@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"sync/atomic"
+	"time"
 )
 
 // ─── Wire protocol types ──────────────────────────────────────────────────────
@@ -33,11 +34,17 @@ type WireClient struct {
 	seq    atomic.Uint32
 }
 
+const (
+	dialTimeout = 5 * time.Second
+	rpcTimeout  = 8 * time.Second // covers login + transfer round-trips
+)
+
 func Dial(host string, port int, secret string) (*WireClient, error) {
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", host, port))
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), dialTimeout)
 	if err != nil {
 		return nil, err
 	}
+	conn.SetDeadline(time.Now().Add(rpcTimeout))
 	c := &WireClient{conn: conn, secret: []byte(secret)}
 	// Start seq from a random base so (mid, seq) idempotency keys never collide
 	// across separate connections for the same account.

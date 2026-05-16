@@ -3,10 +3,17 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+)
+
+const (
+	maxAttempts    = 4
+	retryBaseDelay = time.Second
 )
 
 // ─── Message types (shared with Cards service) ────────────────────────────────
@@ -91,30 +98,85 @@ func (w *Worker) handle(msg amqp.Delivery) {
 	}
 	slog.Info("processing topup", "topup_id", evt.TopUpID, "uid", evt.UID, "amount", evt.Amount)
 
-	result := w.credit(evt)
+	result := w.creditWithRetry(evt)
 	w.publishResult(result)
 	msg.Ack(false)
 }
 
-// credit connects to Wire server as the float account and transfers to the user.
-func (w *Worker) credit(evt TopUpEvent) TopUpResult {
+// creditWithRetry attempts the Wire credit up to maxAttempts times with
+// exponential backoff. Permanent errors (low balance, bad account) fail fast.
+func (w *Worker) creditWithRetry(evt TopUpEvent) TopUpResult {
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		err := w.credit(evt)
+		if err == nil {
+			if attempt > 1 {
+				slog.Info("wire credit ok after retry",
+					"topup_id", evt.TopUpID, "attempt", attempt)
+			} else {
+				slog.Info("wire credit ok", "topup_id", evt.TopUpID,
+					"to", evt.UID, "amount", evt.Amount)
+			}
+			return TopUpResult{TopUpID: evt.TopUpID, Status: "done"}
+		}
+
+		lastErr = err
+		if isPermanent(err) {
+			slog.Error("topup permanent failure, not retrying",
+				"topup_id", evt.TopUpID, "err", err)
+			break
+		}
+
+		if attempt < maxAttempts {
+			delay := retryBaseDelay * (1 << (attempt - 1)) // 1s, 2s, 4s
+			slog.Warn("topup transient error, retrying",
+				"topup_id", evt.TopUpID, "attempt", attempt,
+				"next_in", delay, "err", err)
+			time.Sleep(delay)
+		}
+	}
+
+	slog.Error("topup failed after all attempts",
+		"topup_id", evt.TopUpID, "attempts", maxAttempts, "err", lastErr)
+	return TopUpResult{TopUpID: evt.TopUpID, Status: "failed", Reason: lastErr.Error()}
+}
+
+// credit makes one attempt to connect to Wire and transfer funds.
+// Returns nil on success, error on any failure.
+func (w *Worker) credit(evt TopUpEvent) error {
 	wire, err := Dial(w.wireHost, w.wirePort, w.wireSecret)
 	if err != nil {
-		return TopUpResult{TopUpID: evt.TopUpID, Status: "failed", Reason: "wire connect: " + err.Error()}
+		return fmt.Errorf("wire connect: %w", err)
 	}
 	defer wire.Close()
 
 	token, err := wire.Login(w.floatUID, w.floatPwd)
 	if err != nil {
-		return TopUpResult{TopUpID: evt.TopUpID, Status: "failed", Reason: "wire login: " + err.Error()}
+		return fmt.Errorf("wire login: %w", err)
 	}
 
 	if err := wire.Transfer(token, evt.UID, evt.Amount); err != nil {
-		return TopUpResult{TopUpID: evt.TopUpID, Status: "failed", Reason: "wire transfer: " + err.Error()}
+		return fmt.Errorf("wire transfer: %w", err)
 	}
+	return nil
+}
 
-	slog.Info("wire credit ok", "topup_id", evt.TopUpID, "to", evt.UID, "amount", evt.Amount)
-	return TopUpResult{TopUpID: evt.TopUpID, Status: "done"}
+// isPermanent returns true for errors that won't resolve with a retry.
+var permanentPhrases = []string{
+	"low balance", "bad token", "not found", "bad password", "id reserved",
+}
+
+func isPermanent(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	for _, p := range permanentPhrases {
+		if strings.Contains(msg, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func (w *Worker) publishResult(res TopUpResult) {
