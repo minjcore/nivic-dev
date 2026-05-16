@@ -37,8 +37,11 @@ public struct SavingApp: View {
         .preferredColorScheme(.dark)
         .task {
             let center = UNUserNotificationCenter.current()
-            center.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+            let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
             center.delegate = ForegroundNotificationDelegate.shared
+            if granted {
+                await MainActor.run { UIApplication.shared.registerForRemoteNotifications() }
+            }
             try? await client.connect()
         }
     }
@@ -235,6 +238,10 @@ struct HomeView: View {
             CardManagementSheet(cardsClient: cardsClient, uid: accountID) { await refreshBalance() }
         }
         .task { await refreshBalance() }
+        .onReceive(NotificationCenter.default.publisher(for: .savingDeviceToken)) { note in
+            guard let token = note.userInfo?["token"] as? String else { return }
+            Task { try? await cardsClient.registerDeviceToken(uid: accountID, token: token) }
+        }
         .onChange(of: client.lastTransferIn) { transfer in
             guard let t = transfer else { return }
             Task { await refreshBalance() }

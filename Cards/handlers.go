@@ -23,6 +23,7 @@ func (h *handler) routes() http.Handler {
 	mux.HandleFunc("POST /users/{uid}/cards",               h.handleAdd)
 	mux.HandleFunc("DELETE /users/{uid}/cards/{cid}",       h.handleRemove)
 	mux.HandleFunc("POST /users/{uid}/cards/{cid}/topup",   h.handleTopUp)
+	mux.HandleFunc("POST /users/{uid}/device-token",        h.handleRegisterDeviceToken)
 	mux.HandleFunc("POST /topups/{tid}/complete",           h.handleComplete) // called by Wire
 	return mux
 }
@@ -176,6 +177,35 @@ func (h *handler) handleTopUp(w http.ResponseWriter, r *http.Request) {
 		"amount":   req.Amount,
 		"status":   "pending",
 	})
+}
+
+// POST /users/{uid}/device-token
+// Body: { "token": "<hex apns token>" }
+
+func (h *handler) handleRegisterDeviceToken(w http.ResponseWriter, r *http.Request) {
+	if !h.authUID(r) {
+		jsonErr(w, 401, "unauthorized")
+		return
+	}
+	uid, err := parseUID(r.PathValue("uid"))
+	if err != nil {
+		jsonErr(w, 400, "bad uid")
+		return
+	}
+	var body struct {
+		Token string `json:"token"`
+	}
+	if json.NewDecoder(r.Body).Decode(&body) != nil || body.Token == "" {
+		jsonErr(w, 400, "token required")
+		return
+	}
+	if err := h.store.RegisterDeviceToken(uid, body.Token); err != nil {
+		slog.Error("register device token", "uid", uid, "err", err)
+		jsonErr(w, 500, "store error")
+		return
+	}
+	slog.Info("device token registered", "uid", uid)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // POST /topups/{tid}/complete

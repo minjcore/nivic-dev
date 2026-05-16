@@ -56,6 +56,12 @@ func OpenStore(path string) (*Store, error) {
 			status     TEXT    NOT NULL DEFAULT 'pending',
 			created_at INTEGER NOT NULL
 		);
+
+		CREATE TABLE IF NOT EXISTS device_tokens (
+			uid        INTEGER PRIMARY KEY,
+			token      TEXT    NOT NULL,
+			updated_at INTEGER NOT NULL
+		);
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
@@ -148,6 +154,27 @@ func (s *Store) CompleteTopUp(id, status string) error {
 	}
 	return nil
 }
+
+// ─── Device tokens ────────────────────────────────────────────────────────────
+
+func (s *Store) RegisterDeviceToken(uid uint32, token string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO device_tokens (uid, token, updated_at) VALUES (?, ?, ?)
+		 ON CONFLICT(uid) DO UPDATE SET token = excluded.token, updated_at = excluded.updated_at`,
+		uid, token, time.Now().Unix())
+	return err
+}
+
+func (s *Store) GetDeviceToken(uid uint32) (string, error) {
+	var token string
+	err := s.db.QueryRow(`SELECT token FROM device_tokens WHERE uid = ?`, uid).Scan(&token)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return token, err
+}
+
+// ─── Top-ups (continued) ──────────────────────────────────────────────────────
 
 func (s *Store) GetTopUp(id string) (*TopUp, error) {
 	row := s.db.QueryRow(

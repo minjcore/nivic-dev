@@ -33,6 +33,16 @@ func main() {
 	}
 	defer store.Close()
 
+	// APNs client (optional — push notifications disabled if env vars absent)
+	var apns *APNsClient
+	if c, err := NewAPNsClientFromEnv(); err != nil {
+		slog.Warn("apns disabled", "reason", err)
+	} else {
+		apns = c
+		slog.Info("apns configured", "bundle", os.Getenv("APNS_BUNDLE_ID"),
+			"env", os.Getenv("APNS_ENV"))
+	}
+
 	// AMQP connection (optional — service works without it, topup falls back to sync)
 	var pub *Publisher
 	if conn, err := dialAMQP(amqpURL, 5, time.Second); err != nil {
@@ -42,7 +52,7 @@ func main() {
 		if err != nil {
 			slog.Warn("amqp publisher init failed", "err", err)
 		} else {
-			go ConsumeResults(conn, store)
+			go ConsumeResults(conn, store, apns)
 			slog.Info("amqp connected", "url", amqpURL)
 		}
 	}

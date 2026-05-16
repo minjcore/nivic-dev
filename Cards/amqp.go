@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -71,7 +73,7 @@ func (p *Publisher) Close() { p.ch.Close() }
 
 // ConsumeResults processes topup.result messages from the Topup Worker
 // and updates the DB accordingly. Runs until conn is closed.
-func ConsumeResults(conn *amqp.Connection, store *Store) {
+func ConsumeResults(conn *amqp.Connection, store *Store, apns *APNsClient) {
 	ch, err := conn.Channel()
 	if err != nil {
 		slog.Error("result consumer channel", "err", err)
@@ -103,13 +105,41 @@ func ConsumeResults(conn *amqp.Connection, store *Store) {
 		if res.Status != "done" && res.Status != "failed" {
 			res.Status = "failed"
 		}
+		topup, _ := store.GetTopUp(res.TopUpID)
 		if err := store.CompleteTopUp(res.TopUpID, res.Status); err != nil {
 			slog.Warn("complete topup", "topup_id", res.TopUpID, "err", err)
 		} else {
 			slog.Info("topup settled", "topup_id", res.TopUpID, "status", res.Status)
+			if res.Status == "done" && apns != nil && topup != nil {
+				go pushTopUpDone(apns, store, topup)
+			}
 		}
 		msg.Ack(false)
 	}
+}
+
+func pushTopUpDone(apns *APNsClient, store *Store, topup *TopUp) {
+	tok, err := store.GetDeviceToken(topup.UID)
+	if err != nil || tok == "" {
+		return
+	}
+	title := "Nạp tiền thành công"
+	body := fmt.Sprintf("+%s đ vào tài khoản", fmtVND(topup.Amount))
+	if err := apns.Push(tok, title, body); err != nil {
+		slog.Warn("apns push failed", "uid", topup.UID, "err", err)
+	}
+}
+
+func fmtVND(n uint64) string {
+	s := fmt.Sprintf("%d", n)
+	var b strings.Builder
+	for i, c := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			b.WriteByte('.')
+		}
+		b.WriteRune(c)
+	}
+	return b.String()
 }
 
 // ─── Topology (shared declaration, idempotent) ────────────────────────────────

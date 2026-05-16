@@ -86,6 +86,15 @@ public struct CardsClient {
         try checkResponse(data, resp)
     }
 
+    public func registerDeviceToken(uid: UInt32, token: String) async throws {
+        var req = try authedRequest(method: "POST", path: "/users/\(uid)/device-token")
+        req.httpBody = try JSONEncoder().encode(["token": token])
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        guard (resp as? HTTPURLResponse)?.statusCode == 204 else {
+            throw CardError.rejected("device token registration failed")
+        }
+    }
+
     public func topUp(uid: UInt32, cardID: String, amount: UInt64) async throws -> TopUpResult {
         var req = try authedRequest(method: "POST",
                                     path: "/users/\(uid)/cards/\(cardID)/topup")
