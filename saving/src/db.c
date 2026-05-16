@@ -1,0 +1,605 @@
+#include "db.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <arpa/inet.h>   /* htonl / htons for binary params */
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Helpers
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/* Lock / unlock convenience */
+#define DB_LOCK(db)   pthread_mutex_lock(&(db)->mu)
+#define DB_UNLOCK(db) pthread_mutex_unlock(&(db)->mu)
+
+/* PostgreSQL wire protocol uses network byte order for binary int8 */
+static uint64_t pg_int8(uint64_t v) {
+    uint64_t hi = htonl((uint32_t)(v >> 32));
+    uint64_t lo = htonl((uint32_t)(v & 0xFFFFFFFF));
+    return (lo << 32) | hi;
+}
+
+/* Read big-endian uint64 from binary result value */
+static inline uint64_t from_be64(const uint8_t *p) {
+    return ((uint64_t)p[0]<<56)|((uint64_t)p[1]<<48)|((uint64_t)p[2]<<40)|
+           ((uint64_t)p[3]<<32)|((uint64_t)p[4]<<24)|((uint64_t)p[5]<<16)|
+           ((uint64_t)p[6]<<8 )| (uint64_t)p[7];
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Schema
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+static const char SCHEMA[] =
+    /* Core accounts */
+    "CREATE TABLE IF NOT EXISTS accounts ("
+    "  id            BIGINT PRIMARY KEY,"
+    "  password_hash BYTEA  NOT NULL,"
+    "  balance       BIGINT NOT NULL DEFAULT 0,"
+    "  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+    ");"
+
+    /* Guardian links */
+    "CREATE TABLE IF NOT EXISTS guardians ("
+    "  account_id   BIGINT NOT NULL,"
+    "  guardian_id  BIGINT NOT NULL,"
+    "  PRIMARY KEY (account_id, guardian_id)"
+    ");"
+
+    /* Open device-switch requests */
+    "CREATE TABLE IF NOT EXISTS recovery_requests ("
+    "  account_id  BIGINT PRIMARY KEY,"
+    "  approvals   TEXT   NOT NULL DEFAULT ''"  /* comma-separated guardian IDs */
+    ");"
+
+    /* Idempotency gate — ported from Java JdbcIdempotencyGate */
+    "CREATE TABLE IF NOT EXISTS wallet_idempotency ("
+    "  mid        BIGINT NOT NULL,"
+    "  request_id BIGINT NOT NULL,"
+    "  order_id   BIGINT,"
+    "  PRIMARY KEY (mid, request_id)"
+    ");"
+
+    /* Append-only ledger — ported from Java JdbcWalletLedger */
+    "CREATE TABLE IF NOT EXISTS wallet_ledger ("
+    "  mid          BIGINT NOT NULL,"
+    "  request_id   BIGINT NOT NULL,"
+    "  order_id     BIGINT NOT NULL,"
+    "  command      BIGINT NOT NULL,"
+    "  amount_minor BIGINT NOT NULL,"
+    "  extra_data   BYTEA  NOT NULL,"
+    "  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+    "  PRIMARY KEY (mid, request_id)"
+    ");"
+
+    /* Queryable transfer log (both directions per row) */
+    "CREATE TABLE IF NOT EXISTS transfers ("
+    "  id         BIGSERIAL PRIMARY KEY,"
+    "  from_id    BIGINT NOT NULL,"
+    "  to_id      BIGINT NOT NULL,"
+    "  amount     BIGINT NOT NULL,"
+    "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+    ");"
+    "CREATE INDEX IF NOT EXISTS transfers_from_idx ON transfers(from_id, created_at DESC);"
+    "CREATE INDEX IF NOT EXISTS transfers_to_idx   ON transfers(to_id,   created_at DESC);";
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Lifecycle
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+int db_open(DB *db, const char *conninfo) {
+    db->conn = PQconnectdb(conninfo);
+    if (PQstatus(db->conn) != CONNECTION_OK) {
+        fprintf(stderr, "[db] connect failed: %s\n", PQerrorMessage(db->conn));
+        PQfinish(db->conn);
+        return -1;
+    }
+    pthread_mutex_init(&db->mu, NULL);
+
+    PGresult *r = PQexec(db->conn, SCHEMA);
+    if (PQresultStatus(r) != PGRES_COMMAND_OK) {
+        fprintf(stderr, "[db] schema error: %s\n", PQerrorMessage(db->conn));
+        PQclear(r);
+        return -1;
+    }
+    PQclear(r);
+    return 0;
+}
+
+void db_close(DB *db) {
+    PQfinish(db->conn);
+    pthread_mutex_destroy(&db->mu);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Accounts
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+int db_account_create(DB *db, uint32_t id, const uint8_t *password_hash) {
+    static const char SQL[] =
+        "INSERT INTO accounts (id, password_hash) VALUES ($1, $2)";
+
+    uint64_t id_be = pg_int8((uint64_t)id);
+
+    const char *vals[2]  = { (char *)&id_be, (char *)password_hash };
+    int         lens[2]  = { 8, 32 };
+    int         fmts[2]  = { 1, 1 };  /* binary */
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+
+    int ok = (PQresultStatus(r) == PGRES_COMMAND_OK);
+    if (!ok) fprintf(stderr, "[db] create account: %s\n", PQerrorMessage(db->conn));
+    PQclear(r);
+    return ok ? 0 : -1;
+}
+
+int db_account_exists(DB *db, uint32_t id) {
+    static const char SQL[] =
+        "SELECT 1 FROM accounts WHERE id = $1 LIMIT 1";
+
+    uint64_t id_be = pg_int8((uint64_t)id);
+    const char *vals[1] = { (char *)&id_be };
+    int         lens[1] = { 8 };
+    int         fmts[1] = { 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+
+    int found = (PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) ? 1 : 0;
+    PQclear(r);
+    return found;
+}
+
+int db_account_get_hash(DB *db, uint32_t id, uint8_t *hash) {
+    static const char SQL[] =
+        "SELECT password_hash FROM accounts WHERE id = $1";
+
+    uint64_t id_be = pg_int8((uint64_t)id);
+    const char *vals[1] = { (char *)&id_be };
+    int         lens[1] = { 8 };
+    int         fmts[1] = { 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 1);  /* binary result */
+    DB_UNLOCK(db);
+
+    int rc = -1;
+    if (PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) {
+        int len = PQgetlength(r, 0, 0);
+        if (len == 32) {
+            memcpy(hash, PQgetvalue(r, 0, 0), 32);
+            rc = 0;
+        }
+    }
+    PQclear(r);
+    return rc;
+}
+
+int64_t db_account_balance(DB *db, uint32_t id) {
+    static const char SQL[] =
+        "SELECT balance FROM accounts WHERE id = $1";
+
+    uint64_t id_be = pg_int8((uint64_t)id);
+    const char *vals[1] = { (char *)&id_be };
+    int         lens[1] = { 8 };
+    int         fmts[1] = { 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 1);
+    DB_UNLOCK(db);
+
+    int64_t bal = -1;
+    if (PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) {
+        /* binary int8 from PostgreSQL — big-endian 8 bytes */
+        const char *raw = PQgetvalue(r, 0, 0);
+        uint64_t v = 0;
+        for (int i = 0; i < 8; i++) v = (v << 8) | (uint8_t)raw[i];
+        bal = (int64_t)v;
+    }
+    PQclear(r);
+    return bal;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Transfer — atomic CTE (single round-trip, no deadlock)
+ *
+ *  Logic mirrors Java MoneyTransfers but in SQL:
+ *    1. Debit sender (check balance ≥ amount)
+ *    2. Credit receiver
+ *    Both fail together if sender has insufficient funds or receiver missing.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+int db_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount) {
+    /* Single-query atomic transfer using CTEs.
+     * Returns 1 row on success, 0 rows if sender balance is too low or receiver missing. */
+    static const char SQL[] =
+        "WITH"
+        "  debit AS ("
+        "    UPDATE accounts"
+        "    SET    balance = balance - $1"
+        "    WHERE  id = $2 AND balance >= $1"
+        "    RETURNING id"
+        "  ),"
+        "  credit AS ("
+        "    UPDATE accounts"
+        "    SET    balance = balance + $1"
+        "    WHERE  id = $3 AND EXISTS (SELECT 1 FROM debit)"
+        "    RETURNING id"
+        "  )"
+        "SELECT"
+        "  (SELECT id FROM debit)  AS debited,"
+        "  (SELECT id FROM credit) AS credited";
+
+    uint64_t amount_be  = pg_int8(amount);
+    uint64_t from_id_be = pg_int8((uint64_t)from_id);
+    uint64_t to_id_be   = pg_int8((uint64_t)to_id);
+
+    const char *vals[3] = { (char *)&amount_be, (char *)&from_id_be, (char *)&to_id_be };
+    int         lens[3] = { 8, 8, 8 };
+    int         fmts[3] = { 1, 1, 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 3, NULL, vals, lens, fmts, 1);
+    DB_UNLOCK(db);
+
+    int rc = -3;
+    if (PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) {
+        int debited  = !PQgetisnull(r, 0, 0);
+        int credited = !PQgetisnull(r, 0, 1);
+        if (debited && credited) rc = 0;
+        else if (!debited)        rc = -1;  /* sender: not found or low balance */
+        else                      rc = -2;  /* receiver not found */
+    }
+    if (rc == -3) fprintf(stderr, "[db] transfer: %s\n", PQerrorMessage(db->conn));
+    PQclear(r);
+    return rc;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Idempotency gate  (ported from Java JdbcIdempotencyGate)
+ *
+ *  INSERT (mid, request_id, order_id) ON CONFLICT DO NOTHING.
+ *  Returns 1 (first claim), 0 (duplicate), -1 (error).
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+int db_idempotency_claim(DB *db, uint64_t mid, uint64_t request_id, uint64_t order_id) {
+    static const char SQL[] =
+        "INSERT INTO wallet_idempotency (mid, request_id, order_id)"
+        " VALUES ($1, $2, $3)"
+        " ON CONFLICT (mid, request_id) DO NOTHING";
+
+    uint64_t mid_be = pg_int8(mid);
+    uint64_t rid_be = pg_int8(request_id);
+    uint64_t oid_be = pg_int8(order_id);
+
+    const char *vals[3] = { (char *)&mid_be, (char *)&rid_be, (char *)&oid_be };
+    int         lens[3] = { 8, 8, 8 };
+    int         fmts[3] = { 1, 1, 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 3, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+
+    int rc = -1;
+    if (PQresultStatus(r) == PGRES_COMMAND_OK) {
+        char *affected = PQcmdTuples(r);
+        rc = (affected && affected[0] == '1') ? 1 : 0;
+    } else {
+        fprintf(stderr, "[db] idempotency_claim: %s\n", PQerrorMessage(db->conn));
+    }
+    PQclear(r);
+    return rc;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Ledger  (ported from Java JdbcWalletLedger)
+ *
+ *  Append-only: every accepted command leaves an immutable audit row.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+int db_ledger_append(DB *db,
+                     uint64_t mid, uint64_t request_id, uint64_t order_id,
+                     uint64_t command, uint64_t amount_minor,
+                     const uint8_t *extra_data, uint16_t extra_len) {
+    static const char SQL[] =
+        "INSERT INTO wallet_ledger"
+        "  (mid, request_id, order_id, command, amount_minor, extra_data)"
+        "  VALUES ($1, $2, $3, $4, $5, $6)"
+        "  ON CONFLICT DO NOTHING";   /* idempotency already checked, this is just safety */
+
+    uint64_t mid_be = pg_int8(mid);
+    uint64_t rid_be = pg_int8(request_id);
+    uint64_t oid_be = pg_int8(order_id);
+    uint64_t cmd_be = pg_int8(command);
+    uint64_t amt_be = pg_int8(amount_minor);
+
+    const char *vals[6] = {
+        (char *)&mid_be, (char *)&rid_be, (char *)&oid_be,
+        (char *)&cmd_be, (char *)&amt_be,
+        (char *)extra_data
+    };
+    int lens[6] = { 8, 8, 8, 8, 8, (int)extra_len };
+    int fmts[6] = { 1, 1, 1, 1, 1, 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 6, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+
+    int ok = (PQresultStatus(r) == PGRES_COMMAND_OK);
+    if (!ok) fprintf(stderr, "[db] ledger_append: %s\n", PQerrorMessage(db->conn));
+    PQclear(r);
+    return ok ? 0 : -1;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Guardians
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+int db_guardian_count(DB *db, uint32_t account_id) {
+    static const char SQL[] =
+        "SELECT COUNT(*) FROM guardians WHERE account_id = $1";
+
+    uint64_t id_be = pg_int8((uint64_t)account_id);
+    const char *vals[1] = { (char *)&id_be };
+    int         lens[1] = { 8 };
+    int         fmts[1] = { 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 1);
+    DB_UNLOCK(db);
+
+    int cnt = -1;
+    if (PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) {
+        const char *raw = PQgetvalue(r, 0, 0);
+        uint64_t v = 0;
+        for (int i = 0; i < 8; i++) v = (v << 8) | (uint8_t)raw[i];
+        cnt = (int)v;
+    }
+    PQclear(r);
+    return cnt;
+}
+
+int db_guardian_add(DB *db, uint32_t account_id, uint32_t guardian_id) {
+    if (db_guardian_count(db, account_id) >= 3) return -1;
+
+    static const char SQL[] =
+        "INSERT INTO guardians (account_id, guardian_id) VALUES ($1, $2)"
+        " ON CONFLICT DO NOTHING";
+
+    uint64_t aid_be = pg_int8((uint64_t)account_id);
+    uint64_t gid_be = pg_int8((uint64_t)guardian_id);
+    const char *vals[2] = { (char *)&aid_be, (char *)&gid_be };
+    int         lens[2] = { 8, 8 };
+    int         fmts[2] = { 1, 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+
+    int ok = (PQresultStatus(r) == PGRES_COMMAND_OK);
+    PQclear(r);
+    return ok ? 0 : -2;
+}
+
+int db_guardian_list(DB *db, uint32_t account_id, uint32_t ids[3]) {
+    static const char SQL[] =
+        "SELECT guardian_id FROM guardians WHERE account_id = $1 LIMIT 3";
+
+    uint64_t id_be = pg_int8((uint64_t)account_id);
+    const char *vals[1] = { (char *)&id_be };
+    int         lens[1] = { 8 };
+    int         fmts[1] = { 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 1);
+    DB_UNLOCK(db);
+
+    int n = 0;
+    if (PQresultStatus(r) == PGRES_TUPLES_OK) {
+        int rows = PQntuples(r);
+        for (int i = 0; i < rows && i < 3; i++) {
+            const char *raw = PQgetvalue(r, i, 0);
+            uint64_t v = 0;
+            for (int j = 0; j < 8; j++) v = (v << 8) | (uint8_t)raw[j];
+            ids[n++] = (uint32_t)v;
+        }
+    }
+    PQclear(r);
+    return n;
+}
+
+static int is_guardian(DB *db, uint32_t account_id, uint32_t guardian_id) {
+    uint32_t ids[3] = {0};
+    int n = db_guardian_list(db, account_id, ids);
+    for (int i = 0; i < n; i++)
+        if (ids[i] == guardian_id) return 1;
+    return 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Social Recovery
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+int db_recovery_open(DB *db, uint32_t account_id) {
+    static const char SQL[] =
+        "INSERT INTO recovery_requests (account_id, approvals) VALUES ($1, '')"
+        " ON CONFLICT (account_id) DO UPDATE SET approvals = ''";
+
+    uint64_t id_be = pg_int8((uint64_t)account_id);
+    const char *vals[1] = { (char *)&id_be };
+    int         lens[1] = { 8 };
+    int         fmts[1] = { 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+
+    int ok = (PQresultStatus(r) == PGRES_COMMAND_OK);
+    PQclear(r);
+    return ok ? 0 : -1;
+}
+
+int db_recovery_approve(DB *db, uint32_t account_id, uint32_t guardian_id) {
+    if (!is_guardian(db, account_id, guardian_id)) return -1;
+
+    /* Read existing approvals */
+    static const char SEL[] =
+        "SELECT approvals FROM recovery_requests WHERE account_id = $1";
+
+    uint64_t id_be = pg_int8((uint64_t)account_id);
+    const char *vals1[1] = { (char *)&id_be };
+    int         lens1[1] = { 8 };
+    int         fmts1[1] = { 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SEL, 1, NULL, vals1, lens1, fmts1, 0);
+
+    char approvals[256] = "";
+    if (PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) {
+        const char *txt = PQgetvalue(r, 0, 0);
+        if (txt) snprintf(approvals, sizeof(approvals), "%s", txt);
+    }
+    PQclear(r);
+
+    /* Check if already approved */
+    char needle[20];
+    snprintf(needle, sizeof(needle), "%u", guardian_id);
+    if (strstr(approvals, needle)) {
+        DB_UNLOCK(db);
+        int cnt = (approvals[0] != '\0') ? 1 : 0;
+        for (char *p = approvals; *p; p++) if (*p == ',') cnt++;
+        return cnt;
+    }
+
+    /* Append guardian_id */
+    char updated[256];
+    if (approvals[0])
+        snprintf(updated, sizeof(updated), "%s,%u", approvals, guardian_id);
+    else
+        snprintf(updated, sizeof(updated), "%u", guardian_id);
+
+    static const char UPD[] =
+        "UPDATE recovery_requests SET approvals = $1 WHERE account_id = $2";
+    const char *vals2[2] = { updated, (char *)&id_be };
+    int         lens2[2] = { (int)strlen(updated), 8 };
+    int         fmts2[2] = { 0, 1 };  /* text, binary */
+
+    PGresult *r2 = PQexecParams(db->conn, UPD, 2, NULL, vals2, lens2, fmts2, 0);
+    DB_UNLOCK(db);
+    PQclear(r2);
+
+    int cnt = 1;
+    for (char *p = updated; *p; p++) if (*p == ',') cnt++;
+    return cnt;
+}
+
+int db_recovery_is_complete(DB *db, uint32_t account_id) {
+    static const char SQL[] =
+        "SELECT approvals FROM recovery_requests WHERE account_id = $1";
+
+    uint64_t id_be = pg_int8((uint64_t)account_id);
+    const char *vals[1] = { (char *)&id_be };
+    int         lens[1] = { 8 };
+    int         fmts[1] = { 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+
+    int complete = 0;
+    if (PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) {
+        const char *txt = PQgetvalue(r, 0, 0);
+        if (txt && txt[0]) {
+            int cnt = 1;
+            for (const char *p = txt; *p; p++) if (*p == ',') cnt++;
+            if (cnt >= 2) complete = 1;
+        }
+    }
+    PQclear(r);
+    return complete;
+}
+
+void db_recovery_close(DB *db, uint32_t account_id) {
+    static const char SQL[] =
+        "DELETE FROM recovery_requests WHERE account_id = $1";
+
+    uint64_t id_be = pg_int8((uint64_t)account_id);
+    const char *vals[1] = { (char *)&id_be };
+    int         lens[1] = { 8 };
+    int         fmts[1] = { 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+    PQclear(r);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Transfer history
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+int db_record_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount) {
+    static const char SQL[] =
+        "INSERT INTO transfers (from_id, to_id, amount) VALUES ($1, $2, $3)";
+
+    uint64_t f = pg_int8((uint64_t)from_id);
+    uint64_t t = pg_int8((uint64_t)to_id);
+    uint64_t a = pg_int8(amount);
+
+    const char *vals[3] = { (char *)&f, (char *)&t, (char *)&a };
+    int         lens[3] = { 8, 8, 8 };
+    int         fmts[3] = { 1, 1, 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 3, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+
+    int ok = (PQresultStatus(r) == PGRES_COMMAND_OK);
+    if (!ok) fprintf(stderr, "[db] record_transfer: %s\n", PQerrorMessage(db->conn));
+    PQclear(r);
+    return ok ? 0 : -1;
+}
+
+int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count) {
+    static const char SQL[] =
+        "SELECT from_id, to_id, amount FROM transfers "
+        "WHERE from_id = $1 OR to_id = $1 "
+        "ORDER BY created_at DESC LIMIT $2";
+
+    uint64_t id_be = pg_int8((uint64_t)account_id);
+    char     limit_str[8];
+    snprintf(limit_str, sizeof(limit_str), "%d", max_count);
+
+    const char *vals[2] = { (char *)&id_be, limit_str };
+    int         lens[2] = { 8, 0 };   /* binary, text */
+    int         fmts[2] = { 1, 0 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 1); /* binary result */
+    DB_UNLOCK(db);
+
+    if (PQresultStatus(r) != PGRES_TUPLES_OK) {
+        fprintf(stderr, "[db] history: %s\n", PQerrorMessage(db->conn));
+        PQclear(r);
+        return -1;
+    }
+
+    int n = PQntuples(r);
+    if (n > max_count) n = max_count;
+
+    for (int i = 0; i < n; i++) {
+        uint64_t from = from_be64((uint8_t *)PQgetvalue(r, i, 0));
+        uint64_t to   = from_be64((uint8_t *)PQgetvalue(r, i, 1));
+        uint64_t amt  = from_be64((uint8_t *)PQgetvalue(r, i, 2));
+
+        out[i].direction   = (from == (uint64_t)account_id) ? 0 : 1;
+        out[i].counterpart = (uint32_t)((from == (uint64_t)account_id) ? to : from);
+        out[i].amount      = amt;
+    }
+
+    PQclear(r);
+    return n;
+}

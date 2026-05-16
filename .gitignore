@@ -1,0 +1,25 @@
+# Binaries
+saving/saving
+Merchants/merchants
+Cards/cards
+TopupWorker/topup-worker
+TopupWorker/setup/setup
+
+# Databases
+*.db
+*.db-shm
+*.db-wal
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+
+# Go
+vendor/
+
+# Logs
+*.log

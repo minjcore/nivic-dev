@@ -1,0 +1,375 @@
+package main
+
+import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+	"time"
+)
+
+// ─── Payment request ────────────────────────────────────────────────────────
+//
+//	QR payload (base64url of JSON):
+//	  { "mid":12345, "order_id":"ORD-001", "amount":50000, "ts":1715000000000, "sig":"BASE64" }
+//
+//	Signed message = mid(4 BE) || amount(8 BE) || ts(8 BE) || order_id(utf-8)
+
+type PaymentRequest struct {
+	MID     uint32 `json:"mid"`
+	OrderID string `json:"order_id"`
+	Amount  uint64 `json:"amount"`
+	TS      int64  `json:"ts"`  // unix milliseconds
+	Sig     string `json:"sig"` // base64(ed25519 signature, 64 bytes)
+}
+
+const paymentRequestTTL = 10 * time.Minute
+
+func signedMsg(mid uint32, amount uint64, ts int64, orderID string) []byte {
+	msg := make([]byte, 4+8+8+len(orderID))
+	binary.BigEndian.PutUint32(msg[0:], mid)
+	binary.BigEndian.PutUint64(msg[4:], amount)
+	binary.BigEndian.PutUint64(msg[12:], uint64(ts))
+	copy(msg[20:], orderID)
+	return msg
+}
+
+func buildPaymentRequest(m *Merchant, orderID string, amount uint64) (*PaymentRequest, error) {
+	privRaw, err := base64.StdEncoding.DecodeString(m.PrivkeyB64)
+	if err != nil || len(privRaw) != ed25519.PrivateKeySize {
+		return nil, fmt.Errorf("stored privkey corrupt")
+	}
+	ts := time.Now().UnixMilli()
+	msg := signedMsg(m.MID, amount, ts, orderID)
+	sig := ed25519.Sign(ed25519.PrivateKey(privRaw), msg)
+	return &PaymentRequest{
+		MID:     m.MID,
+		OrderID: orderID,
+		Amount:  amount,
+		TS:      ts,
+		Sig:     base64.StdEncoding.EncodeToString(sig),
+	}, nil
+}
+
+// base64url-encodes a PaymentRequest as JSON for embedding in QR
+func prToBase64URL(pr *PaymentRequest) (string, error) {
+	b, err := json.Marshal(pr)
+	if err != nil {
+		return "", err
+	}
+	s := base64.URLEncoding.EncodeToString(b)
+	// strip padding — receivers must re-pad
+	for len(s) > 0 && s[len(s)-1] == '=' {
+		s = s[:len(s)-1]
+	}
+	return s, nil
+}
+
+// ─── Handler context ────────────────────────────────────────────────────────
+
+type handler struct {
+	store      *Store
+	adminToken string
+}
+
+func (h *handler) routes() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health",                          h.handleHealth)
+	mux.HandleFunc("GET /merchants/{mid}",                 h.handleGet)
+	mux.HandleFunc("POST /merchants",                      h.handleRegister)
+	mux.HandleFunc("POST /merchants/{mid}/orders",         h.handleCreateOrder)
+	mux.HandleFunc("GET /merchants/{mid}/orders/{oid}",   h.handleGetOrder)
+	mux.HandleFunc("POST /orders/{oid}/confirm",           h.handleConfirmOrder)
+	mux.HandleFunc("POST /payment_request/verify",         h.handleVerify)
+	return mux
+}
+
+// GET /health
+
+func (h *handler) handleHealth(w http.ResponseWriter, _ *http.Request) {
+	jsonOK(w, map[string]string{"status": "ok", "service": "merchants-host"})
+}
+
+// GET /merchants/{mid}
+
+func (h *handler) handleGet(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid")
+		return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if m == nil {
+		jsonErr(w, 404, "merchant not found")
+		return
+	}
+	jsonOK(w, m) // PrivkeyB64 / Token are tagged json:"-" so never exposed
+}
+
+// POST /merchants
+// Header: X-Admin-Token: <token>
+// Body:   { "mid":12345, "name":"Shop A" }
+//         pubkey/privkey are generated server-side; returned once in response.
+
+func (h *handler) handleRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-Admin-Token") != h.adminToken {
+		jsonErr(w, 401, "unauthorized")
+		return
+	}
+	var req struct {
+		MID  uint32 `json:"mid"`
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "bad json")
+		return
+	}
+	if req.MID == 0 || req.Name == "" {
+		jsonErr(w, 400, "mid and name required")
+		return
+	}
+
+	// Generate Ed25519 keypair for this merchant
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		jsonErr(w, 500, "keygen failed")
+		return
+	}
+
+	// Generate a random merchant API token
+	tokenBytes := make([]byte, 24)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		jsonErr(w, 500, "token gen failed")
+		return
+	}
+	token := base64.URLEncoding.EncodeToString(tokenBytes)
+
+	pubB64  := base64.StdEncoding.EncodeToString(pub)
+	privB64 := base64.StdEncoding.EncodeToString(priv)
+
+	if err := h.store.Register(req.MID, req.Name, pubB64, privB64, token); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	// Return privkey and token once — caller must store securely
+	jsonOK(w, map[string]any{
+		"registered":  req.MID,
+		"pubkey_b64":  pubB64,
+		"privkey_b64": privB64,
+		"token":       token,
+	})
+}
+
+// POST /merchants/{mid}/orders
+// Header: X-Merchant-Token: <token>
+// Body:   { "amount":50000, "note":"Cà phê x2", "order_id":"POS-001" }
+// Returns: { "order_id":"...", "pr":"BASE64URL", "qr_url":"saving://pay?pr=..." }
+
+func (h *handler) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid")
+		return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if m == nil {
+		jsonErr(w, 404, "merchant not found")
+		return
+	}
+	if r.Header.Get("X-Merchant-Token") != m.Token {
+		jsonErr(w, 401, "unauthorized")
+		return
+	}
+
+	var req struct {
+		Amount  uint64 `json:"amount"`
+		Note    string `json:"note"`
+		OrderID string `json:"order_id"` // optional; POS-supplied reference
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "bad json")
+		return
+	}
+	if req.Amount == 0 {
+		jsonErr(w, 400, "amount required")
+		return
+	}
+
+	// Use caller-supplied order_id or generate one
+	orderID := req.OrderID
+	if orderID == "" {
+		orderID = fmt.Sprintf("%d-%d", mid, time.Now().UnixMilli())
+	}
+
+	if err := h.store.CreateOrder(orderID, mid, req.Amount, req.Note); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+
+	pr, err := buildPaymentRequest(m, orderID, req.Amount)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+
+	prB64, err := prToBase64URL(pr)
+	if err != nil {
+		jsonErr(w, 500, "encode failed")
+		return
+	}
+
+	jsonOK(w, map[string]any{
+		"order_id": orderID,
+		"pr":       prB64,
+		"qr_url":   "saving://pay?pr=" + prB64,
+	})
+}
+
+// GET /merchants/{mid}/orders/{oid}
+// Header: X-Merchant-Token: <token>
+
+func (h *handler) handleGetOrder(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid")
+		return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if m == nil {
+		jsonErr(w, 404, "merchant not found")
+		return
+	}
+	if r.Header.Get("X-Merchant-Token") != m.Token {
+		jsonErr(w, 401, "unauthorized")
+		return
+	}
+
+	o, err := h.store.GetOrder(r.PathValue("oid"))
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if o == nil || o.MID != mid {
+		jsonErr(w, 404, "order not found")
+		return
+	}
+	jsonOK(w, o)
+}
+
+// POST /orders/{oid}/confirm
+// Called by Wire after a successful payment.
+// Body: { "paid_by": 16777216 }  (UID of payer)
+// Auth: X-Wire-Token header (shared secret, set via WIRE_TOKEN env)
+
+func (h *handler) handleConfirmOrder(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-Wire-Token") != h.adminToken {
+		// Re-use adminToken for Wire↔MerchantsHost auth for simplicity;
+		// in production this would be a separate rotating secret.
+		jsonErr(w, 401, "unauthorized")
+		return
+	}
+	var body struct {
+		PaidBy uint32 `json:"paid_by"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonErr(w, 400, "bad json")
+		return
+	}
+	if err := h.store.MarkPaid(r.PathValue("oid"), body.PaidBy); err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	jsonOK(w, map[string]string{"status": "paid"})
+}
+
+// POST /payment_request/verify
+// Body: { "mid":12345, "order_id":"...", "amount":50000, "ts":..., "sig":"BASE64" }
+// Returns: { "valid":true, "merchant":{...}, "order":{...} }
+
+func (h *handler) handleVerify(w http.ResponseWriter, r *http.Request) {
+	var pr PaymentRequest
+	if err := json.NewDecoder(r.Body).Decode(&pr); err != nil {
+		jsonErr(w, 400, "bad json")
+		return
+	}
+
+	age := time.Since(time.UnixMilli(pr.TS))
+	if age > paymentRequestTTL || age < -time.Minute {
+		jsonErr(w, 400, fmt.Sprintf("payment_request expired or future-dated (age=%s)", age.Round(time.Second)))
+		return
+	}
+
+	m, err := h.store.Get(pr.MID)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if m == nil {
+		jsonErr(w, 404, "merchant not found")
+		return
+	}
+
+	pubkeyRaw, err := base64.StdEncoding.DecodeString(m.PubkeyB64)
+	if err != nil || len(pubkeyRaw) != ed25519.PublicKeySize {
+		jsonErr(w, 500, "stored pubkey corrupt")
+		return
+	}
+
+	sigRaw, err := base64.StdEncoding.DecodeString(pr.Sig)
+	if err != nil || len(sigRaw) != ed25519.SignatureSize {
+		jsonErr(w, 400, "invalid sig encoding")
+		return
+	}
+
+	msg := signedMsg(pr.MID, pr.Amount, pr.TS, pr.OrderID)
+	if !ed25519.Verify(ed25519.PublicKey(pubkeyRaw), msg, sigRaw) {
+		jsonErr(w, 400, "signature invalid")
+		return
+	}
+
+	// Also return order info if it exists
+	order, _ := h.store.GetOrder(pr.OrderID)
+
+	resp := map[string]any{
+		"valid":    true,
+		"merchant": m,
+	}
+	if order != nil {
+		resp["order"] = order
+	}
+	jsonOK(w, resp)
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+func parseMID(s string) (uint32, error) {
+	v, err := strconv.ParseUint(s, 10, 32)
+	return uint32(v), err
+}
+
+func jsonOK(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(v)
+}
+
+func jsonErr(w http.ResponseWriter, code int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
