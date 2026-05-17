@@ -42,6 +42,7 @@ iPhone (iOS 17+)
 | **saving-ios** | Swift / SwiftUI | iOS 17+ |
 | **wire** | Xcode host app | — |
 | **wire-android** | Kotlin / Jetpack Compose | Android 8+ (API 26) |
+| **java** | Java / Undertow + PostgreSQL | server-side wallet |
 
 ## Wire Protocol
 
