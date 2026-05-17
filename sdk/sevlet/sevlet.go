@@ -271,23 +271,31 @@ func NewReversal(mid, requestID, orderID, amount uint64, debit, credit uint32, e
 }
 
 // NewConfirm builds and signs a CONFIRM_PAYMENT frame.
-func NewConfirm(mid, requestID, orderID uint64, ce ConfirmExtra, secret []byte) ([]byte, error) {
+// amount/debit/credit carry the settlement values for the ledger (typically
+// echoed from the original intent, but may differ for partial fulfilment).
+func NewConfirm(mid, requestID, orderID, amount uint64, debit, credit uint32, ce ConfirmExtra, secret []byte) ([]byte, error) {
 	return Sign(Payload{
 		Command:   OpConfirmPayment,
 		Mid:       mid,
 		RequestID: requestID,
 		OrderID:   orderID,
+		Amount:    amount,
+		Debit:     debit,
+		Credit:    credit,
 		ExtraData: EncodeConfirmExtra(ce),
 	}, secret)
 }
 
 // NewReject builds and signs a REJECT_PAYMENT frame.
-func NewReject(mid, requestID, orderID uint64, ce ConfirmExtra, secret []byte) ([]byte, error) {
+func NewReject(mid, requestID, orderID, amount uint64, debit, credit uint32, ce ConfirmExtra, secret []byte) ([]byte, error) {
 	return Sign(Payload{
 		Command:   OpRejectPayment,
 		Mid:       mid,
 		RequestID: requestID,
 		OrderID:   orderID,
+		Amount:    amount,
+		Debit:     debit,
+		Credit:    credit,
 		ExtraData: EncodeConfirmExtra(ce),
 	}, secret)
 }

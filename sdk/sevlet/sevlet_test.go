@@ -202,7 +202,7 @@ func TestConfirmExtraTooShort(t *testing.T) {
 func TestNewConfirmSetsOpcode(t *testing.T) {
 	var challenge [32]byte
 	ce := sevlet.ConfirmExtra{OriginalRequestID: testReqID, Challenge: challenge}
-	wire, err := sevlet.NewConfirm(testMid, testReqID+1, testOrdID, ce, secret)
+	wire, err := sevlet.NewConfirm(testMid, testReqID+1, testOrdID, testAmt, testDebit, testCredit, ce, secret)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +219,7 @@ func TestNewConfirmSetsOpcode(t *testing.T) {
 func TestNewRejectSetsOpcode(t *testing.T) {
 	var challenge [32]byte
 	ce := sevlet.ConfirmExtra{OriginalRequestID: testReqID, Challenge: challenge}
-	wire, err := sevlet.NewReject(testMid, testReqID+1, testOrdID, ce, secret)
+	wire, err := sevlet.NewReject(testMid, testReqID+1, testOrdID, testAmt, testDebit, testCredit, ce, secret)
 	if err != nil {
 		t.Fatal(err)
 	}
