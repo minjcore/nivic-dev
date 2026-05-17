@@ -2,6 +2,21 @@
 
 A privacy-first super app — no phone number, 4-byte user IDs, social recovery.
 
+## Screenshots
+
+<p float="left">
+  <img src="screenshots/IMG_3332.PNG" width="160" alt="Login">
+  <img src="screenshots/IMG_3333.PNG" width="160" alt="Enter ID">
+  <img src="screenshots/IMG_3334.PNG" width="160" alt="Home">
+  <img src="screenshots/IMG_3335.PNG" width="160" alt="Transfer">
+</p>
+<p float="left">
+  <img src="screenshots/IMG_3336.PNG" width="160" alt="History">
+  <img src="screenshots/IMG_3337.PNG" width="160" alt="QR Scan">
+  <img src="screenshots/IMG_3339.PNG" width="160" alt="Cards">
+  <img src="screenshots/IMG_3340.PNG" width="160" alt="Add Card">
+</p>
+
 ## Architecture
 
 ```
