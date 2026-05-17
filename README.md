@@ -24,8 +24,9 @@ iPhone (iOS 17+)
 | **Merchants** | Go | 8090 |
 | **Cards** | Go + SQLite | 8091 |
 | **TopupWorker** | Go | — (AMQP consumer) |
-| **saving-ios** | Swift / SwiftUI | iOS |
+| **saving-ios** | Swift / SwiftUI | iOS 17+ |
 | **wire** | Xcode host app | — |
+| **wire-android** | Kotlin / Jetpack Compose | Android 8+ (API 26) |
 
 ## Wire Protocol
 
@@ -65,6 +66,8 @@ cd TopupWorker && FLOAT_PWD=saving_float_changeme ./topup-worker
 **iOS:** Open `wire/wire.xcodeproj` in Xcode, set your team, run on device.
 
 The app defaults to `127.0.0.1` (Simulator). For a real device, edit `macIP` in `wire/wire/wireApp.swift` to your Mac's LAN IP.
+
+**Android:** Open `wire-android/` in Android Studio, edit the backend host in `WireApp.kt`, run on device or emulator (API 26+).
 
 ## Environment variables
 
