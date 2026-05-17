@@ -8,6 +8,9 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 data class MerchantStats(val totalEarned: Long, val orderCount: Int)
+data class LoyaltyBalance(val uid: Long, val mid: Long, val points: Long, val valueVnd: Long)
+data class LoyaltyMember(val uid: Long, val points: Long)
+data class UserLoyaltyEntry(val mid: Long, val merchantName: String, val points: Long)
 
 data class MerchantOrder(
     val id: String,
@@ -57,10 +60,35 @@ class MerchantsClient(private val baseURL: String = "http://10.0.2.2:8090") {
         }
     }
 
-    suspend fun createOrder(mid: Long, token: String, amount: Long, note: String): CreateOrderResult =
+    suspend fun loyaltyBalance(mid: Long, uid: Long): LoyaltyBalance = withContext(Dispatchers.IO) {
+        val conn = get("$baseURL/merchants/$mid/loyalty/$uid")
+        val j    = JSONObject(conn.inputStream.bufferedReader().readText())
+        LoyaltyBalance(j.getLong("uid"), j.getLong("mid"), j.getLong("points"), j.getLong("value_vnd"))
+    }
+
+    suspend fun loyaltyMembers(mid: Long, token: String): List<LoyaltyMember> = withContext(Dispatchers.IO) {
+        val conn = get("$baseURL/merchants/$mid/loyalty", token)
+        val arr  = JSONArray(conn.inputStream.bufferedReader().readText())
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            LoyaltyMember(o.getLong("uid"), o.getLong("points"))
+        }
+    }
+
+    suspend fun userLoyalty(uid: Long): List<UserLoyaltyEntry> = withContext(Dispatchers.IO) {
+        val conn = get("$baseURL/loyalty/user/$uid")
+        val arr  = JSONArray(conn.inputStream.bufferedReader().readText())
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            UserLoyaltyEntry(o.getLong("mid"), o.getString("merchant_name"), o.getLong("points"))
+        }
+    }
+
+    suspend fun createOrder(mid: Long, token: String, amount: Long, note: String, discountPoints: Long = 0): CreateOrderResult =
         withContext(Dispatchers.IO) {
             val body = JSONObject().apply {
                 put("amount", amount); put("note", note)
+                if (discountPoints > 0) put("discount_points", discountPoints)
             }.toString()
             val conn = post("$baseURL/merchants/$mid/orders", body, token)
             if (conn.responseCode != 200) throw Exception("Tạo đơn thất bại")

@@ -78,16 +78,20 @@ type handler struct {
 
 func (h *handler) routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health",                         h.handleHealth)
-	mux.HandleFunc("GET /merchants/{mid}",                h.handleGet)
-	mux.HandleFunc("POST /merchants",                     h.handleRegister)
-	mux.HandleFunc("POST /merchants/onboard",             h.handleOnboard)
-	mux.HandleFunc("POST /merchants/{mid}/orders",        h.handleCreateOrder)
-	mux.HandleFunc("GET /merchants/{mid}/orders",         h.handleListOrders)
-	mux.HandleFunc("GET /merchants/{mid}/orders/{oid}",   h.handleGetOrder)
-	mux.HandleFunc("GET /merchants/{mid}/stats",          h.handleStats)
-	mux.HandleFunc("POST /orders/{oid}/confirm",          h.handleConfirmOrder)
-	mux.HandleFunc("POST /payment_request/verify",        h.handleVerify)
+	mux.HandleFunc("GET /health",                              h.handleHealth)
+	mux.HandleFunc("GET /merchants/{mid}",                     h.handleGet)
+	mux.HandleFunc("POST /merchants",                          h.handleRegister)
+	mux.HandleFunc("POST /merchants/onboard",                  h.handleOnboard)
+	mux.HandleFunc("POST /merchants/{mid}/orders",             h.handleCreateOrder)
+	mux.HandleFunc("GET /merchants/{mid}/orders",              h.handleListOrders)
+	mux.HandleFunc("GET /merchants/{mid}/orders/{oid}",        h.handleGetOrder)
+	mux.HandleFunc("GET /merchants/{mid}/stats",               h.handleStats)
+	mux.HandleFunc("GET /merchants/{mid}/loyalty",             h.handleLoyaltyMembers)
+	mux.HandleFunc("GET /merchants/{mid}/loyalty/{uid}",       h.handleLoyaltyGet)
+	mux.HandleFunc("POST /merchants/{mid}/loyalty/{uid}/award",h.handleLoyaltyAward)
+	mux.HandleFunc("GET /loyalty/user/{uid}",                  h.handleUserLoyalty)
+	mux.HandleFunc("POST /orders/{oid}/confirm",               h.handleConfirmOrder)
+	mux.HandleFunc("POST /payment_request/verify",             h.handleVerify)
 	return mux
 }
 
@@ -197,9 +201,10 @@ func (h *handler) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Amount  uint64 `json:"amount"`
-		Note    string `json:"note"`
-		OrderID string `json:"order_id"` // optional; POS-supplied reference
+		Amount         uint64 `json:"amount"`
+		Note           string `json:"note"`
+		OrderID        string `json:"order_id"`       // optional; POS-supplied reference
+		DiscountPoints int64  `json:"discount_points"` // points to deduct at payment
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, 400, "bad json")
@@ -210,13 +215,22 @@ func (h *handler) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use caller-supplied order_id or generate one
+	// Apply point discount: 1 point = 100 VND
+	finalAmount := req.Amount
+	if req.DiscountPoints > 0 {
+		discount := uint64(req.DiscountPoints) * 100
+		if discount >= finalAmount {
+			discount = finalAmount - 1 // minimum 1 VND
+		}
+		finalAmount -= discount
+	}
+
 	orderID := req.OrderID
 	if orderID == "" {
 		orderID = fmt.Sprintf("%d-%d", mid, time.Now().UnixMilli())
 	}
 
-	if err := h.store.CreateOrder(orderID, mid, req.Amount, req.Note); err != nil {
+	if err := h.store.CreateOrder(orderID, mid, finalAmount, req.Note, req.DiscountPoints); err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
@@ -294,11 +308,12 @@ func (h *handler) handleConfirmOrder(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "bad json")
 		return
 	}
-	if err := h.store.MarkPaid(r.PathValue("oid"), body.PaidBy); err != nil {
+	pts, err := h.store.MarkPaid(r.PathValue("oid"), body.PaidBy)
+	if err != nil {
 		jsonErr(w, 400, err.Error())
 		return
 	}
-	jsonOK(w, map[string]string{"status": "paid"})
+	jsonOK(w, map[string]any{"status": "paid", "points_awarded": pts})
 }
 
 // POST /payment_request/verify
@@ -482,6 +497,107 @@ func (h *handler) handleStats(w http.ResponseWriter, r *http.Request) {
 		"total_earned": earned,
 		"order_count":  count,
 	})
+}
+
+// GET /merchants/{mid}/loyalty
+// Header: X-Merchant-Token — returns all loyalty members sorted by points desc.
+
+func (h *handler) handleLoyaltyMembers(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid"); return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil || m == nil {
+		jsonErr(w, 404, "merchant not found"); return
+	}
+	if r.Header.Get("X-Merchant-Token") != m.Token {
+		jsonErr(w, 401, "unauthorized"); return
+	}
+	members, err := h.store.ListLoyaltyMembers(mid)
+	if err != nil {
+		jsonErr(w, 500, err.Error()); return
+	}
+	if members == nil {
+		members = []LoyaltyEntry{}
+	}
+	jsonOK(w, members)
+}
+
+// GET /merchants/{mid}/loyalty/{uid}
+// Public — returns point balance for uid at this merchant.
+
+func (h *handler) handleLoyaltyGet(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid"); return
+	}
+	uid, err := parseMID(r.PathValue("uid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid uid"); return
+	}
+	pts, err := h.store.GetPoints(mid, uid)
+	if err != nil {
+		jsonErr(w, 500, err.Error()); return
+	}
+	jsonOK(w, map[string]any{
+		"uid":         uid,
+		"mid":         mid,
+		"points":      pts,
+		"value_vnd":   pts * 100,
+		"rate":        "1 point = 100 ₫ / 1,000 ₫ spent = 1 point",
+	})
+}
+
+// POST /merchants/{mid}/loyalty/{uid}/award
+// Header: X-Merchant-Token — manually award points (bonus, correction, etc.)
+// Body: { "points": 50 }
+
+func (h *handler) handleLoyaltyAward(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid"); return
+	}
+	uid, err := parseMID(r.PathValue("uid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid uid"); return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil || m == nil {
+		jsonErr(w, 404, "merchant not found"); return
+	}
+	if r.Header.Get("X-Merchant-Token") != m.Token {
+		jsonErr(w, 401, "unauthorized"); return
+	}
+	var req struct {
+		Points int64 `json:"points"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Points == 0 {
+		jsonErr(w, 400, "points required"); return
+	}
+	if err := h.store.AwardPoints(mid, uid, req.Points); err != nil {
+		jsonErr(w, 500, err.Error()); return
+	}
+	pts, _ := h.store.GetPoints(mid, uid)
+	jsonOK(w, map[string]any{"uid": uid, "mid": mid, "points": pts})
+}
+
+// GET /loyalty/user/{uid}
+// Public — returns all merchants where uid has loyalty points.
+
+func (h *handler) handleUserLoyalty(w http.ResponseWriter, r *http.Request) {
+	uid, err := parseMID(r.PathValue("uid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid uid"); return
+	}
+	entries, err := h.store.UserLoyalty(uid)
+	if err != nil {
+		jsonErr(w, 500, err.Error()); return
+	}
+	if entries == nil {
+		entries = []UserLoyaltyEntry{}
+	}
+	jsonOK(w, entries)
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

@@ -27,15 +27,33 @@ const (
 )
 
 type Order struct {
-	ID        string  `json:"id"`
-	MID       uint32  `json:"mid"`
-	Amount    uint64  `json:"amount"`
-	Note      string  `json:"note,omitempty"`
-	Status    string  `json:"status"`
-	CreatedAt int64   `json:"created_at"`
-	PaidAt    *int64  `json:"paid_at,omitempty"`
-	PaidBy    *uint32 `json:"paid_by,omitempty"`
+	ID             string  `json:"id"`
+	MID            uint32  `json:"mid"`
+	Amount         uint64  `json:"amount"`
+	Note           string  `json:"note,omitempty"`
+	Status         string  `json:"status"`
+	CreatedAt      int64   `json:"created_at"`
+	PaidAt         *int64  `json:"paid_at,omitempty"`
+	PaidBy         *uint32 `json:"paid_by,omitempty"`
+	DiscountPoints int64   `json:"discount_points,omitempty"`
+	PointsAwarded  int64   `json:"points_awarded,omitempty"`
 }
+
+// LoyaltyEntry is one row in the merchant's loyalty member list.
+type LoyaltyEntry struct {
+	UID    uint32 `json:"uid"`
+	Points int64  `json:"points"`
+}
+
+// UserLoyaltyEntry is one merchant's points from a user's perspective.
+type UserLoyaltyEntry struct {
+	MID        uint32 `json:"mid"`
+	MerchantName string `json:"merchant_name"`
+	Points     int64  `json:"points"`
+}
+
+// PointsPerVND: 1 point per 1,000 VND spent.
+const PointsPerVND = 1_000
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
@@ -65,20 +83,30 @@ func migrate(db *sql.DB) error {
 			created_at   INTEGER NOT NULL
 		);
 		CREATE TABLE IF NOT EXISTS orders (
-			id         TEXT    PRIMARY KEY,
-			mid        INTEGER NOT NULL REFERENCES merchants(mid),
-			amount     INTEGER NOT NULL,
-			note       TEXT    NOT NULL DEFAULT '',
-			status     TEXT    NOT NULL DEFAULT 'pending',
-			created_at INTEGER NOT NULL,
-			paid_at    INTEGER,
-			paid_by    INTEGER
+			id              TEXT    PRIMARY KEY,
+			mid             INTEGER NOT NULL REFERENCES merchants(mid),
+			amount          INTEGER NOT NULL,
+			note            TEXT    NOT NULL DEFAULT '',
+			status          TEXT    NOT NULL DEFAULT 'pending',
+			created_at      INTEGER NOT NULL,
+			paid_at         INTEGER,
+			paid_by         INTEGER,
+			discount_points INTEGER NOT NULL DEFAULT 0,
+			points_awarded  INTEGER NOT NULL DEFAULT 0
 		);
 		CREATE INDEX IF NOT EXISTS idx_orders_mid ON orders(mid);
+		CREATE TABLE IF NOT EXISTS loyalty_points (
+			uid    INTEGER NOT NULL,
+			mid    INTEGER NOT NULL REFERENCES merchants(mid),
+			points INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY (uid, mid)
+		);
+		CREATE INDEX IF NOT EXISTS idx_loyalty_uid ON loyalty_points(uid);
 	`)
-	// Add columns that may not exist in older DBs (SQLite ignores errors here via separate stmts)
 	db.Exec(`ALTER TABLE merchants ADD COLUMN privkey_b64 TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE merchants ADD COLUMN token       TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE orders ADD COLUMN discount_points INTEGER NOT NULL DEFAULT 0`)
+	db.Exec(`ALTER TABLE orders ADD COLUMN points_awarded  INTEGER NOT NULL DEFAULT 0`)
 	return err
 }
 
@@ -110,41 +138,38 @@ func (s *Store) Get(mid uint32) (*Merchant, error) {
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
 
-func (s *Store) CreateOrder(id string, mid uint32, amount uint64, note string) error {
+func (s *Store) CreateOrder(id string, mid uint32, amount uint64, note string, discountPoints int64) error {
 	_, err := s.db.Exec(
-		`INSERT INTO orders (id, mid, amount, note, status, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		id, mid, amount, note, StatusPending, time.Now().UnixMilli(),
+		`INSERT INTO orders (id, mid, amount, note, status, created_at, discount_points)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		id, mid, amount, note, StatusPending, time.Now().UnixMilli(), discountPoints,
 	)
 	return err
 }
 
 func (s *Store) GetOrder(id string) (*Order, error) {
 	row := s.db.QueryRow(
-		`SELECT id, mid, amount, note, status, created_at, paid_at, paid_by FROM orders WHERE id = ?`, id)
+		`SELECT id, mid, amount, note, status, created_at, paid_at, paid_by,
+		        discount_points, points_awarded FROM orders WHERE id = ?`, id)
 	var o Order
 	var paidAt sql.NullInt64
 	var paidBy sql.NullInt32
 	if err := row.Scan(&o.ID, &o.MID, &o.Amount, &o.Note, &o.Status,
-		&o.CreatedAt, &paidAt, &paidBy); err != nil {
+		&o.CreatedAt, &paidAt, &paidBy, &o.DiscountPoints, &o.PointsAwarded); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
-	if paidAt.Valid {
-		v := paidAt.Int64
-		o.PaidAt = &v
-	}
-	if paidBy.Valid {
-		v := uint32(paidBy.Int32)
-		o.PaidBy = &v
-	}
+	if paidAt.Valid { v := paidAt.Int64; o.PaidAt = &v }
+	if paidBy.Valid { v := uint32(paidBy.Int32); o.PaidBy = &v }
 	return &o, nil
 }
 
 func (s *Store) ListOrders(mid uint32, limit int) ([]Order, error) {
 	rows, err := s.db.Query(
-		`SELECT id, mid, amount, note, status, created_at, paid_at, paid_by
+		`SELECT id, mid, amount, note, status, created_at, paid_at, paid_by,
+		        discount_points, points_awarded
 		 FROM orders WHERE mid = ? ORDER BY created_at DESC LIMIT ?`, mid, limit)
 	if err != nil {
 		return nil, err
@@ -156,17 +181,11 @@ func (s *Store) ListOrders(mid uint32, limit int) ([]Order, error) {
 		var paidAt sql.NullInt64
 		var paidBy sql.NullInt32
 		if err := rows.Scan(&o.ID, &o.MID, &o.Amount, &o.Note, &o.Status,
-			&o.CreatedAt, &paidAt, &paidBy); err != nil {
+			&o.CreatedAt, &paidAt, &paidBy, &o.DiscountPoints, &o.PointsAwarded); err != nil {
 			return nil, err
 		}
-		if paidAt.Valid {
-			v := paidAt.Int64
-			o.PaidAt = &v
-		}
-		if paidBy.Valid {
-			v := uint32(paidBy.Int32)
-			o.PaidBy = &v
-		}
+		if paidAt.Valid { v := paidAt.Int64; o.PaidAt = &v }
+		if paidBy.Valid { v := uint32(paidBy.Int32); o.PaidBy = &v }
 		out = append(out, o)
 	}
 	return out, nil
@@ -179,18 +198,122 @@ func (s *Store) Stats(mid uint32) (totalEarned uint64, orderCount int, err error
 	return
 }
 
-func (s *Store) MarkPaid(orderID string, paidBy uint32) error {
-	res, err := s.db.Exec(
-		`UPDATE orders SET status = ?, paid_at = ?, paid_by = ?
-		 WHERE id = ? AND status = ?`,
-		StatusPaid, time.Now().UnixMilli(), paidBy, orderID, StatusPending,
+// MarkPaid marks an order as paid, deducts used points, and awards new points.
+// Returns points awarded so callers can include it in responses.
+func (s *Store) MarkPaid(orderID string, paidBy uint32) (pointsAwarded int64, err error) {
+	// Load order to get amount and discount_points
+	o, err := s.GetOrder(orderID)
+	if err != nil || o == nil {
+		return 0, fmt.Errorf("order not found or already processed")
+	}
+	if o.Status != StatusPending {
+		return 0, fmt.Errorf("order not found or already processed")
+	}
+
+	// Points to award = floor(amount / PointsPerVND)
+	pointsAwarded = int64(o.Amount / PointsPerVND)
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	res, err := tx.Exec(
+		`UPDATE orders SET status=?, paid_at=?, paid_by=?, points_awarded=?
+		 WHERE id=? AND status=?`,
+		StatusPaid, time.Now().UnixMilli(), paidBy, pointsAwarded, orderID, StatusPending,
 	)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return fmt.Errorf("order not found or already processed")
+	if n, _ := res.RowsAffected(); n == 0 {
+		return 0, fmt.Errorf("order not found or already processed")
 	}
-	return nil
+
+	// Deduct used points (if any)
+	if o.DiscountPoints > 0 {
+		if _, err := tx.Exec(
+			`UPDATE loyalty_points SET points = MAX(0, points - ?)
+			 WHERE uid=? AND mid=?`,
+			o.DiscountPoints, paidBy, o.MID,
+		); err != nil {
+			return 0, err
+		}
+	}
+
+	// Award earned points
+	if pointsAwarded > 0 {
+		if _, err := tx.Exec(
+			`INSERT INTO loyalty_points (uid, mid, points) VALUES (?, ?, ?)
+			 ON CONFLICT(uid, mid) DO UPDATE SET points = points + excluded.points`,
+			paidBy, o.MID, pointsAwarded,
+		); err != nil {
+			return 0, err
+		}
+	}
+
+	return pointsAwarded, tx.Commit()
+}
+
+// ─── Loyalty ──────────────────────────────────────────────────────────────────
+
+func (s *Store) GetPoints(mid, uid uint32) (int64, error) {
+	row := s.db.QueryRow(`SELECT points FROM loyalty_points WHERE uid=? AND mid=?`, uid, mid)
+	var pts int64
+	if err := row.Scan(&pts); err == sql.ErrNoRows {
+		return 0, nil
+	} else if err != nil {
+		return 0, err
+	}
+	return pts, nil
+}
+
+func (s *Store) AwardPoints(mid, uid uint32, points int64) error {
+	_, err := s.db.Exec(
+		`INSERT INTO loyalty_points (uid, mid, points) VALUES (?, ?, ?)
+		 ON CONFLICT(uid, mid) DO UPDATE SET points = points + excluded.points`,
+		uid, mid, points,
+	)
+	return err
+}
+
+func (s *Store) ListLoyaltyMembers(mid uint32) ([]LoyaltyEntry, error) {
+	rows, err := s.db.Query(
+		`SELECT uid, points FROM loyalty_points WHERE mid=? ORDER BY points DESC`, mid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []LoyaltyEntry
+	for rows.Next() {
+		var e LoyaltyEntry
+		if err := rows.Scan(&e.UID, &e.Points); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
+func (s *Store) UserLoyalty(uid uint32) ([]UserLoyaltyEntry, error) {
+	rows, err := s.db.Query(
+		`SELECT lp.mid, m.name, lp.points
+		 FROM loyalty_points lp
+		 JOIN merchants m ON m.mid = lp.mid
+		 WHERE lp.uid=? AND lp.points > 0
+		 ORDER BY lp.points DESC`, uid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []UserLoyaltyEntry
+	for rows.Next() {
+		var e UserLoyaltyEntry
+		if err := rows.Scan(&e.MID, &e.MerchantName, &e.Points); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, nil
 }

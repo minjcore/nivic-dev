@@ -6,6 +6,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color as AColor
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
+import dev.nivic.wire.data.LoyaltyMember
 import dev.nivic.wire.data.MerchantOrder
 import dev.nivic.wire.data.MerchantStats
 import dev.nivic.wire.data.MerchantsClient
@@ -193,14 +195,17 @@ private fun MerchantDashboardView(
     client:  MerchantsClient,
     onClose: () -> Unit,
 ) {
-    var stats          by remember { mutableStateOf<MerchantStats?>(null) }
-    var orders         by remember { mutableStateOf<List<MerchantOrder>>(emptyList()) }
-    var showCreateOrder by remember { mutableStateOf(false) }
-    val scope          = rememberCoroutineScope()
+    var stats           by remember { mutableStateOf<MerchantStats?>(null) }
+    var orders          by remember { mutableStateOf<List<MerchantOrder>>(emptyList()) }
+    var members         by remember { mutableStateOf<List<LoyaltyMember>>(emptyList()) }
+    var showCreateOrder  by remember { mutableStateOf(false) }
+    var showLoyalty      by remember { mutableStateOf(false) }
+    val scope           = rememberCoroutineScope()
 
     suspend fun load() {
-        runCatching { stats  = client.stats(uid, token) }
-        runCatching { orders = client.listOrders(uid, token) }
+        runCatching { stats   = client.stats(uid, token) }
+        runCatching { orders  = client.listOrders(uid, token) }
+        runCatching { members = client.loyaltyMembers(uid, token) }
     }
 
     LaunchedEffect(Unit) { load() }
@@ -219,24 +224,33 @@ private fun MerchantDashboardView(
         }
 
         LazyColumn(Modifier.weight(1f)) {
-            // ── Stats card ───────────────────────────────────────────────────
+            // ── Stats row ────────────────────────────────────────────────────
             item {
-                Surface(
+                Row(
                     Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-                    shape = RoundedCornerShape(20.dp),
-                    color = Color.White.copy(alpha = 0.06f)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(
-                        Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    Surface(Modifier.weight(1f), shape = RoundedCornerShape(16.dp),
+                        color = Color.White.copy(alpha = 0.06f)) {
+                        Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Doanh thu", color = Color.Gray, fontSize = 12.sp)
+                            Text("${vndFmt(stats?.totalEarned ?: 0)} ₫",
+                                color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                            Text("${stats?.orderCount ?: 0} đơn", color = Color.Gray, fontSize = 12.sp)
+                        }
+                    }
+                    Surface(
+                        Modifier.weight(1f).clickable { showLoyalty = true },
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.White.copy(alpha = 0.06f)
                     ) {
-                        Text("Doanh thu", color = Color.Gray, fontSize = 13.sp)
-                        Text(
-                            "${vndFmt(stats?.totalEarned ?: 0)} ₫",
-                            color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Black
-                        )
-                        Text("${stats?.orderCount ?: 0} đơn thành công",
-                            color = Color.Gray, fontSize = 13.sp)
+                        Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Star, null, tint = Color(0xFFFFC107),
+                                modifier = Modifier.size(24.dp))
+                            Text("${members.size}", color = Color.White, fontSize = 22.sp,
+                                fontWeight = FontWeight.Black)
+                            Text("Thành viên", color = Color.Gray, fontSize = 12.sp)
+                        }
                     }
                 }
             }
@@ -273,6 +287,9 @@ private fun MerchantDashboardView(
             onDismiss = { showCreateOrder = false },
             onDone    = { showCreateOrder = false; scope.launch { load() } })
     }
+    if (showLoyalty) {
+        LoyaltyMembersDialog(members, onDismiss = { showLoyalty = false })
+    }
 }
 
 @Composable
@@ -306,6 +323,53 @@ private fun OrderRow(order: MerchantOrder) {
     HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
 }
 
+// ─── Loyalty Members Dialog ───────────────────────────────────────────────────
+
+@Composable
+private fun LoyaltyMembersDialog(
+    members:   List<LoyaltyMember>,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor   = Color(0xFF1A1A1A),
+        title            = { Text("Thành viên tích điểm", color = Color.White) },
+        text = {
+            if (members.isEmpty()) {
+                Text("Chưa có thành viên nào", color = Color.Gray, fontSize = 14.sp)
+            } else {
+                LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                    items(members) { m ->
+                        Row(
+                            Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Person, null,
+                                    tint = Color.Gray, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("UID ${m.uid}", color = Color.White, fontSize = 14.sp)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Star, null,
+                                    tint = Color(0xFFFFC107), modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("${m.points} điểm", color = Color(0xFFFFC107),
+                                    fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Đóng", color = Color.White) }
+        }
+    )
+}
+
 // ─── Create Order Dialog ──────────────────────────────────────────────────────
 
 @Composable
@@ -316,12 +380,18 @@ private fun CreateOrderDialog(
     onDismiss: () -> Unit,
     onDone:    () -> Unit,
 ) {
-    var amountText by remember { mutableStateOf("") }
-    var note       by remember { mutableStateOf("") }
-    var loading    by remember { mutableStateOf(false) }
-    var error      by remember { mutableStateOf<String?>(null) }
-    var qrBitmap   by remember { mutableStateOf<Bitmap?>(null) }
-    val scope      = rememberCoroutineScope()
+    var amountText    by remember { mutableStateOf("") }
+    var note          by remember { mutableStateOf("") }
+    var discountText  by remember { mutableStateOf("") }
+    var loading       by remember { mutableStateOf(false) }
+    var error         by remember { mutableStateOf<String?>(null) }
+    var qrBitmap      by remember { mutableStateOf<Bitmap?>(null) }
+    val scope         = rememberCoroutineScope()
+
+    val amount        = amountText.toLongOrNull() ?: 0L
+    val discountPts   = discountText.toLongOrNull() ?: 0L
+    val discountVnd   = discountPts * 100L
+    val finalAmount   = maxOf(1L, amount - discountVnd)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -364,6 +434,42 @@ private fun CreateOrderDialog(
                             unfocusedLabelColor  = Color.Gray,
                         )
                     )
+                    OutlinedTextField(
+                        value         = discountText,
+                        onValueChange = { discountText = it.filter { c -> c.isDigit() } },
+                        label         = { Text("Dùng điểm tích lũy") },
+                        placeholder   = { Text("0") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier      = Modifier.fillMaxWidth(),
+                        colors        = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor     = Color(0xFFFFC107),
+                            unfocusedTextColor   = Color(0xFFFFC107),
+                            focusedBorderColor   = Color(0xFFFFC107),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedLabelColor    = Color(0xFFFFC107),
+                            unfocusedLabelColor  = Color.Gray,
+                        ),
+                        trailingIcon  = {
+                            if (discountPts > 0) {
+                                Text("- ${vndFmt(discountVnd)} ₫",
+                                    color = Color(0xFF4CAF50), fontSize = 12.sp,
+                                    modifier = Modifier.padding(end = 8.dp))
+                            }
+                        }
+                    )
+                    if (discountPts > 0 && amount > 0) {
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .background(Color(0xFF1E2A1A), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Thực thu:", color = Color.Gray, fontSize = 13.sp)
+                            Text("${vndFmt(finalAmount)} ₫",
+                                color = Color(0xFF4CAF50), fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold)
+                        }
+                    }
                     error?.let { Text(it, color = Color.Red, fontSize = 13.sp) }
                 }
             } else {
@@ -380,6 +486,11 @@ private fun CreateOrderDialog(
                     }
                     Text(note.ifEmpty { "Đang chờ thanh toán..." },
                         color = Color.Gray, fontSize = 13.sp)
+                    if (discountPts > 0) {
+                        Spacer(Modifier.height(4.dp))
+                        Text("Giảm ${vndFmt(discountVnd)} ₫ (${discountPts} điểm)",
+                            color = Color(0xFF4CAF50), fontSize = 12.sp)
+                    }
                 }
             }
         },
@@ -387,10 +498,10 @@ private fun CreateOrderDialog(
             if (qrBitmap == null) {
                 Button(
                     onClick = {
-                        val amount = amountText.toLongOrNull() ?: return@Button
+                        val amt = amountText.toLongOrNull() ?: return@Button
                         scope.launch {
                             loading = true; error = null
-                            runCatching { client.createOrder(mid, token, amount, note) }
+                            runCatching { client.createOrder(mid, token, amt, note, discountPts) }
                                 .onSuccess { result ->
                                     qrBitmap = generateQR("saving://pay?pr=${result.pr}")
                                 }

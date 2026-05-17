@@ -150,8 +150,37 @@ public struct MerchantsClient {
         return (try? JSONDecoder().decode([OrderInfo].self, from: data)) ?? []
     }
 
+    // Loyalty: points balance for uid at merchant mid (public, no token needed).
+    public func loyaltyBalance(mid: UInt32, uid: UInt32) async throws -> LoyaltyBalance {
+        guard let url = URL(string: "\(baseURL)/merchants/\(mid)/loyalty/\(uid)") else {
+            throw VerifyError.network("bad URL")
+        }
+        let (data, _) = try await URLSession.shared.data(from: url)
+        return try JSONDecoder().decode(LoyaltyBalance.self, from: data)
+    }
+
+    // Loyalty: all merchants where uid has points (public).
+    public func userLoyalty(uid: UInt32) async throws -> [UserLoyaltyEntry] {
+        guard let url = URL(string: "\(baseURL)/loyalty/user/\(uid)") else {
+            throw VerifyError.network("bad URL")
+        }
+        let (data, _) = try await URLSession.shared.data(from: url)
+        return (try? JSONDecoder().decode([UserLoyaltyEntry].self, from: data)) ?? []
+    }
+
+    // Loyalty: list members for merchant dashboard.
+    public func loyaltyMembers(mid: UInt32, token: String) async throws -> [LoyaltyMember] {
+        guard let url = URL(string: "\(baseURL)/merchants/\(mid)/loyalty") else {
+            throw VerifyError.network("bad URL")
+        }
+        var req = URLRequest(url: url)
+        req.setValue(token, forHTTPHeaderField: "X-Merchant-Token")
+        let (data, _) = try await URLSession.shared.data(for: req)
+        return (try? JSONDecoder().decode([LoyaltyMember].self, from: data)) ?? []
+    }
+
     // Create an order and get back a QR payload.
-    public func createOrder(mid: UInt32, token: String, amount: UInt64, note: String) async throws -> CreateOrderResponse {
+    public func createOrder(mid: UInt32, token: String, amount: UInt64, note: String, discountPoints: Int64 = 0) async throws -> CreateOrderResponse {
         guard let url = URL(string: "\(baseURL)/merchants/\(mid)/orders") else {
             throw VerifyError.network("bad URL")
         }
@@ -159,7 +188,10 @@ public struct MerchantsClient {
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(token, forHTTPHeaderField: "X-Merchant-Token")
-        req.httpBody = try JSONEncoder().encode(["amount": amount, "note": note])
+        struct OrderReq: Encodable {
+            let amount: UInt64; let note: String; let discount_points: Int64
+        }
+        req.httpBody = try JSONEncoder().encode(OrderReq(amount: amount, note: note, discount_points: discountPoints))
         req.timeoutInterval = 10
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
@@ -179,6 +211,30 @@ public struct MerchantsClient {
         req.timeoutInterval = 10
         _ = try? await URLSession.shared.data(for: req)
         // Fire-and-forget: payment already succeeded in Wire; order confirmation is best-effort.
+    }
+}
+
+public struct LoyaltyBalance: Codable {
+    public let uid:      UInt32
+    public let mid:      UInt32
+    public let points:   Int64
+    public let valueVND: Int64
+    enum CodingKeys: String, CodingKey {
+        case uid, mid, points, valueVND = "value_vnd"
+    }
+}
+
+public struct LoyaltyMember: Codable {
+    public let uid:    UInt32
+    public let points: Int64
+}
+
+public struct UserLoyaltyEntry: Codable {
+    public let mid:          UInt32
+    public let merchantName: String
+    public let points:       Int64
+    enum CodingKeys: String, CodingKey {
+        case mid, merchantName = "merchant_name", points
     }
 }
 

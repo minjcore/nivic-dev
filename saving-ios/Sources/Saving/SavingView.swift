@@ -145,6 +145,7 @@ struct HomeView: View {
     @State private var showQRScan   = false
     @State private var showCards    = false
     @State private var showMerchant = false
+    @State private var showLoyalty  = false
     @State private var toast: String? = nil
 
     var body: some View {
@@ -198,6 +199,9 @@ struct HomeView: View {
                             MiniAppTile(icon: "storefront.fill", label: "Bán hàng") {
                                 showMerchant = true
                             }
+                            MiniAppTile(icon: "star.circle.fill", label: "Tích điểm") {
+                                showLoyalty = true
+                            }
                             MiniAppTile(icon: "arrow.counterclockwise.circle", label: "Phục hồi") {
                                 // coming soon
                             }
@@ -246,6 +250,9 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showMerchant) {
             MerchantSheet(merchantsClient: merchantsClient, uid: accountID)
+        }
+        .sheet(isPresented: $showLoyalty) {
+            MyLoyaltySheet(merchantsClient: merchantsClient, uid: accountID)
         }
         .task { await refreshBalance() }
         .onReceive(NotificationCenter.default.publisher(for: .savingDeviceToken)) { note in
@@ -1602,7 +1609,9 @@ struct MerchantDashboardView: View {
 
     @State private var stats: MerchantStats?
     @State private var orders: [OrderInfo] = []
+    @State private var members: [LoyaltyMember] = []
     @State private var showCreateOrder = false
+    @State private var showLoyalty = false
     @State private var loading = false
 
     var body: some View {
@@ -1612,21 +1621,35 @@ struct MerchantDashboardView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         // ── Stats card ──────────────────────────────────────
-                        VStack(spacing: 6) {
-                            Text("Doanh thu")
-                                .font(.caption)
-                                .foregroundStyle(.gray)
-                            Text(fmtVND(stats?.totalEarned ?? 0) + " ₫")
-                                .font(.system(size: 36, weight: .bold))
-                                .foregroundStyle(.white)
-                            Text("\(stats?.orderCount ?? 0) đơn thành công")
-                                .font(.caption)
-                                .foregroundStyle(.gray)
+                        HStack(spacing: 12) {
+                            VStack(spacing: 4) {
+                                Text("Doanh thu")
+                                    .font(.caption).foregroundStyle(.gray)
+                                Text(fmtVND(stats?.totalEarned ?? 0) + " ₫")
+                                    .font(.system(size: 28, weight: .bold)).foregroundStyle(.white)
+                                Text("\(stats?.orderCount ?? 0) đơn")
+                                    .font(.caption).foregroundStyle(.gray)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(18)
+                            .background(Color.white.opacity(0.06))
+                            .cornerRadius(16)
+
+                            Button { showLoyalty = true } label: {
+                                VStack(spacing: 4) {
+                                    Image(systemName: "star.fill")
+                                        .font(.title2).foregroundStyle(.yellow)
+                                    Text("\(members.count)")
+                                        .font(.title2.bold()).foregroundStyle(.white)
+                                    Text("Thành viên")
+                                        .font(.caption).foregroundStyle(.gray)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(18)
+                                .background(Color.white.opacity(0.06))
+                                .cornerRadius(16)
+                            }
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(24)
-                        .background(Color.white.opacity(0.06))
-                        .cornerRadius(20)
                         .padding(.horizontal, 20)
 
                         // ── Create order button ─────────────────────────────
@@ -1668,6 +1691,9 @@ struct MerchantDashboardView: View {
             .sheet(isPresented: $showCreateOrder, onDismiss: { Task { await load() } }) {
                 CreateOrderSheet(merchantsClient: merchantsClient, mid: uid, token: token)
             }
+            .sheet(isPresented: $showLoyalty) {
+                LoyaltyMembersSheet(members: members)
+            }
             .task { await load() }
         }
         .preferredColorScheme(.dark)
@@ -1678,8 +1704,10 @@ struct MerchantDashboardView: View {
         defer { loading = false }
         async let s = try? merchantsClient.stats(mid: uid, token: token)
         async let o = (try? merchantsClient.listOrders(mid: uid, token: token)) ?? []
-        stats  = await s
-        orders = await o
+        async let m = (try? merchantsClient.loyaltyMembers(mid: uid, token: token)) ?? []
+        stats   = await s
+        orders  = await o
+        members = await m
     }
 
     private func fmtVND(_ n: UInt64) -> String {
@@ -1747,9 +1775,10 @@ struct CreateOrderSheet: View {
     let mid: UInt32
     let token: String
 
-    @State private var amountText = ""
-    @State private var note       = ""
-    @State private var loading    = false
+    @State private var amountText     = ""
+    @State private var note           = ""
+    @State private var discountPoints = ""
+    @State private var loading        = false
     @State private var error: String?
     @State private var qrPayload: String?
     @Environment(\.dismiss) private var dismiss
@@ -1792,6 +1821,23 @@ struct CreateOrderSheet: View {
                 Text("Ghi chú")
                     .font(.caption).foregroundStyle(.gray)
                 TextField("Cà phê x2", text: $note)
+                    .padding(14)
+                    .background(Color.white.opacity(0.08))
+                    .cornerRadius(12)
+                    .foregroundStyle(.white)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Điểm thưởng dùng")
+                        .font(.caption).foregroundStyle(.gray)
+                    Spacer()
+                    if let pts = Int64(discountPoints), pts > 0 {
+                        Text("- \(pts * 100) ₫")
+                            .font(.caption).foregroundStyle(.yellow)
+                    }
+                }
+                TextField("0", text: $discountPoints)
+                    .keyboardType(.numberPad)
                     .padding(14)
                     .background(Color.white.opacity(0.08))
                     .cornerRadius(12)
@@ -1842,11 +1888,12 @@ struct CreateOrderSheet: View {
 
     private func create() async {
         guard let amount = UInt64(amountText) else { return }
+        let pts = Int64(discountPoints) ?? 0
         loading = true; error = nil
         defer { loading = false }
         do {
             let resp = try await merchantsClient.createOrder(
-                mid: mid, token: token, amount: amount, note: note)
+                mid: mid, token: token, amount: amount, note: note, discountPoints: pts)
             qrPayload = resp.pr
         } catch let e as VerifyError {
             error = e.localizedDescription
@@ -1864,6 +1911,125 @@ struct CreateOrderSheet: View {
         let scale: CGFloat = 10
         let scaled = ci.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         return UIImage(ciImage: scaled)
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - Loyalty Members Sheet (merchant view)
+// ══════════════════════════════════════════════════════════════════════════════
+
+struct LoyaltyMembersSheet: View {
+    let members: [LoyaltyMember]
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if members.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "star.slash").font(.system(size: 48)).foregroundStyle(.gray)
+                        Text("Chưa có thành viên loyalty").foregroundStyle(.gray)
+                    }
+                } else {
+                    List {
+                        ForEach(members, id: \.uid) { m in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("#\(m.uid)")
+                                        .font(.subheadline.monospaced()).foregroundStyle(.white)
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "star.fill").font(.caption).foregroundStyle(.yellow)
+                                        Text("\(m.points) điểm").font(.subheadline.bold()).foregroundStyle(.white)
+                                    }
+                                    Text("= \(m.points * 100) ₫").font(.caption2).foregroundStyle(.gray)
+                                }
+                            }
+                            .listRowBackground(Color.white.opacity(0.05))
+                        }
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .navigationTitle("Thành viên Loyalty")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Đóng") { dismiss() }.foregroundStyle(.white)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - My Loyalty Cards (customer view)
+// ══════════════════════════════════════════════════════════════════════════════
+
+struct MyLoyaltySheet: View {
+    let merchantsClient: MerchantsClient
+    let uid: UInt32
+    @State private var entries: [UserLoyaltyEntry] = []
+    @State private var loading = false
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if loading {
+                    ProgressView().tint(.white)
+                } else if entries.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "star.slash").font(.system(size: 48)).foregroundStyle(.gray)
+                        Text("Chưa có điểm thưởng nào").foregroundStyle(.gray)
+                        Text("Thanh toán tại merchant để tích điểm").font(.caption).foregroundStyle(.gray)
+                    }
+                } else {
+                    List {
+                        ForEach(entries, id: \.mid) { e in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(e.merchantName).font(.subheadline.bold()).foregroundStyle(.white)
+                                    Text("#\(e.mid)").font(.caption.monospaced()).foregroundStyle(.gray)
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "star.fill").font(.caption).foregroundStyle(.yellow)
+                                        Text("\(e.points) điểm").font(.subheadline.bold()).foregroundStyle(.white)
+                                    }
+                                    Text("= \(e.points * 100) ₫").font(.caption2).foregroundStyle(.gray)
+                                }
+                            }
+                            .listRowBackground(Color.white.opacity(0.05))
+                        }
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .navigationTitle("Thẻ tích điểm")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Đóng") { dismiss() }.foregroundStyle(.white)
+                }
+            }
+            .task { await load() }
+            .refreshable { await load() }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private func load() async {
+        loading = true; defer { loading = false }
+        entries = (try? await merchantsClient.userLoyalty(uid: uid)) ?? []
     }
 }
 #endif
