@@ -61,11 +61,11 @@ data class WireFrame(
     val seq:  Int,
     val body: ByteArray = ByteArray(0)
 ) {
-    companion object
+    companion object {}
 
-    override fun equals(other: Any?) =
+    override fun equals(other: Any?): Boolean =
         other is WireFrame && type == other.type && seq == other.seq && body.contentEquals(other.body)
-    override fun hashCode() = 31 * (31 * type.hashCode() + seq) + body.contentHashCode()
+    override fun hashCode(): Int = 31 * (31 * type.hashCode() + seq) + body.contentHashCode()
 }
 
 // ─── Encode ────────────────────────────────────────────────────────────────

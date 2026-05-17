@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "dev.nivic.wire.app-mergeDebugResources-62:/values-v30/values-v30.xml",
+            "map": [
+                {
+                    "source": "/Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/2c38f34f8de3bcc91fc7e6cb9fd7bb9e/transformed/jetified-material3-release/res/values-v30/values-v30.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "72",
+                        "endOffsets": "123"
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -97,7 +97,7 @@ fun HomeScreen(
                     MiniTile(Icons.Default.List,       "Lịch sử",  Modifier.weight(1f)) { showHistory  = true }
                     MiniTile(Icons.Default.QrCode,     "QR nhận",  Modifier.weight(1f)) { showQRRecv   = true }
                     MiniTile(Icons.Default.Group,      "Bảo hộ",   Modifier.weight(1f)) { showGuardian = true }
-                    MiniTile(Icons.Default.Storefront, "Bán hàng", Modifier.weight(1f)) { showMerchant = true }
+                    MiniTile(Icons.Default.Store, "Bán hàng", Modifier.weight(1f)) { showMerchant = true }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     MiniTile(Icons.Default.Refresh, "Phục hồi", Modifier.weight(1f)) { }

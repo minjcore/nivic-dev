@@ -25,6 +25,8 @@ import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import dev.nivic.wire.data.SavingClient
 import dev.nivic.wire.protocol.WireCode
 import dev.nivic.wire.protocol.WireError
@@ -127,7 +129,7 @@ private fun MerchantPayContent(client: SavingClient, payload: MerchantPayload, o
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         Icon(
-            imageVector   = androidx.compose.material.icons.Icons.Default.Storefront,
+            imageVector   = Icons.Default.Store,
             contentDescription = null,
             modifier      = Modifier.size(64.dp),
             tint          = Color.White.copy(alpha = 0.85f)
@@ -153,7 +155,7 @@ private fun MerchantPayContent(client: SavingClient, payload: MerchantPayload, o
 
         if (success) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(androidx.compose.material.icons.Icons.Default.CheckCircle, null, tint = Color(0xFF4CAF50))
+                Icon(Icons.Default.CheckCircleOutline, null, tint = Color(0xFF4CAF50))
                 Text("Thanh toán thành công!", color = Color(0xFF4CAF50), fontWeight = FontWeight.SemiBold)
             }
         } else {

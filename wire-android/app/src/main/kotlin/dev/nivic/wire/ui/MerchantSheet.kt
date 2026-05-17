@@ -92,7 +92,7 @@ private fun MerchantOnboardingView(
         Spacer(Modifier.height(32.dp))
 
         if (!done) {
-            Icon(Icons.Default.Storefront, null,
+            Icon(Icons.Default.Store, null,
                 modifier = Modifier.size(72.dp), tint = Color.White)
             Spacer(Modifier.height(24.dp))
             Text("Mở gian hàng của bạn", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
@@ -143,7 +143,7 @@ private fun MerchantOnboardingView(
                 else Text("Bắt đầu bán hàng", fontWeight = FontWeight.SemiBold)
             }
         } else {
-            Icon(Icons.Default.CheckCircle, null,
+            Icon(Icons.Default.CheckCircleOutline, null,
                 modifier = Modifier.size(80.dp), tint = Color(0xFF4CAF50))
             Spacer(Modifier.height(20.dp))
             Text("Chào mừng, $shopName! 🎉", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
