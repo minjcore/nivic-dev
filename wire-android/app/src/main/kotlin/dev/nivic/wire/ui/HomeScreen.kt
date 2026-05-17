@@ -6,6 +6,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -72,7 +74,7 @@ fun HomeScreen(
                 IconButton(onClick = {
                     scope.launch { runCatching { client.logout() }; onLogout() }
                 }) {
-                    Icon(Icons.Default.ExitToApp, contentDescription = null, tint = Color.Gray)
+                    Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, tint = Color.Gray)
                 }
             }
 
@@ -94,7 +96,7 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MiniTile(Icons.Default.List,       "Lịch sử",  Modifier.weight(1f)) { showHistory  = true }
+                    MiniTile(Icons.AutoMirrored.Filled.List, "Lịch sử", Modifier.weight(1f)) { showHistory = true }
                     MiniTile(Icons.Default.QrCode,     "QR nhận",  Modifier.weight(1f)) { showQRRecv   = true }
                     MiniTile(Icons.Default.Group,      "Bảo hộ",   Modifier.weight(1f)) { showGuardian = true }
                     MiniTile(Icons.Default.Store, "Bán hàng", Modifier.weight(1f)) { showMerchant = true }
