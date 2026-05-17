@@ -17,20 +17,28 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.nivic.wire.data.MerchantsClient
 import dev.nivic.wire.data.SavingClient
 import dev.nivic.wire.data.SavingEvent
 import kotlinx.coroutines.launch
 
 @Composable
-fun HomeScreen(client: SavingClient, accountId: Long, onLogout: () -> Unit) {
-    var balance      by remember { mutableStateOf(0L) }
-    var showTransfer by remember { mutableStateOf(false) }
-    var showHistory  by remember { mutableStateOf(false) }
-    var showQRRecv   by remember { mutableStateOf(false) }
-    var showQRScan   by remember { mutableStateOf(false) }
-    var showGuardian by remember { mutableStateOf(false) }
-    var toast        by remember { mutableStateOf<String?>(null) }
-    val scope        = rememberCoroutineScope()
+fun HomeScreen(
+    client:          SavingClient,
+    accountId:       Long,
+    merchantsClient: MerchantsClient,
+    prefs:           android.content.SharedPreferences,
+    onLogout:        () -> Unit,
+) {
+    var balance       by remember { mutableStateOf(0L) }
+    var showTransfer  by remember { mutableStateOf(false) }
+    var showHistory   by remember { mutableStateOf(false) }
+    var showQRRecv    by remember { mutableStateOf(false) }
+    var showQRScan    by remember { mutableStateOf(false) }
+    var showGuardian  by remember { mutableStateOf(false) }
+    var showMerchant  by remember { mutableStateOf(false) }
+    var toast         by remember { mutableStateOf<String?>(null) }
+    val scope         = rememberCoroutineScope()
 
     suspend fun refresh() { balance = runCatching { client.balance() }.getOrDefault(balance) }
 
@@ -81,14 +89,20 @@ fun HomeScreen(client: SavingClient, accountId: Long, onLogout: () -> Unit) {
             // ── Mini-app grid ─────────────────────────────────────────────────
             Text("Ứng dụng", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(start = 20.dp, bottom = 12.dp))
 
-            Row(
-                modifier            = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                MiniTile(Icons.Default.List,    "Lịch sử", Modifier.weight(1f)) { showHistory  = true }
-                MiniTile(Icons.Default.QrCode,  "QR nhận", Modifier.weight(1f)) { showQRRecv   = true }
-                MiniTile(Icons.Default.Group,   "Bảo hộ",  Modifier.weight(1f)) { showGuardian = true }
-                MiniTile(Icons.Default.Refresh, "Phục hồi",Modifier.weight(1f)) { }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MiniTile(Icons.Default.List,       "Lịch sử",  Modifier.weight(1f)) { showHistory  = true }
+                    MiniTile(Icons.Default.QrCode,     "QR nhận",  Modifier.weight(1f)) { showQRRecv   = true }
+                    MiniTile(Icons.Default.Group,      "Bảo hộ",   Modifier.weight(1f)) { showGuardian = true }
+                    MiniTile(Icons.Default.Storefront, "Bán hàng", Modifier.weight(1f)) { showMerchant = true }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MiniTile(Icons.Default.Refresh, "Phục hồi", Modifier.weight(1f)) { }
+                    Spacer(Modifier.weight(3f))
+                }
             }
 
             Spacer(Modifier.height(120.dp))
@@ -119,6 +133,7 @@ fun HomeScreen(client: SavingClient, accountId: Long, onLogout: () -> Unit) {
     if (showQRRecv)   QRReceiveSheet(accountId)                                         { showQRRecv   = false }
     if (showQRScan)   QRScanSheet(client, onDone = { scope.launch { refresh() } })     { showQRScan   = false }
     if (showGuardian) GuardianSheet(client)                                             { showGuardian = false }
+    if (showMerchant) MerchantSheet(accountId, merchantsClient, prefs)                 { showMerchant = false }
 }
 
 @Composable

@@ -142,6 +142,43 @@ func (s *Store) GetOrder(id string) (*Order, error) {
 	return &o, nil
 }
 
+func (s *Store) ListOrders(mid uint32, limit int) ([]Order, error) {
+	rows, err := s.db.Query(
+		`SELECT id, mid, amount, note, status, created_at, paid_at, paid_by
+		 FROM orders WHERE mid = ? ORDER BY created_at DESC LIMIT ?`, mid, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Order
+	for rows.Next() {
+		var o Order
+		var paidAt sql.NullInt64
+		var paidBy sql.NullInt32
+		if err := rows.Scan(&o.ID, &o.MID, &o.Amount, &o.Note, &o.Status,
+			&o.CreatedAt, &paidAt, &paidBy); err != nil {
+			return nil, err
+		}
+		if paidAt.Valid {
+			v := paidAt.Int64
+			o.PaidAt = &v
+		}
+		if paidBy.Valid {
+			v := uint32(paidBy.Int32)
+			o.PaidBy = &v
+		}
+		out = append(out, o)
+	}
+	return out, nil
+}
+
+func (s *Store) Stats(mid uint32) (totalEarned uint64, orderCount int, err error) {
+	row := s.db.QueryRow(
+		`SELECT COALESCE(SUM(amount),0), COUNT(*) FROM orders WHERE mid=? AND status='paid'`, mid)
+	err = row.Scan(&totalEarned, &orderCount)
+	return
+}
+
 func (s *Store) MarkPaid(orderID string, paidBy uint32) error {
 	res, err := s.db.Exec(
 		`UPDATE orders SET status = ?, paid_at = ?, paid_by = ?

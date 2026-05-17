@@ -13,13 +13,16 @@ public struct SavingApp: View {
     @State private var session: SessionState = .gate
     private let merchantsClient: MerchantsClient
     private let cardsClient:     CardsClient
+    private let tomcatsClient:   TomcatsClient
 
     public init(host: String = "127.0.0.1", port: UInt16 = 7474,
                 merchantsURL: String = "http://localhost:8090",
-                cardsURL:     String = "http://localhost:8091") {
+                cardsURL:     String = "http://localhost:8091",
+                tomcatsURL:   String = "http://localhost:8093") {
         _client         = StateObject(wrappedValue: SavingClient(host: host, port: port))
         merchantsClient = MerchantsClient(baseURL: merchantsURL)
         cardsClient     = CardsClient(baseURL: cardsURL)
+        tomcatsClient   = TomcatsClient(baseURL: tomcatsURL)
     }
 
     public var body: some View {
@@ -141,6 +144,7 @@ struct HomeView: View {
     @State private var showGuardian = false
     @State private var showQRScan   = false
     @State private var showCards    = false
+    @State private var showMerchant = false
     @State private var toast: String? = nil
 
     var body: some View {
@@ -191,6 +195,9 @@ struct HomeView: View {
                             MiniAppTile(icon: "person.2.fill", label: "Bảo hộ") {
                                 showGuardian = true
                             }
+                            MiniAppTile(icon: "storefront.fill", label: "Bán hàng") {
+                                showMerchant = true
+                            }
                             MiniAppTile(icon: "arrow.counterclockwise.circle", label: "Phục hồi") {
                                 // coming soon
                             }
@@ -237,10 +244,16 @@ struct HomeView: View {
         .sheet(isPresented: $showCards) {
             CardManagementSheet(cardsClient: cardsClient, uid: accountID) { await refreshBalance() }
         }
+        .sheet(isPresented: $showMerchant) {
+            MerchantSheet(merchantsClient: merchantsClient, uid: accountID)
+        }
         .task { await refreshBalance() }
         .onReceive(NotificationCenter.default.publisher(for: .savingDeviceToken)) { note in
             guard let token = note.userInfo?["token"] as? String else { return }
-            Task { try? await cardsClient.registerDeviceToken(uid: accountID, token: token) }
+            Task {
+                try? await cardsClient.registerDeviceToken(uid: accountID, token: token)
+                try? await tomcatsClient.registerToken(uid: accountID, token: token)
+            }
         }
         .onChange(of: client.lastTransferIn) { transfer in
             guard let t = transfer else { return }
@@ -1386,6 +1399,471 @@ private struct AddCardSheet: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - Merchant Sheet
+// ══════════════════════════════════════════════════════════════════════════════
+
+struct MerchantSheet: View {
+    let merchantsClient: MerchantsClient
+    let uid: UInt32
+
+    @AppStorage("merchant_token")  private var savedToken = ""
+    @AppStorage("merchant_name")   private var savedName  = ""
+
+    var body: some View {
+        if savedToken.isEmpty {
+            MerchantOnboardingView(merchantsClient: merchantsClient, uid: uid,
+                                   onDone: { name, token in
+                savedName  = name
+                savedToken = token
+            })
+        } else {
+            MerchantDashboardView(merchantsClient: merchantsClient,
+                                  uid: uid, name: savedName, token: savedToken)
+        }
+    }
+}
+
+// ── Onboarding ────────────────────────────────────────────────────────────────
+
+struct MerchantOnboardingView: View {
+    let merchantsClient: MerchantsClient
+    let uid: UInt32
+    let onDone: (String, String) -> Void
+
+    @State private var shopName  = ""
+    @State private var loading   = false
+    @State private var error: String?
+    @State private var step      = 0  // 0=form, 1=success
+    @State private var newToken  = ""
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if step == 0 {
+                    onboardForm
+                } else {
+                    successView
+                }
+            }
+            .navigationTitle("Đăng ký bán hàng")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Đóng") { dismiss() }
+                        .foregroundStyle(.white)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private var onboardForm: some View {
+        VStack(spacing: 32) {
+            Spacer()
+            Image(systemName: "storefront.fill")
+                .font(.system(size: 64))
+                .foregroundStyle(.white)
+
+            VStack(spacing: 8) {
+                Text("Mở gian hàng của bạn")
+                    .font(.title2.bold())
+                    .foregroundStyle(.white)
+                Text("Nhận thanh toán qua QR code\ntrực tiếp vào tài khoản Saving")
+                    .font(.subheadline)
+                    .foregroundStyle(.gray)
+                    .multilineTextAlignment(.center)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Tên cửa hàng")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                TextField("VD: Quán Cà Phê ABC", text: $shopName)
+                    .padding(14)
+                    .background(Color.white.opacity(0.08))
+                    .cornerRadius(12)
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 24)
+
+            if let e = error {
+                Text(e).font(.caption).foregroundStyle(.red).padding(.horizontal, 24)
+            }
+
+            Button {
+                Task { await register() }
+            } label: {
+                Group {
+                    if loading {
+                        ProgressView().tint(.black)
+                    } else {
+                        Text("Bắt đầu bán hàng")
+                            .fontWeight(.semibold)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(16)
+                .background(shopName.trimmingCharacters(in: .whitespaces).isEmpty ? Color.gray : Color.white)
+                .foregroundStyle(.black)
+                .cornerRadius(14)
+            }
+            .disabled(shopName.trimmingCharacters(in: .whitespaces).isEmpty || loading)
+            .padding(.horizontal, 24)
+
+            Spacer()
+        }
+    }
+
+    private var successView: some View {
+        VStack(spacing: 28) {
+            Spacer()
+            Image(systemName: "checkmark.seal.fill")
+                .font(.system(size: 72))
+                .foregroundStyle(.green)
+
+            Text("Chào mừng, \(savedName)! 🎉")
+                .font(.title2.bold())
+                .foregroundStyle(.white)
+
+            VStack(spacing: 6) {
+                Text("Merchant ID: \(uid)")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                Text("Lưu token bên dưới — chỉ hiện một lần")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+
+            HStack {
+                Text(newToken)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .lineLimit(2)
+                Spacer()
+                Button {
+                    UIPasteboard.general.string = newToken
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .foregroundStyle(.white)
+                }
+            }
+            .padding(14)
+            .background(Color.white.opacity(0.08))
+            .cornerRadius(12)
+            .padding(.horizontal, 24)
+
+            Button("Vào Dashboard") {
+                onDone(shopName, newToken)
+                dismiss()
+            }
+            .frame(maxWidth: .infinity)
+            .padding(16)
+            .background(Color.white)
+            .foregroundStyle(.black)
+            .fontWeight(.semibold)
+            .cornerRadius(14)
+            .padding(.horizontal, 24)
+
+            Spacer()
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    @AppStorage("merchant_name") private var savedName = ""
+
+    private func register() async {
+        loading = true; error = nil
+        defer { loading = false }
+        let name = shopName.trimmingCharacters(in: .whitespaces)
+        do {
+            newToken = try await merchantsClient.onboard(uid: uid, name: name)
+            step = 1
+        } catch let e as VerifyError {
+            error = e.localizedDescription
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+
+struct MerchantDashboardView: View {
+    let merchantsClient: MerchantsClient
+    let uid: UInt32
+    let name: String
+    let token: String
+
+    @State private var stats: MerchantStats?
+    @State private var orders: [OrderInfo] = []
+    @State private var showCreateOrder = false
+    @State private var loading = false
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // ── Stats card ──────────────────────────────────────
+                        VStack(spacing: 6) {
+                            Text("Doanh thu")
+                                .font(.caption)
+                                .foregroundStyle(.gray)
+                            Text(fmtVND(stats?.totalEarned ?? 0) + " ₫")
+                                .font(.system(size: 36, weight: .bold))
+                                .foregroundStyle(.white)
+                            Text("\(stats?.orderCount ?? 0) đơn thành công")
+                                .font(.caption)
+                                .foregroundStyle(.gray)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(24)
+                        .background(Color.white.opacity(0.06))
+                        .cornerRadius(20)
+                        .padding(.horizontal, 20)
+
+                        // ── Create order button ─────────────────────────────
+                        Button { showCreateOrder = true } label: {
+                            Label("Tạo đơn hàng", systemImage: "plus.circle.fill")
+                                .fontWeight(.semibold)
+                                .frame(maxWidth: .infinity)
+                                .padding(16)
+                                .background(Color.white)
+                                .foregroundStyle(.black)
+                                .cornerRadius(14)
+                        }
+                        .padding(.horizontal, 20)
+
+                        // ── Orders list ─────────────────────────────────────
+                        if orders.isEmpty && !loading {
+                            Text("Chưa có đơn hàng nào")
+                                .font(.caption)
+                                .foregroundStyle(.gray)
+                                .padding(.top, 40)
+                        } else {
+                            VStack(spacing: 1) {
+                                ForEach(orders, id: \.id) { order in
+                                    OrderRow(order: order)
+                                }
+                            }
+                            .background(Color.white.opacity(0.05))
+                            .cornerRadius(14)
+                            .padding(.horizontal, 20)
+                        }
+                    }
+                    .padding(.top, 16)
+                    .padding(.bottom, 40)
+                }
+                .refreshable { await load() }
+            }
+            .navigationTitle(name)
+            .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showCreateOrder, onDismiss: { Task { await load() } }) {
+                CreateOrderSheet(merchantsClient: merchantsClient, mid: uid, token: token)
+            }
+            .task { await load() }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private func load() async {
+        loading = true
+        defer { loading = false }
+        async let s = try? merchantsClient.stats(mid: uid, token: token)
+        async let o = (try? merchantsClient.listOrders(mid: uid, token: token)) ?? []
+        stats  = await s
+        orders = await o
+    }
+
+    private func fmtVND(_ n: UInt64) -> String {
+        let s = "\(n)"
+        var out = ""; var i = 0
+        for c in s.reversed() {
+            if i > 0 && i % 3 == 0 { out = "." + out }
+            out = String(c) + out; i += 1
+        }
+        return out
+    }
+}
+
+struct OrderRow: View {
+    let order: OrderInfo
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(order.note?.isEmpty == false ? order.note! : order.id)
+                    .font(.subheadline)
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text(tsLabel(order.createdAt))
+                    .font(.caption2)
+                    .foregroundStyle(.gray)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(fmtVND(order.amount) + " ₫")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+                Text(statusLabel(order.status))
+                    .font(.caption2)
+                    .foregroundStyle(order.status == "paid" ? .green : .orange)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private func fmtVND(_ n: UInt64) -> String {
+        let s = "\(n)"; var out = ""; var i = 0
+        for c in s.reversed() {
+            if i > 0 && i % 3 == 0 { out = "." + out }
+            out = String(c) + out; i += 1
+        }
+        return out
+    }
+    private func statusLabel(_ s: String) -> String {
+        switch s { case "paid": return "✓ Đã thanh toán"
+                   case "expired": return "Hết hạn"
+                   default: return "⏳ Chờ" }
+    }
+    private func tsLabel(_ ms: Int64) -> String {
+        let d = Date(timeIntervalSince1970: Double(ms) / 1000)
+        let f = DateFormatter(); f.dateStyle = .short; f.timeStyle = .short
+        return f.string(from: d)
+    }
+}
+
+// ── Create Order Sheet ────────────────────────────────────────────────────────
+
+struct CreateOrderSheet: View {
+    let merchantsClient: MerchantsClient
+    let mid: UInt32
+    let token: String
+
+    @State private var amountText = ""
+    @State private var note       = ""
+    @State private var loading    = false
+    @State private var error: String?
+    @State private var qrPayload: String?
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if let pr = qrPayload {
+                    qrView(pr)
+                } else {
+                    form
+                }
+            }
+            .navigationTitle("Tạo đơn hàng")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Đóng") { dismiss() }.foregroundStyle(.white)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private var form: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Số tiền (₫)")
+                    .font(.caption).foregroundStyle(.gray)
+                TextField("50000", text: $amountText)
+                    .keyboardType(.numberPad)
+                    .padding(14)
+                    .background(Color.white.opacity(0.08))
+                    .cornerRadius(12)
+                    .foregroundStyle(.white)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Ghi chú")
+                    .font(.caption).foregroundStyle(.gray)
+                TextField("Cà phê x2", text: $note)
+                    .padding(14)
+                    .background(Color.white.opacity(0.08))
+                    .cornerRadius(12)
+                    .foregroundStyle(.white)
+            }
+            if let e = error {
+                Text(e).font(.caption).foregroundStyle(.red)
+            }
+            Button {
+                Task { await create() }
+            } label: {
+                Group {
+                    if loading { ProgressView().tint(.black) }
+                    else { Text("Tạo QR thanh toán").fontWeight(.semibold) }
+                }
+                .frame(maxWidth: .infinity).padding(16)
+                .background(UInt64(amountText) != nil ? Color.white : Color.gray)
+                .foregroundStyle(.black).cornerRadius(14)
+            }
+            .disabled(UInt64(amountText) == nil || loading)
+            Spacer()
+        }
+        .padding(.horizontal, 24)
+    }
+
+    private func qrView(_ pr: String) -> some View {
+        VStack(spacing: 24) {
+            Spacer()
+            Text("Quét để thanh toán")
+                .font(.headline).foregroundStyle(.white)
+            if let img = generateQR(pr) {
+                Image(uiImage: img)
+                    .interpolation(.none)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 240, height: 240)
+                    .padding(16)
+                    .background(Color.white)
+                    .cornerRadius(16)
+            }
+            Text(note.isEmpty ? "Đang chờ thanh toán..." : note)
+                .font(.subheadline).foregroundStyle(.gray)
+            Button("Tạo đơn mới") { qrPayload = nil; amountText = ""; note = "" }
+                .foregroundStyle(.white)
+            Spacer()
+        }
+    }
+
+    private func create() async {
+        guard let amount = UInt64(amountText) else { return }
+        loading = true; error = nil
+        defer { loading = false }
+        do {
+            let resp = try await merchantsClient.createOrder(
+                mid: mid, token: token, amount: amount, note: note)
+            qrPayload = resp.pr
+        } catch let e as VerifyError {
+            error = e.localizedDescription
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func generateQR(_ payload: String) -> UIImage? {
+        let data = "saving://pay?pr=\(payload)".data(using: .utf8)
+        guard let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
+        filter.setValue(data, forKey: "inputMessage")
+        filter.setValue("M", forKey: "inputCorrectionLevel")
+        guard let ci = filter.outputImage else { return nil }
+        let scale: CGFloat = 10
+        let scaled = ci.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        return UIImage(ciImage: scaled)
     }
 }
 #endif

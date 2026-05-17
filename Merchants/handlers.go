@@ -78,13 +78,16 @@ type handler struct {
 
 func (h *handler) routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health",                          h.handleHealth)
-	mux.HandleFunc("GET /merchants/{mid}",                 h.handleGet)
-	mux.HandleFunc("POST /merchants",                      h.handleRegister)
-	mux.HandleFunc("POST /merchants/{mid}/orders",         h.handleCreateOrder)
+	mux.HandleFunc("GET /health",                         h.handleHealth)
+	mux.HandleFunc("GET /merchants/{mid}",                h.handleGet)
+	mux.HandleFunc("POST /merchants",                     h.handleRegister)
+	mux.HandleFunc("POST /merchants/onboard",             h.handleOnboard)
+	mux.HandleFunc("POST /merchants/{mid}/orders",        h.handleCreateOrder)
+	mux.HandleFunc("GET /merchants/{mid}/orders",         h.handleListOrders)
 	mux.HandleFunc("GET /merchants/{mid}/orders/{oid}",   h.handleGetOrder)
-	mux.HandleFunc("POST /orders/{oid}/confirm",           h.handleConfirmOrder)
-	mux.HandleFunc("POST /payment_request/verify",         h.handleVerify)
+	mux.HandleFunc("GET /merchants/{mid}/stats",          h.handleStats)
+	mux.HandleFunc("POST /orders/{oid}/confirm",          h.handleConfirmOrder)
+	mux.HandleFunc("POST /payment_request/verify",        h.handleVerify)
 	return mux
 }
 
@@ -354,6 +357,131 @@ func (h *handler) handleVerify(w http.ResponseWriter, r *http.Request) {
 		resp["order"] = order
 	}
 	jsonOK(w, resp)
+}
+
+// POST /merchants/onboard
+// Self-service: any user can become a merchant. MID = their UID.
+// Body: { "uid": 16777216, "name": "Quán Cà Phê ABC" }
+// Returns: { "mid", "name", "token" }  — token shown once, store securely.
+
+func (h *handler) handleOnboard(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		UID  uint32 `json:"uid"`
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "bad json")
+		return
+	}
+	if req.UID == 0 || req.Name == "" {
+		jsonErr(w, 400, "uid and name required")
+		return
+	}
+	if len(req.Name) > 64 {
+		jsonErr(w, 400, "name too long (max 64)")
+		return
+	}
+
+	// Idempotent: if already registered, return existing public info
+	existing, err := h.store.Get(req.UID)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if existing != nil {
+		jsonErr(w, 409, "already a merchant")
+		return
+	}
+
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		jsonErr(w, 500, "keygen failed")
+		return
+	}
+	tokenBytes := make([]byte, 24)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		jsonErr(w, 500, "token gen failed")
+		return
+	}
+	token   := base64.URLEncoding.EncodeToString(tokenBytes)
+	pubB64  := base64.StdEncoding.EncodeToString(pub)
+	privB64 := base64.StdEncoding.EncodeToString(priv)
+
+	if err := h.store.Register(req.UID, req.Name, pubB64, privB64, token); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonOK(w, map[string]any{
+		"mid":   req.UID,
+		"name":  req.Name,
+		"token": token,
+	})
+}
+
+// GET /merchants/{mid}/orders
+// Header: X-Merchant-Token
+
+func (h *handler) handleListOrders(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid")
+		return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if m == nil {
+		jsonErr(w, 404, "merchant not found")
+		return
+	}
+	if r.Header.Get("X-Merchant-Token") != m.Token {
+		jsonErr(w, 401, "unauthorized")
+		return
+	}
+	orders, err := h.store.ListOrders(mid, 50)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if orders == nil {
+		orders = []Order{}
+	}
+	jsonOK(w, orders)
+}
+
+// GET /merchants/{mid}/stats
+// Header: X-Merchant-Token
+
+func (h *handler) handleStats(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid")
+		return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if m == nil {
+		jsonErr(w, 404, "merchant not found")
+		return
+	}
+	if r.Header.Get("X-Merchant-Token") != m.Token {
+		jsonErr(w, 401, "unauthorized")
+		return
+	}
+	earned, count, err := h.store.Stats(mid)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonOK(w, map[string]any{
+		"total_earned": earned,
+		"order_count":  count,
+	})
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

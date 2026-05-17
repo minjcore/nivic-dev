@@ -104,6 +104,70 @@ public struct MerchantsClient {
         return try JSONDecoder().decode(VerifyResponse.self, from: data)
     }
 
+    // Self-service merchant onboarding. Returns the merchant token (shown once).
+    public func onboard(uid: UInt32, name: String) async throws -> String {
+        guard let url = URL(string: "\(baseURL)/merchants/onboard") else {
+            throw VerifyError.network("bad URL")
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONEncoder().encode(["uid": uid, "name": name])
+        req.timeoutInterval = 10
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw VerifyError.network("no response") }
+        if http.statusCode == 409 { throw VerifyError.rejected("Bạn đã là merchant rồi") }
+        guard http.statusCode == 200 else {
+            struct E: Decodable { let error: String }
+            let msg = (try? JSONDecoder().decode(E.self, from: data))?.error ?? "onboard failed"
+            throw VerifyError.rejected(msg)
+        }
+        struct Resp: Decodable { let token: String }
+        return try JSONDecoder().decode(Resp.self, from: data).token
+    }
+
+    // Merchant dashboard stats.
+    public func stats(mid: UInt32, token: String) async throws -> MerchantStats {
+        guard let url = URL(string: "\(baseURL)/merchants/\(mid)/stats") else {
+            throw VerifyError.network("bad URL")
+        }
+        var req = URLRequest(url: url)
+        req.setValue(token, forHTTPHeaderField: "X-Merchant-Token")
+        req.timeoutInterval = 10
+        let (data, _) = try await URLSession.shared.data(for: req)
+        return try JSONDecoder().decode(MerchantStats.self, from: data)
+    }
+
+    // List recent orders.
+    public func listOrders(mid: UInt32, token: String) async throws -> [OrderInfo] {
+        guard let url = URL(string: "\(baseURL)/merchants/\(mid)/orders") else {
+            throw VerifyError.network("bad URL")
+        }
+        var req = URLRequest(url: url)
+        req.setValue(token, forHTTPHeaderField: "X-Merchant-Token")
+        req.timeoutInterval = 10
+        let (data, _) = try await URLSession.shared.data(for: req)
+        return (try? JSONDecoder().decode([OrderInfo].self, from: data)) ?? []
+    }
+
+    // Create an order and get back a QR payload.
+    public func createOrder(mid: UInt32, token: String, amount: UInt64, note: String) async throws -> CreateOrderResponse {
+        guard let url = URL(string: "\(baseURL)/merchants/\(mid)/orders") else {
+            throw VerifyError.network("bad URL")
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(token, forHTTPHeaderField: "X-Merchant-Token")
+        req.httpBody = try JSONEncoder().encode(["amount": amount, "note": note])
+        req.timeoutInterval = 10
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
+            throw VerifyError.rejected("Tạo đơn thất bại")
+        }
+        return try JSONDecoder().decode(CreateOrderResponse.self, from: data)
+    }
+
     // Notify Merchants Host that the order was paid. Called after Wire ACKs payment.
     public func confirmPaid(orderID: String, paidBy: UInt32) async {
         guard let url = URL(string: "\(baseURL)/orders/\(orderID)/confirm") else { return }
@@ -115,6 +179,24 @@ public struct MerchantsClient {
         req.timeoutInterval = 10
         _ = try? await URLSession.shared.data(for: req)
         // Fire-and-forget: payment already succeeded in Wire; order confirmation is best-effort.
+    }
+}
+
+public struct MerchantStats: Codable {
+    public let totalEarned: UInt64
+    public let orderCount:  Int
+    enum CodingKeys: String, CodingKey {
+        case totalEarned = "total_earned"
+        case orderCount  = "order_count"
+    }
+}
+
+public struct CreateOrderResponse: Codable {
+    public let orderID: String
+    public let pr:      String  // base64url payment request
+    public let qrURL:   String
+    enum CodingKeys: String, CodingKey {
+        case orderID = "order_id", pr, qrURL = "qr_url"
     }
 }
 
