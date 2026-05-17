@@ -39,6 +39,7 @@ iPhone (iOS 17+)
 | **Merchants** | Go | 8090 |
 | **Cards** | Go + SQLite | 8091 |
 | **TopupWorker** | Go | — (AMQP consumer) |
+| **Tomcats** | Go | — (notification service, APNs + FCM) |
 | **saving-ios** | Swift / SwiftUI | iOS 17+ |
 | **wire** | Xcode host app | — |
 | **wire-android** | Kotlin / Jetpack Compose | Android 8+ (API 26) |
