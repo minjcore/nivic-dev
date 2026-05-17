@@ -1,3 +1,4 @@
+#if os(iOS)
 import Foundation
 
 // ─── Models ───────────────────────────────────────────────────────────────────
@@ -116,3 +117,5 @@ public enum CardError: Error, LocalizedError {
         }
     }
 }
+
+#endif

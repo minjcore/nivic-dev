@@ -1,3 +1,4 @@
+#if os(iOS)
 import Foundation
 
 // ─── Payment request ──────────────────────────────────────────────────────────
@@ -128,3 +129,4 @@ public enum VerifyError: Error, LocalizedError {
         }
     }
 }
+#endif
