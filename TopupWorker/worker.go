@@ -27,6 +27,8 @@ type TopUpEvent struct {
 
 type TopUpResult struct {
 	TopUpID string `json:"topup_id"`
+	UID     uint32 `json:"uid"`
+	Amount  uint64 `json:"amount"`
 	Status  string `json:"status"` // "done" | "failed"
 	Reason  string `json:"reason,omitempty"`
 }
@@ -117,7 +119,7 @@ func (w *Worker) creditWithRetry(evt TopUpEvent) TopUpResult {
 				slog.Info("wire credit ok", "topup_id", evt.TopUpID,
 					"to", evt.UID, "amount", evt.Amount)
 			}
-			return TopUpResult{TopUpID: evt.TopUpID, Status: "done"}
+			return TopUpResult{TopUpID: evt.TopUpID, UID: evt.UID, Amount: evt.Amount, Status: "done"}
 		}
 
 		lastErr = err
@@ -138,7 +140,7 @@ func (w *Worker) creditWithRetry(evt TopUpEvent) TopUpResult {
 
 	slog.Error("topup failed after all attempts",
 		"topup_id", evt.TopUpID, "attempts", maxAttempts, "err", lastErr)
-	return TopUpResult{TopUpID: evt.TopUpID, Status: "failed", Reason: lastErr.Error()}
+	return TopUpResult{TopUpID: evt.TopUpID, UID: evt.UID, Amount: evt.Amount, Status: "failed", Reason: lastErr.Error()}
 }
 
 // credit makes one attempt to connect to Wire and transfer funds.
