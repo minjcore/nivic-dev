@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Saving — Ví tiền riêng tư</title>
+  <meta name="description" content="Ví tiền không số điện thoại. ID 4 byte. Bảo hộ xã hội. Giao thức Wire nhị phân.">
+  <meta property="og:title" content="Saving">
+  <meta property="og:description" content="Ví tiền riêng tư — không số điện thoại, ID 4 byte, bảo hộ xã hội.">
+  <meta property="og:image" content="og.png">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #000;
+      --surface: #111;
+      --border:  #222;
+      --text:    #fff;
+      --muted:   #666;
+      --accent:  #fff;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Nav ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px; height: 60px;
+      background: rgba(0,0,0,.8);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo { font-weight: 800; font-size: 18px; letter-spacing: .08em; }
+    .nav-links { display: flex; gap: 28px; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 14px; transition: color .2s; }
+    .nav-links a:hover { color: var(--text); }
+    .nav-gh {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 16px; border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); text-decoration: none; font-size: 13px; font-weight: 500;
+      transition: background .2s;
+    }
+    .nav-gh:hover { background: var(--surface); }
+
+    /* ── Hero ── */
+    .hero {
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 100px 24px 60px;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 14px; border: 1px solid var(--border); border-radius: 999px;
+      font-size: 12px; color: var(--muted); margin-bottom: 32px;
+      letter-spacing: .04em;
+    }
+    .hero-badge span { width: 6px; height: 6px; background: #4ade80; border-radius: 50%; display: inline-block; }
+    h1 {
+      font-size: clamp(56px, 10vw, 100px);
+      font-weight: 900; letter-spacing: -.03em; line-height: 1;
+      margin-bottom: 24px;
+    }
+    .hero-sub {
+      font-size: clamp(16px, 2.5vw, 20px);
+      color: var(--muted); max-width: 520px; margin-bottom: 48px;
+    }
+    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    .btn-primary {
+      padding: 14px 28px; background: var(--text); color: var(--bg);
+      border-radius: 12px; font-weight: 700; font-size: 15px; text-decoration: none;
+      transition: opacity .2s;
+    }
+    .btn-primary:hover { opacity: .85; }
+    .btn-secondary {
+      padding: 14px 28px; border: 1px solid var(--border); color: var(--text);
+      border-radius: 12px; font-weight: 600; font-size: 15px; text-decoration: none;
+      transition: background .2s;
+    }
+    .btn-secondary:hover { background: var(--surface); }
+
+    /* ── Screenshots ── */
+    .screenshots {
+      padding: 80px 24px;
+      overflow: hidden;
+    }
+    .screenshots-track {
+      display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;
+    }
+    .screenshots-track img {
+      height: 420px; width: auto; border-radius: 20px;
+      border: 1px solid var(--border);
+      box-shadow: 0 32px 64px rgba(0,0,0,.6);
+    }
+
+    /* ── Features ── */
+    .features { padding: 80px 24px; max-width: 960px; margin: 0 auto; }
+    .section-label {
+      font-size: 12px; letter-spacing: .12em; color: var(--muted);
+      text-transform: uppercase; text-align: center; margin-bottom: 48px;
+    }
+    .features-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 2px;
+    }
+    .feature {
+      background: var(--surface); padding: 28px;
+      border: 1px solid var(--border);
+    }
+    .feature:first-child { border-radius: 16px 0 0 0; }
+    .feature:nth-child(2) { border-radius: 0 16px 0 0; }
+    .feature:nth-last-child(2) { border-radius: 0 0 0 16px; }
+    .feature:last-child { border-radius: 0 0 16px 0; }
+    .feature-icon { font-size: 24px; margin-bottom: 14px; }
+    .feature h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+    .feature p { font-size: 14px; color: var(--muted); line-height: 1.6; }
+
+    /* ── Protocol ── */
+    .protocol { padding: 80px 24px; max-width: 720px; margin: 0 auto; }
+    .protocol h2 { font-size: 32px; font-weight: 800; margin-bottom: 12px; text-align: center; }
+    .protocol-sub { color: var(--muted); text-align: center; margin-bottom: 40px; font-size: 15px; }
+    .code-block {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 24px 28px;
+      font-family: "SF Mono", "Fira Code", monospace; font-size: 13px;
+      color: #a8b5c8; line-height: 1.8; overflow-x: auto;
+    }
+    .code-block .c { color: var(--muted); }
+    .code-block .k { color: #fff; }
+    .code-block .s { color: #7dd3a8; }
+
+    /* ── Stack ── */
+    .stack { padding: 80px 24px; max-width: 720px; margin: 0 auto; }
+    .stack h2 { font-size: 32px; font-weight: 800; margin-bottom: 40px; text-align: center; }
+    .stack-list { display: flex; flex-direction: column; gap: 2px; }
+    .stack-row {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 16px 20px; font-size: 14px;
+    }
+    .stack-row:first-child { border-radius: 12px 12px 0 0; }
+    .stack-row:last-child  { border-radius: 0 0 12px 12px; }
+    .stack-name { font-weight: 600; }
+    .stack-detail { color: var(--muted); font-size: 13px; }
+    .stack-tag {
+      padding: 3px 10px; border: 1px solid var(--border);
+      border-radius: 999px; font-size: 11px; color: var(--muted);
+    }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border); padding: 40px 24px;
+      text-align: center; color: var(--muted); font-size: 13px;
+    }
+    footer a { color: var(--muted); text-decoration: none; }
+    footer a:hover { color: var(--text); }
+
+    @media (max-width: 600px) {
+      nav { padding: 0 16px; }
+      .nav-links { display: none; }
+      .screenshots-track img { height: 300px; }
+      .feature:first-child, .feature:nth-child(2),
+      .feature:nth-last-child(2), .feature:last-child { border-radius: 0; }
+      .features-grid > .feature:first-child { border-radius: 16px 16px 0 0; }
+      .features-grid > .feature:last-child  { border-radius: 0 0 16px 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <div class="nav-logo">SAVING</div>
+  <div class="nav-links">
+    <a href="#features">Tính năng</a>
+    <a href="#protocol">Giao thức</a>
+    <a href="#stack">Stack</a>
+  </div>
+  <a class="nav-gh" href="https://github.com/minjcore/nivic-dev" target="_blank">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+               0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
+               -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
+               .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
+               -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27
+               .68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
+               .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48
+               0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+    </svg>
+    GitHub
+  </a>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-badge"><span></span> Open source · iOS &amp; Android</div>
+  <h1>SAVING</h1>
+  <p class="hero-sub">
+    Ví tiền riêng tư — không số điện thoại, không KYC.<br>
+    ID 4 byte. Giao thức Wire nhị phân. Bảo hộ xã hội.
+  </p>
+  <div class="hero-actions">
+    <a class="btn-primary" href="https://github.com/minjcore/nivic-dev" target="_blank">Xem mã nguồn</a>
+    <a class="btn-secondary" href="#features">Tìm hiểu thêm</a>
+  </div>
+</section>
+
+<!-- Screenshots -->
+<section class="screenshots">
+  <div class="screenshots-track">
+    <img src="../screenshots/IMG_3332.PNG" alt="Đăng nhập">
+    <img src="../screenshots/IMG_3334.PNG" alt="Trang chủ">
+    <img src="../screenshots/IMG_3335.PNG" alt="Chuyển tiền">
+    <img src="../screenshots/IMG_3336.PNG" alt="Lịch sử">
+    <img src="../screenshots/IMG_3340.PNG" alt="Thêm thẻ">
+  </div>
+</section>
+
+<!-- Features -->
+<section class="features" id="features">
+  <p class="section-label">Tính năng</p>
+  <div class="features-grid">
+    <div class="feature">
+      <div class="feature-icon">🔒</div>
+      <h3>Không số điện thoại</h3>
+      <p>Đăng ký chỉ với ID 4 byte tự chọn và mật khẩu. Không email, không KYC.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">⚡</div>
+      <h3>Chuyển tiền tức thì</h3>
+      <p>Giao thức TCP nhị phân tốc độ cao với HMAC-SHA256 xác thực từng frame.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📱</div>
+      <h3>Quét QR thanh toán</h3>
+      <p>Merchant tạo đơn hàng, ký bằng Ed25519. App xác minh chữ ký trước khi thanh toán.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">💳</div>
+      <h3>Nạp tiền qua thẻ</h3>
+      <p>Async pipeline qua RabbitMQ → TopupWorker → Wire. Retry tự động với exponential backoff.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">👥</div>
+      <h3>Bảo hộ xã hội</h3>
+      <p>Khôi phục tài khoản thông qua mạng lưới người bảo hộ, không cần seed phrase.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🔔</div>
+      <h3>Push notification</h3>
+      <p>APNs JWT ES256 — nhận thông báo ngay khi nạp tiền thành công.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Protocol -->
+<section class="protocol" id="protocol">
+  <h2>Wire Protocol</h2>
+  <p class="protocol-sub">Giao thức TCP nhị phân tự thiết kế — nhỏ gọn, xác thực mạnh.</p>
+  <div class="code-block">
+<span class="c">// Frame layout</span>
+<span class="k">len</span>     <span class="s">4 bytes  </span> <span class="c">Big-endian uint32, toàn bộ frame</span>
+<span class="k">type</span>    <span class="s">1 byte   </span> <span class="c">0x02 login | 0x11 transfer | 0x10 register</span>
+<span class="k">seq</span>     <span class="s">4 bytes  </span> <span class="c">Random seed, idempotency key</span>
+<span class="k">body</span>    <span class="s">N bytes  </span> <span class="c">Payload tuỳ theo type</span>
+<span class="k">hmac</span>    <span class="s">32 bytes </span> <span class="c">HMAC-SHA256 toàn bộ frame</span>
+
+<span class="c">// Transfer body</span>
+<span class="k">token</span>   <span class="s">32 bytes </span> <span class="c">Session token từ login</span>
+<span class="k">to_uid</span>  <span class="s">4 bytes  </span> <span class="c">ID người nhận</span>
+<span class="k">amount</span>  <span class="s">8 bytes  </span> <span class="c">Big-endian uint64</span>
+  </div>
+</section>
+
+<!-- Stack -->
+<section class="stack" id="stack">
+  <h2>Stack</h2>
+  <div class="stack-list">
+    <div class="stack-row">
+      <span class="stack-name">Wire Server</span>
+      <span class="stack-detail">C + PostgreSQL · TCP :7474</span>
+      <span class="stack-tag">Backend</span>
+    </div>
+    <div class="stack-row">
+      <span class="stack-name">Merchants</span>
+      <span class="stack-detail">Go · Ed25519 · HTTP :8090</span>
+      <span class="stack-tag">Backend</span>
+    </div>
+    <div class="stack-row">
+      <span class="stack-name">Cards</span>
+      <span class="stack-detail">Go + SQLite · APNs · HTTP :8091</span>
+      <span class="stack-tag">Backend</span>
+    </div>
+    <div class="stack-row">
+      <span class="stack-name">TopupWorker</span>
+      <span class="stack-detail">Go · RabbitMQ consumer · retry backoff</span>
+      <span class="stack-tag">Worker</span>
+    </div>
+    <div class="stack-row">
+      <span class="stack-name">iOS</span>
+      <span class="stack-detail">Swift · SwiftUI · iOS 17+</span>
+      <span class="stack-tag">Mobile</span>
+    </div>
+    <div class="stack-row">
+      <span class="stack-name">Android</span>
+      <span class="stack-detail">Kotlin · Jetpack Compose · API 26+</span>
+      <span class="stack-tag">Mobile</span>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <p>
+    Open source trên <a href="https://github.com/minjcore/nivic-dev" target="_blank">GitHub</a>
+    &nbsp;·&nbsp;
+    Xây dựng bởi <a href="https://github.com/minjcore" target="_blank">minjcore</a>
+  </p>
+</footer>
+
+</body>
+</html>
