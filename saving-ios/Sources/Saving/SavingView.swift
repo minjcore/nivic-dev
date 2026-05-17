@@ -144,8 +144,9 @@ struct HomeView: View {
     @State private var showGuardian = false
     @State private var showQRScan   = false
     @State private var showCards    = false
-    @State private var showMerchant = false
-    @State private var showLoyalty  = false
+    @State private var showMerchant     = false
+    @State private var showLoyalty      = false
+    @State private var showPaymentToken = false
     @State private var toast: String? = nil
 
     var body: some View {
@@ -202,6 +203,9 @@ struct HomeView: View {
                             MiniAppTile(icon: "star.circle.fill", label: "Tích điểm") {
                                 showLoyalty = true
                             }
+                            MiniAppTile(icon: "key.fill", label: "Mã TT") {
+                                showPaymentToken = true
+                            }
                             MiniAppTile(icon: "arrow.counterclockwise.circle", label: "Phục hồi") {
                                 // coming soon
                             }
@@ -253,6 +257,9 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showLoyalty) {
             MyLoyaltySheet(merchantsClient: merchantsClient, uid: accountID)
+        }
+        .sheet(isPresented: $showPaymentToken) {
+            PaymentTokenSheet(uid: accountID)
         }
         .task { await refreshBalance() }
         .onReceive(NotificationCenter.default.publisher(for: .savingDeviceToken)) { note in
@@ -814,6 +821,136 @@ struct MiniAppTile: View {
             .background(Color.white.opacity(0.05))
             .clipShape(RoundedRectangle(cornerRadius: 14))
         }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  MARK: - Payment Token Sheet (offline TOTP, 32-char)
+// ══════════════════════════════════════════════════════════════════════════════
+
+struct PaymentTokenSheet: View {
+    let uid: UInt32
+
+    @ObservedObject private var totp: TOTPManager = .shared
+    @State private var showEnroll = false
+    @Environment(\.dismiss) private var dismiss
+
+    private var formattedCode: String {
+        // 32 chars → 8 groups of 4 separated by spaces
+        stride(from: 0, to: totp.code.count, by: 4)
+            .map { totp.code.dropFirst($0).prefix(4) }
+            .joined(separator: " ")
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: 0) {
+                // top bar
+                HStack {
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title2).foregroundStyle(.gray)
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 20)
+
+                Spacer()
+
+                // countdown ring + code
+                ZStack {
+                    Circle()
+                        .stroke(Color.white.opacity(0.08), lineWidth: 6)
+                        .frame(width: 200, height: 200)
+                    Circle()
+                        .trim(from: 0, to: CGFloat(totp.remaining) / 30.0)
+                        .stroke(Color.white, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                        .frame(width: 200, height: 200)
+                        .rotationEffect(.degrees(-90))
+                        .animation(.linear(duration: 1), value: totp.remaining)
+                    VStack(spacing: 4) {
+                        Text("\(totp.remaining)s")
+                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.gray)
+                    }
+                }
+                .padding(.bottom, 28)
+
+                Text("MÃ THANH TOÁN")
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.gray)
+                    .tracking(2)
+                    .padding(.bottom, 12)
+
+                // 32-char code (8 groups of 4)
+                Text(formattedCode)
+                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 32)
+
+                // QR of payment token
+                if let qrImg = generateQR(totp.paymentURL(uid: uid)) {
+                    Image(uiImage: qrImg)
+                        .interpolation(.none)
+                        .resizable()
+                        .frame(width: 200, height: 200)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .padding(.bottom, 8)
+                }
+
+                Text("Merchant quét QR này để xác nhận")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                    .padding(.bottom, 28)
+
+                // enrollment QR toggle
+                Button {
+                    showEnroll.toggle()
+                } label: {
+                    Label(showEnroll ? "Ẩn QR đăng ký" : "Đăng ký với cửa hàng mới",
+                          systemImage: "qrcode")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(14)
+                        .background(Color.white.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .padding(.horizontal, 24)
+
+                if showEnroll {
+                    VStack(spacing: 8) {
+                        Text("Merchant quét QR này một lần để đăng ký")
+                            .font(.caption)
+                            .foregroundStyle(.gray)
+                        if let img = generateQR(totp.enrollmentURL(uid: uid)) {
+                            Image(uiImage: img)
+                                .interpolation(.none)
+                                .resizable()
+                                .frame(width: 180, height: 180)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                    }
+                    .padding(.top, 16)
+                }
+
+                Spacer()
+            }
+        }
+    }
+
+    private func generateQR(_ content: String) -> UIImage? {
+        let data = content.data(using: .utf8)
+        guard let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
+        filter.setValue(data, forKey: "inputMessage")
+        filter.setValue("M", forKey: "inputCorrectionLevel")
+        guard let ci = filter.outputImage else { return nil }
+        let scaled = ci.transformed(by: CGAffineTransform(scaleX: 6, y: 6))
+        return UIImage(ciImage: scaled)
     }
 }
 

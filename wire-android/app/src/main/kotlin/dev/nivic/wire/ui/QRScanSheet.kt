@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,8 +34,10 @@ import dev.nivic.wire.protocol.WireError
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 
-// ─── Merchant QR payload ────────────────────────────────────────────────────
-// Format: saving://pay?mid=12345&amount=50000&ref=ORDER_REF
+// ─── QR payload types ────────────────────────────────────────────────────────
+// saving://pay?mid=12345&amount=50000&ref=ORDER_REF   → merchant payment
+// saving://totp-enroll?uid=X&secret=BASE32            → enroll user TOTP
+// saving://totp-pay?uid=X&token=32CHARTOKEN           → TOTP payment token
 
 data class MerchantPayload(val mid: Long, val amount: Long?, val ref: String?) {
     companion object {
@@ -49,13 +52,45 @@ data class MerchantPayload(val mid: Long, val amount: Long?, val ref: String?) {
     }
 }
 
+data class TOTPEnrollPayload(val uid: Long, val secretB32: String) {
+    companion object {
+        fun parse(raw: String): TOTPEnrollPayload? {
+            val uri = android.net.Uri.parse(raw)
+            if (uri.scheme != "saving" || uri.host != "totp-enroll") return null
+            val uid = uri.getQueryParameter("uid")?.toLongOrNull() ?: return null
+            val secret = uri.getQueryParameter("secret") ?: return null
+            return TOTPEnrollPayload(uid, secret)
+        }
+    }
+}
+
+data class TOTPPayPayload(val uid: Long, val token: String) {
+    companion object {
+        fun parse(raw: String): TOTPPayPayload? {
+            val uri = android.net.Uri.parse(raw)
+            if (uri.scheme != "saving" || uri.host != "totp-pay") return null
+            val uid = uri.getQueryParameter("uid")?.toLongOrNull() ?: return null
+            val token = uri.getQueryParameter("token") ?: return null
+            return TOTPPayPayload(uid, token)
+        }
+    }
+}
+
 // ─── QR Scan screen ────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun QRScanSheet(client: SavingClient, onDone: () -> Unit, onDismiss: () -> Unit) {
-    var payload   by remember { mutableStateOf<MerchantPayload?>(null) }
-    var scanError by remember { mutableStateOf<String?>(null) }
+fun QRScanSheet(
+    client:    SavingClient,
+    prefs:     android.content.SharedPreferences,
+    onDone:    () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var payload      by remember { mutableStateOf<MerchantPayload?>(null) }
+    var enrollPayload by remember { mutableStateOf<TOTPEnrollPayload?>(null) }
+    var totpPayload  by remember { mutableStateOf<TOTPPayPayload?>(null) }
+    var scanError    by remember { mutableStateOf<String?>(null) }
+    val ctx          = LocalContext.current
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -72,44 +107,150 @@ fun QRScanSheet(client: SavingClient, onDone: () -> Unit, onDismiss: () -> Unit)
                 verticalAlignment   = Alignment.CenterVertically
             ) {
                 Text(
-                    if (payload == null) "Quét QR" else "Xác nhận thanh toán",
+                    when {
+                        payload != null      -> "Xác nhận thanh toán"
+                        enrollPayload != null -> "Đăng ký TOTP"
+                        totpPayload != null  -> "Xác nhận TOTP"
+                        else                 -> "Quét QR"
+                    },
                     color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp
                 )
-                if (payload != null) {
-                    TextButton(onClick = { payload = null; scanError = null }) {
+                if (payload != null || enrollPayload != null || totpPayload != null) {
+                    TextButton(onClick = { payload = null; enrollPayload = null; totpPayload = null; scanError = null }) {
                         Text("Quét lại", color = Color.Gray)
                     }
                 }
             }
 
-            if (payload == null) {
-                CameraQRView(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(horizontal = 20.dp)
-                        .background(Color.Black, RoundedCornerShape(16.dp)),
-                    onCode = { raw ->
-                        val p = MerchantPayload.parse(raw)
-                        if (p != null) { payload = p; scanError = null }
-                        else scanError = "QR không phải của người bán"
-                    }
-                )
-                scanError?.let {
-                    Text(it, color = Color.Red, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
-                } ?: Text(
-                    "Quét QR của người bán để thanh toán",
-                    color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp)
-                )
-                Spacer(Modifier.height(32.dp))
-            } else {
-                MerchantPayContent(
-                    client   = client,
-                    payload  = payload!!,
-                    onDone   = { onDone(); onDismiss() }
-                )
+            when {
+                enrollPayload != null -> {
+                    TOTPEnrollContent(
+                        p      = enrollPayload!!,
+                        prefs  = prefs,
+                        onDone = { enrollPayload = null; onDismiss() }
+                    )
+                }
+                totpPayload != null -> {
+                    TOTPPayContent(
+                        p      = totpPayload!!,
+                        prefs  = prefs,
+                        onDone = { totpPayload = null; onDismiss() }
+                    )
+                }
+                payload != null -> {
+                    MerchantPayContent(
+                        client  = client,
+                        payload = payload!!,
+                        onDone  = { onDone(); onDismiss() }
+                    )
+                }
+                else -> {
+                    CameraQRView(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(horizontal = 20.dp)
+                            .background(Color.Black, RoundedCornerShape(16.dp)),
+                        onCode = { raw ->
+                            val ep = TOTPEnrollPayload.parse(raw)
+                            val tp = TOTPPayPayload.parse(raw)
+                            val mp = MerchantPayload.parse(raw)
+                            when {
+                                ep != null -> { enrollPayload = ep; scanError = null }
+                                tp != null -> { totpPayload = tp;  scanError = null }
+                                mp != null -> { payload = mp;      scanError = null }
+                                else       -> scanError = "QR không hợp lệ"
+                            }
+                        }
+                    )
+                    scanError?.let {
+                        Text(it, color = Color.Red, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+                    } ?: Text(
+                        "Quét QR của người bán để thanh toán",
+                        color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp)
+                    )
+                    Spacer(Modifier.height(32.dp))
+                }
             }
         }
+    }
+}
+
+// ─── TOTP enrollment ──────────────────────────────────────────────────────────
+
+@Composable
+private fun TOTPEnrollContent(
+    p:      TOTPEnrollPayload,
+    prefs:  android.content.SharedPreferences,
+    onDone: () -> Unit,
+) {
+    LaunchedEffect(Unit) {
+        TOTPStore.save(prefs, p.uid, p.secretB32)
+    }
+    Column(
+        Modifier.fillMaxWidth().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Icon(Icons.Default.CheckCircleOutline, null,
+            tint = Color(0xFF4CAF50), modifier = Modifier.size(64.dp))
+        Text("Đã đăng ký thành công!", color = Color.White,
+            fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text("UID #${p.uid} đã được lưu.\nLần sau chỉ cần quét mã thanh toán.",
+            color = Color.Gray, fontSize = 14.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Button(
+            onClick = onDone,
+            colors  = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
+        ) { Text("Xong", fontWeight = FontWeight.SemiBold) }
+    }
+}
+
+// ─── TOTP payment verification (customer shows payment QR) ────────────────────
+
+@Composable
+private fun TOTPPayContent(
+    p:      TOTPPayPayload,
+    prefs:  android.content.SharedPreferences,
+    onDone: () -> Unit,
+) {
+    val secret  = TOTPStore.getSecret(prefs, p.uid)
+    val isValid = secret != null && TOTP.verify(secret, p.token)
+
+    Column(
+        Modifier.fillMaxWidth().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        if (isValid) {
+            Icon(Icons.Default.CheckCircleOutline, null,
+                tint = Color(0xFF4CAF50), modifier = Modifier.size(64.dp))
+            Text("Xác thực thành công", color = Color.White,
+                fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("UID #${p.uid} đã được xác nhận.\nTiến hành tạo đơn trong dashboard.",
+                color = Color.Gray, fontSize = 14.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Text(p.token.chunked(8).joinToString(" "),
+                color = Color(0xFF4CAF50), fontSize = 13.sp,
+                fontFamily = FontFamily.Monospace)
+        } else {
+            Icon(Icons.Default.Error, null,
+                tint = Color(0xFFFF5252), modifier = Modifier.size(64.dp))
+            Text("Xác thực thất bại", color = Color(0xFFFF5252),
+                fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            if (secret == null)
+                Text("Chưa đăng ký người dùng này.\nYêu cầu quét QR đăng ký trước.",
+                    color = Color.Gray, fontSize = 14.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            else
+                Text("Mã đã hết hạn hoặc không đúng.\nYêu cầu người dùng làm mới mã.",
+                    color = Color.Gray, fontSize = 14.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
+        Button(
+            onClick = onDone,
+            colors  = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
+        ) { Text("Đóng") }
     }
 }
 

@@ -100,8 +100,9 @@ fun HomeScreen(
                     MiniTile(Icons.Default.Store, "Bán hàng", Modifier.weight(1f)) { showMerchant = true }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MiniTile(Icons.Default.VpnKey, "Mã TT", Modifier.weight(1f)) { }
                     MiniTile(Icons.Default.Refresh, "Phục hồi", Modifier.weight(1f)) { }
-                    Spacer(Modifier.weight(3f))
+                    Spacer(Modifier.weight(2f))
                 }
             }
 
@@ -131,7 +132,7 @@ fun HomeScreen(
     if (showTransfer) TransferSheet(client, onDone = { scope.launch { refresh() } })  { showTransfer = false }
     if (showHistory)  HistorySheet(client)                                              { showHistory  = false }
     if (showQRRecv)   QRReceiveSheet(accountId)                                         { showQRRecv   = false }
-    if (showQRScan)   QRScanSheet(client, onDone = { scope.launch { refresh() } })     { showQRScan   = false }
+    if (showQRScan)   QRScanSheet(client, prefs, onDone = { scope.launch { refresh() } }) { showQRScan   = false }
     if (showGuardian) GuardianSheet(client)                                             { showGuardian = false }
     if (showMerchant) MerchantSheet(accountId, merchantsClient, prefs)                 { showMerchant = false }
 }
