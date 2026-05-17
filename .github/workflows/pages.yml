@@ -29,6 +29,7 @@ jobs:
         run: |
           mkdir -p _site
           cp landing/index.html _site/index.html
+          cp landing/CNAME _site/CNAME
           cp -r screenshots _site/screenshots
 
       - uses: actions/configure-pages@v5
