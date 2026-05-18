@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -21,11 +22,15 @@ func main() {
 	fmt.Println("Card-linking service • :8091")
 	fmt.Println("──────────────────────────────────────────")
 
-	dbPath      := envOr("CARDS_DB",       "cards.db")
-	addr        := envOr("CARDS_ADDR",    ":8091")
-	wireToken   := envOr("WIRE_TOKEN",    "change-me-in-production")
-	amqpURL     := envOr("AMQP_URL",      "amqp://guest:guest@localhost:5672/")
-	bankGWAddr  := envOr("BANK_GW_ADDR", "127.0.0.1:8095")
+	dbPath       := envOr("CARDS_DB",        "cards.db")
+	addr         := envOr("CARDS_ADDR",     ":8091")
+	wireToken    := envOr("WIRE_TOKEN",     "change-me-in-production")
+	amqpURL      := envOr("AMQP_URL",       "amqp://guest:guest@localhost:5672/")
+	bankGWAddr   := envOr("BANK_GW_ADDR",  "127.0.0.1:8095")
+	wireAddr     := envOr("WIRE_ADDR",      "127.0.0.1:7474")
+	wireSecret   := envOr("WIRE_SECRET",    "supersecret")
+	wireFloatUID := envOr("WIRE_FLOAT_UID", "1")
+	wireFloatPwd := envOr("WIRE_FLOAT_PWD", "bankpassword")
 
 	store, err := OpenStore(dbPath)
 	if err != nil {
@@ -61,7 +66,16 @@ func main() {
 	iso := &ISO8583Client{Addr: bankGWAddr}
 	slog.Info("bank-gateway configured", "addr", bankGWAddr)
 
-	h := &handler{store: store, wireToken: wireToken, pub: pub, iso: iso}
+	floatUID64, _ := strconv.ParseUint(wireFloatUID, 10, 32)
+	wireCfg := &WireConfig{
+		Addr:     wireAddr,
+		Secret:   wireSecret,
+		FloatUID: uint32(floatUID64),
+		FloatPwd: wireFloatPwd,
+	}
+	slog.Info("wire configured", "addr", wireAddr, "float_uid", wireFloatUID)
+
+	h := &handler{store: store, wireToken: wireToken, pub: pub, iso: iso, wire: wireCfg}
 
 	slog.Info("cards-service ready", "addr", addr, "db", dbPath)
 	if err := http.ListenAndServe(addr, h.routes()); err != nil {

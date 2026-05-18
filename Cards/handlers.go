@@ -10,11 +10,19 @@ import (
 	"time"
 )
 
+type WireConfig struct {
+	Addr     string
+	Secret   string
+	FloatUID uint32
+	FloatPwd string
+}
+
 type handler struct {
 	store     *Store
 	wireToken string
 	pub       *Publisher    // nil when AMQP unavailable
 	iso       *ISO8583Client
+	wire      *WireConfig   // for sync credit when AMQP unavailable
 }
 
 func (h *handler) routes() http.Handler {
@@ -206,12 +214,22 @@ func (h *handler) handleTopUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Publish async event → Topup Worker → Wire Server credit
 	if h.pub != nil {
+		// Async path: publish to TopupWorker via RabbitMQ
 		evt := TopUpEvent{TopUpID: tid, UID: uid, CardID: card.ID, Amount: req.Amount}
 		if err := h.pub.PublishTopUp(evt); err != nil {
 			slog.Warn("publish topup event failed", "topup_id", tid, "err", err)
 		}
+	} else if h.wire != nil {
+		// Sync fallback: credit Wire wallet directly
+		if err := h.wireCredit(uid, req.Amount, tid); err != nil {
+			slog.Error("sync wire credit failed", "topup_id", tid, "err", err)
+			h.store.CompleteTopUp(tid, "failed")
+			jsonErr(w, 502, "wire credit failed")
+			return
+		}
+		h.store.CompleteTopUp(tid, "done")
+		slog.Info("sync wire credit ok", "topup_id", tid, "uid", uid, "amount", req.Amount)
 	}
 
 	jsonOK(w, map[string]any{
@@ -275,6 +293,19 @@ func (h *handler) handleComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOK(w, map[string]string{"status": req.Status})
+}
+
+func (h *handler) wireCredit(toUID uint32, amount uint64, topupID string) error {
+	wc, err := DialWire(h.wire.Addr, h.wire.Secret)
+	if err != nil {
+		return fmt.Errorf("dial wire: %w", err)
+	}
+	defer wc.Close()
+	token, err := wc.Login(h.wire.FloatUID, h.wire.FloatPwd)
+	if err != nil {
+		return fmt.Errorf("wire login: %w", err)
+	}
+	return wc.CashIn(token, toUID, amount, topupID)
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

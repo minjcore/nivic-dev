@@ -1508,6 +1508,7 @@ struct CardManagementSheet: View {
     @State private var cards:         [CardInfo] = []
     @State private var showAddCard    = false
     @State private var topUpCard:     CardInfo?
+    @State private var cardToRemove:  CardInfo?
     @State private var loading        = false
     @State private var error:         String?
 
@@ -1531,7 +1532,7 @@ struct CardManagementSheet: View {
                                 CardRow(card: card) {
                                     topUp(card: card)
                                 } onRemove: {
-                                    await remove(card: card)
+                                    cardToRemove = card
                                 }
                                 .listRowBackground(Color.white.opacity(0.05))
                             }
@@ -1564,6 +1565,22 @@ struct CardManagementSheet: View {
                     await onTopUp()
                 }
             }
+            .alert("Gỡ thẻ?", isPresented: Binding(
+                get: { cardToRemove != nil },
+                set: { if !$0 { cardToRemove = nil } }
+            )) {
+                Button("Gỡ", role: .destructive) {
+                    if let card = cardToRemove {
+                        Task { await remove(card: card) }
+                    }
+                    cardToRemove = nil
+                }
+                Button("Hủy", role: .cancel) { cardToRemove = nil }
+            } message: {
+                if let card = cardToRemove {
+                    Text("Bỏ liên kết thẻ \(card.last4)?")
+                }
+            }
             .task { await loadCards() }
         }
     }
@@ -1587,7 +1604,7 @@ struct CardManagementSheet: View {
 private struct CardRow: View {
     let card:     CardInfo
     let onTopUp:  () -> Void
-    let onRemove: () async -> Void
+    let onRemove: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1614,7 +1631,7 @@ private struct CardRow: View {
                         .clipShape(Capsule())
                 }
                 Button(role: .destructive) {
-                    Task { await onRemove() }
+                    onRemove()
                 } label: {
                     Label("Gỡ", systemImage: "trash")
                         .font(.caption).fontWeight(.semibold)
