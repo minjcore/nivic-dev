@@ -196,7 +196,9 @@ public struct MerchantsClient {
         req.timeoutInterval = 10
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
-            throw VerifyError.rejected("Tạo đơn thất bại")
+            struct E: Decodable { let error: String }
+            let msg = (try? JSONDecoder().decode(E.self, from: data))?.error ?? "HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0)"
+            throw VerifyError.rejected(msg)
         }
         return try JSONDecoder().decode(CreateOrderResponse.self, from: data)
     }
