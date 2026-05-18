@@ -1120,6 +1120,10 @@ struct QRScanSheet: View {
                    let secret = comps.queryItems?.first(where: { $0.name == "secret" })?.value {
                     TOTPEnrollmentStore.save(uid: uid, secretB32: secret)
                     state = .totpEnroll(uid: uid, secretB32: secret)
+                    /* Register on Wire server so PAY_INTENT can verify */
+                    if let rawSecret = base32Decode(secret) {
+                        Task { try? await client.enrollTotp(customerID: uid, secret: rawSecret) }
+                    }
                 } else if let comps = URLComponents(string: raw),
                           comps.scheme == "saving", comps.host == "totp-pay",
                           let uidStr = comps.queryItems?.first(where: { $0.name == "uid" })?.value,
