@@ -6,6 +6,8 @@ services:
       dockerfile: saving/Dockerfile
     environment:
       SAVING_DB: ${SAVING_DB}
+    ports:
+      - "7474:7474"
     restart: unless-stopped
     networks: [app]
 
