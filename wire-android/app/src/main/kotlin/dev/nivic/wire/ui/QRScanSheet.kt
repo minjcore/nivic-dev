@@ -103,10 +103,12 @@ data class TOTPPayPayload(val uid: Long, val token: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QRScanSheet(
-    client:    SavingClient,
-    prefs:     android.content.SharedPreferences,
-    onDone:    () -> Unit,
-    onDismiss: () -> Unit,
+    client:          SavingClient,
+    prefs:           android.content.SharedPreferences,
+    merchantsClient: dev.nivic.wire.data.MerchantsClient,
+    accountId:       Long,
+    onDone:          () -> Unit,
+    onDismiss:       () -> Unit,
 ) {
     var payload      by remember { mutableStateOf<MerchantPayload?>(null) }
     var enrollPayload by remember { mutableStateOf<TOTPEnrollPayload?>(null) }
@@ -161,9 +163,11 @@ fun QRScanSheet(
                 }
                 payload != null -> {
                     MerchantPayContent(
-                        client  = client,
-                        payload = payload!!,
-                        onDone  = { onDone(); onDismiss() }
+                        client          = client,
+                        merchantsClient = merchantsClient,
+                        accountId       = accountId,
+                        payload         = payload!!,
+                        onDone          = { onDone(); onDismiss() }
                     )
                 }
                 else -> {
@@ -279,7 +283,13 @@ private fun TOTPPayContent(
 // ─── Merchant pay confirmation ──────────────────────────────────────────────
 
 @Composable
-private fun MerchantPayContent(client: SavingClient, payload: MerchantPayload, onDone: () -> Unit) {
+private fun MerchantPayContent(
+    client:          SavingClient,
+    merchantsClient: dev.nivic.wire.data.MerchantsClient,
+    accountId:       Long,
+    payload:         MerchantPayload,
+    onDone:          () -> Unit,
+) {
     var amountText by remember { mutableStateOf(payload.amount?.toString() ?: "") }
     var error      by remember { mutableStateOf<String?>(null) }
     var loading    by remember { mutableStateOf(false) }
@@ -333,6 +343,9 @@ private fun MerchantPayContent(client: SavingClient, payload: MerchantPayload, o
                     loading = true; error = null
                     try {
                         client.payMerchant(payload.mid, amt)
+                        payload.ref?.let { orderId ->
+                            merchantsClient.confirmPaid(orderId, accountId.toInt())
+                        }
                         success = true
                         kotlinx.coroutines.delay(1500)
                         onDone()

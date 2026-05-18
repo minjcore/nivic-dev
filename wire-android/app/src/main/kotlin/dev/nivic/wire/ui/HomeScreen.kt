@@ -157,7 +157,7 @@ fun HomeScreen(
     )
     if (showHistory)  HistorySheet(client)                                              { showHistory  = false }
     if (showQRRecv)   QRReceiveSheet(accountId)                                         { showQRRecv   = false }
-    if (showQRScan)   QRScanSheet(client, prefs, onDone = { scope.launch { refresh() } }) { showQRScan   = false }
+    if (showQRScan)   QRScanSheet(client, prefs, merchantsClient, accountId, onDone = { scope.launch { refresh() } }) { showQRScan   = false }
     if (showGuardian) GuardianSheet(client)                                             { showGuardian = false }
     if (showMerchant) MerchantSheet(accountId, merchantsClient, prefs)                 { showMerchant = false }
     if (showLoyalty)  MyLoyaltySheet(merchantsClient, accountId)                       { showLoyalty  = false }

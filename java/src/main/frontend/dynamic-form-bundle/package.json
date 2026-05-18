@@ -1,0 +1,11 @@
+{
+  "name": "dynamic-form-bundle",
+  "private": true,
+  "description": "Merchants admin UI bundle for /dynamic-form/ (Vue external via import map).",
+  "scripts": {
+    "build": "esbuild src/dynamic-form.js --bundle --format=esm --platform=browser --outfile=../../webapp/dynamic-form/dynamic-form.bundle.js --external:vue --sourcemap"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.8"
+  }
+}

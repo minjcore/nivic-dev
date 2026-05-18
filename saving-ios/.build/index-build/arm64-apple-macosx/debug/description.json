@@ -1,0 +1,319 @@
+{
+  "builtTestProducts" : [
+
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.Saving-arm64-apple-macosx-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Saving.build/sources",
+      "importPath" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/CardsClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/MerchantsClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/Saving.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/SavingAppDelegate.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/SavingView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/TOTP.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/TomcatsClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/WireConnection.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/WireProtocol.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Saving.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "Saving",
+      "moduleOutputPath" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Modules/Saving.swiftmodule",
+      "objects" : [
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Saving.build/CardsClient.swift.o",
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Saving.build/MerchantsClient.swift.o",
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Saving.build/Saving.swift.o",
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Saving.build/SavingAppDelegate.swift.o",
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Saving.build/SavingView.swift.o",
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Saving.build/TOTP.swift.o",
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Saving.build/TomcatsClient.swift.o",
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Saving.build/WireConnection.swift.o",
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Saving.build/WireProtocol.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-Onone",
+        "-enable-testing",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Saving.build/include/Saving-Swift.h",
+        "-swift-version",
+        "5",
+        "-Xfrontend",
+        "-experimental-lazy-typecheck",
+        "-Xfrontend",
+        "-experimental-skip-all-function-bodies",
+        "-Xfrontend",
+        "-experimental-allow-module-with-compiler-errors",
+        "-Xfrontend",
+        "-empty-abi-descriptor",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "saving_ios"
+      ],
+      "outputFileMapPath" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Saving.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Modules/Saving.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : true,
+      "sources" : [
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/CardsClient.swift",
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/MerchantsClient.swift",
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/Saving.swift",
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/SavingAppDelegate.swift",
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/SavingView.swift",
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/TOTP.swift",
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/TomcatsClient.swift",
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/WireConnection.swift",
+        "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/WireProtocol.swift"
+      ],
+      "tempsPath" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Saving.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "Saving" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "Saving",
+      "-package-name",
+      "saving_ios",
+      "-c",
+      "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/CardsClient.swift",
+      "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/MerchantsClient.swift",
+      "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/Saving.swift",
+      "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/SavingAppDelegate.swift",
+      "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/SavingView.swift",
+      "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/TOTP.swift",
+      "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/TomcatsClient.swift",
+      "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/WireConnection.swift",
+      "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/WireProtocol.swift",
+      "-I",
+      "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-Onone",
+      "-enable-testing",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Saving.build/include/Saving-Swift.h",
+      "-swift-version",
+      "5",
+      "-Xfrontend",
+      "-experimental-lazy-typecheck",
+      "-Xfrontend",
+      "-experimental-skip-all-function-bodies",
+      "-Xfrontend",
+      "-experimental-allow-module-with-compiler-errors",
+      "-Xfrontend",
+      "-empty-abi-descriptor",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "saving_ios",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "Saving" : [
+
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+
+  },
+  "traitConfiguration" : {
+    "default" : {
+
+    }
+  },
+  "writeCommands" : {
+    "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Saving.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/CardsClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/MerchantsClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/Saving.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/SavingAppDelegate.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/SavingView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/TOTP.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/TomcatsClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/WireConnection.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/Sources/Saving/WireProtocol.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/Saving.build/sources"
+    },
+    "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/khangdc/Desktop/nivic-dev/saving-ios/.build/index-build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+    }
+  }
+}

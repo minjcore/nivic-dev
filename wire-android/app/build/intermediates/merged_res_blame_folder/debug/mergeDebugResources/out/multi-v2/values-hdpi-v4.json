@@ -4,7 +4,7 @@
             "outputFile": "dev.nivic.wire.app-mergeDebugResources-62:/values-hdpi-v4/values-hdpi-v4.xml",
             "map": [
                 {
-                    "source": "/Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d21e60046306b34de726ec8a223f6796/transformed/appcompat-1.6.1/res/values-hdpi-v4/values-hdpi-v4.xml",
+                    "source": "/Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/8894c4153419210fe04383733851badb/transformed/appcompat-1.6.1/res/values-hdpi-v4/values-hdpi-v4.xml",
                     "from": {
                         "startLines": "2",
                         "startColumns": "4",

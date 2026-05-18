@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nivic.dev/schemas/wallet_core_event_v1.schema.json",
+  "title": "WalletCoreEventV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_type", "occurred_at", "payload"],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Bump for breaking payload shape changes."
+    },
+    "event_type": {
+      "type": "string",
+      "minLength": 1,
+      "examples": ["wallet.payload_accepted"]
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 instant when Core accepted / appended."
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mid",
+        "request_id",
+        "order_id",
+        "command",
+        "input_command",
+        "amount",
+        "debit",
+        "credit",
+        "extra_data",
+        "sig"
+      ],
+      "properties": {
+        "mid": { "type": "string", "pattern": "^[0-9]+$" },
+        "request_id": { "type": "string", "pattern": "^[0-9]+$" },
+        "order_id": { "type": "string", "pattern": "^[0-9]+$" },
+        "command": { "type": "string", "pattern": "^[0-9]+$" },
+        "input_command": { "type": "string", "minLength": 1 },
+        "amount": { "type": "string", "pattern": "^[0-9]+$" },
+        "debit": { "type": "string", "pattern": "^[0-9]+$" },
+        "credit": { "type": "string", "pattern": "^[0-9]+$" },
+        "extra_data": {
+          "type": "string",
+          "description": "Base64 of wire extraData (may be empty)."
+        },
+        "sig": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+        "currency_code": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 3
+        },
+        "raw_body_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        },
+        "wal_sequence": { "type": "string", "pattern": "^[0-9]+$" }
+      }
+    }
+  }
+}

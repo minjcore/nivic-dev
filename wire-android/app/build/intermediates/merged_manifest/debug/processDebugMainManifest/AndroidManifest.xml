@@ -30,9 +30,11 @@
         android:debuggable="true"
         android:extractNativeLibs="false"
         android:label="Wire"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" >
         <activity
             android:name="dev.nivic.wire.MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:exported="true"
             android:windowSoftInputMode="adjustResize" >
             <intent-filter>

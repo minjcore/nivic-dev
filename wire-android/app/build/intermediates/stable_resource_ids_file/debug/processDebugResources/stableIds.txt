@@ -881,6 +881,7 @@ dev.nivic.wire:styleable/Fragment = 0x7f0e0019
 dev.nivic.wire:id/ALT = 0x7f080000
 dev.nivic.wire:color/abc_hint_foreground_material_light = 0x7f050008
 dev.nivic.wire:color/abc_decor_view_status_guard_light = 0x7f050006
+dev.nivic.wire:xml/network_security_config = 0x7f0f0000
 dev.nivic.wire:anim/btn_radio_to_on_mtrl_ring_outer_animation = 0x7f010016
 dev.nivic.wire:drawable/abc_tab_indicator_material = 0x7f070043
 dev.nivic.wire:color/abc_decor_view_status_guard = 0x7f050005

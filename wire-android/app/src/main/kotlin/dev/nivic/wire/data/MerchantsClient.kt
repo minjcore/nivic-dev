@@ -96,6 +96,14 @@ class MerchantsClient(private val baseURL: String = "http://127.0.0.1:8090") {
             CreateOrderResult(j.getString("order_id"), j.getString("pr"), j.getString("qr_url"))
         }
 
+    suspend fun confirmPaid(orderID: String, paidBy: Int) = withContext(Dispatchers.IO) {
+        runCatching {
+            val body = JSONObject().apply { put("paid_by", paidBy) }.toString()
+            post("$baseURL/orders/$orderID/confirm", body)
+        }
+        // fire-and-forget: payment already succeeded in Wire
+    }
+
     private fun readResponse(conn: HttpURLConnection): String {
         val code = conn.responseCode
         val body = (if (code in 200..299) conn.inputStream else conn.errorStream)

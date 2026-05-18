@@ -1,0 +1,97 @@
+# Package Overview
+
+Generated from `src/main/java/dev/nivic`.
+
+- **`dev.nivic.api`** 
+- **`dev.nivic.bank`** 
+- **`dev.nivic.controllers`** 
+- **`dev.nivic.core`** 
+- **`dev.nivic.db`** 
+- **`dev.nivic.entity`** 
+- **`dev.nivic.fraud`** 
+- **`dev.nivic.model`** 
+- **`dev.nivic.modules`** 
+- **`dev.nivic.party`** 
+- **`dev.nivic.payment`** 
+- **`dev.nivic.security`** 
+- **`dev.nivic.service`** 
+- **`dev.nivic.users`** 
+  - `DevServer` — `dev.nivic.cli.DevServer`
+  - `WalVerifyMain` — `dev.nivic.cli.WalVerifyMain`
+  - `SevletWalletClient` — `dev.nivic.client.SevletWalletClient`
+  - `GenericInputCommand` — `dev.nivic.command.GenericInputCommand`
+  - `TransferCommand` — `dev.nivic.command.TransferCommand`
+  - `WalletInputCommands` — `dev.nivic.command.WalletInputCommands`
+  - `WalletInputOp` — `dev.nivic.command.WalletInputOp`
+  - `ApplicationProperties` — `dev.nivic.config.ApplicationProperties`
+  - `DbSchema` — `dev.nivic.db.DbSchema`
+  - `Postgres` — `dev.nivic.db.Postgres`
+  - `PostgresContextListener` — `dev.nivic.db.PostgresContextListener`
+  - `JdbcWalletJournal` — `dev.nivic.journal.JdbcWalletJournal`
+  - `MemoryWalletJournal` — `dev.nivic.journal.MemoryWalletJournal`
+  - `NoopWalletJournal` — `dev.nivic.journal.NoopWalletJournal`
+  - `WalletJournal` — `dev.nivic.journal.WalletJournal`
+  - `CoreLedgerStatus` — `dev.nivic.ledger.CoreLedgerStatus`
+  - `JdbcPaymentLedger` — `dev.nivic.ledger.JdbcPaymentLedger`
+  - `JdbcWalletLedger` — `dev.nivic.ledger.JdbcWalletLedger`
+  - `MemoryPaymentLedger` — `dev.nivic.ledger.MemoryPaymentLedger`
+  - `MemoryWalletLedger` — `dev.nivic.ledger.MemoryWalletLedger`
+  - `NoopPaymentLedger` — `dev.nivic.ledger.NoopPaymentLedger`
+  - `NoopWalletLedger` — `dev.nivic.ledger.NoopWalletLedger`
+  - `OrderIdConflictException` — `dev.nivic.ledger.OrderIdConflictException`
+  - `PaymentIntentAppendCtx` — `dev.nivic.ledger.PaymentIntentAppendCtx`
+  - `PaymentLedger` — `dev.nivic.ledger.PaymentLedger`
+  - `WalletLedger` — `dev.nivic.ledger.WalletLedger`
+  - `MerchantConfig` — `dev.nivic.merchant.MerchantConfig`
+  - `MerchantDisabledException` — `dev.nivic.merchant.MerchantDisabledException`
+  - `Money` — `dev.nivic.money.Money`
+  - `MoneyTransfers` — `dev.nivic.money.MoneyTransfers`
+  - `MidConventions` — `dev.nivic.party.MidConventions`
+  - `PartyKind` — `dev.nivic.party.PartyKind`
+  - `AcceptResult` — `dev.nivic.payment.AcceptResult`
+  - `AccountHoldStore` — `dev.nivic.payment.AccountHoldStore`
+  - `ConfirmPayloadParser` — `dev.nivic.payment.ConfirmPayloadParser`
+  - `JdbcAccountHoldStore` — `dev.nivic.payment.JdbcAccountHoldStore`
+  - `JdbcPaymentIntentExpiry` — `dev.nivic.payment.JdbcPaymentIntentExpiry`
+  - `LedgerService` — `dev.nivic.payment.LedgerService`
+  - `NoopAccountHoldStore` — `dev.nivic.payment.NoopAccountHoldStore`
+  - `PaymentIntentAck` — `dev.nivic.payment.PaymentIntentAck`
+  - `PaymentIntentExpiryScheduler` — `dev.nivic.payment.PaymentIntentExpiryScheduler`
+  - `PersistKind` — `dev.nivic.payment.PersistKind`
+  - `ReconciliationJob` — `dev.nivic.payment.ReconciliationJob`
+  - `WalService` — `dev.nivic.payment.WalService`
+  - `WalletAcceptService` — `dev.nivic.payment.WalletAcceptService`
+  - `WalletPayloadJson` — `dev.nivic.payment.WalletPayloadJson`
+  - `WalletService` — `dev.nivic.payment.WalletService`
+  - `WalletVerificationService` — `dev.nivic.payment.WalletVerificationService`
+  - `WalletPersistDisruptor` — `dev.nivic.payment.disruptor.WalletPersistDisruptor`
+  - `WalletRingEvent` — `dev.nivic.payment.disruptor.WalletRingEvent`
+  - `BinaryBodyReader` — `dev.nivic.sevlet.BinaryBodyReader`
+  - `BodyTooLargeException` — `dev.nivic.sevlet.BodyTooLargeException`
+  - `ExtraDataPolicy` — `dev.nivic.sevlet.ExtraDataPolicy`
+  - `HttpProxyServlet` — `dev.nivic.sevlet.HttpProxyServlet`
+  - `SevletWalletCodec` — `dev.nivic.sevlet.SevletWalletCodec`
+  - `SevletWalletPayload` — `dev.nivic.sevlet.SevletWalletPayload`
+  - `SevletWalletPayloadServlet` — `dev.nivic.sevlet.SevletWalletPayloadServlet`
+  - `FormCodegenServlet` — `dev.nivic.sevlet.api.FormCodegenServlet`
+  - `FormDefinitionJson` — `dev.nivic.sevlet.api.FormDefinitionJson`
+  - `FormManifestServlet` — `dev.nivic.sevlet.api.FormManifestServlet`
+  - `FormSchemaServlet` — `dev.nivic.sevlet.api.FormSchemaServlet`
+  - `FormSubmitServlet` — `dev.nivic.sevlet.api.FormSubmitServlet`
+  - `IdempotencyGate` — `dev.nivic.sevlet.idempotency.IdempotencyGate`
+  - `JdbcIdempotencyGate` — `dev.nivic.sevlet.idempotency.JdbcIdempotencyGate`
+  - `MemoryIdempotencyGate` — `dev.nivic.sevlet.idempotency.MemoryIdempotencyGate`
+  - `OrderIdMismatchException` — `dev.nivic.sevlet.idempotency.OrderIdMismatchException`
+  - `JdbcMidSecretResolver` — `dev.nivic.sevlet.secret.JdbcMidSecretResolver`
+  - `MidProfile` — `dev.nivic.sevlet.secret.MidProfile`
+  - `MidSecretResolver` — `dev.nivic.sevlet.secret.MidSecretResolver`
+  - `SevletWalletHmac` — `dev.nivic.sevlet.secret.SevletWalletHmac`
+  - `UnknownMidException` — `dev.nivic.sevlet.secret.UnknownMidException`
+  - `Bytes` — `dev.nivic.util.Bytes`
+  - `CoreWalSigner` — `dev.nivic.wal.CoreWalSigner`
+  - `Ed25519WalKeys` — `dev.nivic.wal.Ed25519WalKeys`
+  - `InternalWalEvent` — `dev.nivic.wal.InternalWalEvent`
+  - `SignedWalConstants` — `dev.nivic.wal.SignedWalConstants`
+  - `SignedWalVerifier` — `dev.nivic.wal.SignedWalVerifier`
+  - `SimpleWalLog` — `dev.nivic.wal.SimpleWalLog`
+  - `RequestMiddlewareFilter` — `dev.nivic.web.RequestMiddlewareFilter`

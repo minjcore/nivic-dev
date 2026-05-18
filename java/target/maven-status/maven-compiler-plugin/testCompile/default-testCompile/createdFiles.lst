@@ -1,0 +1,7 @@
+dev/nivic/wal/SignedWalChainTest.class
+dev/nivic/payment/HotPathTest.class
+dev/nivic/party/MidConventionsTest.class
+dev/nivic/sevlet/GoldenVectorPrinter.class
+dev/nivic/ledger/MemoryPaymentIntentTest.class
+dev/nivic/payment/ConfirmPayloadParserTest.class
+dev/nivic/sevlet/ExtraDataPolicyTest.class

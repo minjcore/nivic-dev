@@ -2167,14 +2167,21 @@ struct CreateOrderSheet: View {
 
     private func create() async {
         guard let amount = UInt64(amountText) else { return }
+        let pts = Int64(discountPoints) ?? 0
         loading = true; error = nil
         defer { loading = false }
         do {
+            /* Step 1: merchant-gateway signs the order and returns an orderID */
+            let resp = try await merchantsClient.createOrder(
+                mid: mid, token: token, amount: amount, note: note, discountPoints: pts)
+
+            /* Step 2: register the intent with Wire server using that orderID */
             let requestID = UInt64(Date().timeIntervalSince1970 * 1000)
-            let orderID   = requestID  /* use same value as simple unique key */
+            let orderIDNum = UInt64(resp.orderID) ?? requestID
             let intent = try await savingClient.createIntent(
-                requestID: requestID, orderID: orderID, amount: amount)
-            /* QR encodes saving://intent?mid=X&rid=Y so customer can PAY_INTENT */
+                requestID: requestID, orderID: orderIDNum, amount: amount)
+
+            /* QR for customer to scan and call PAY_INTENT */
             qrPayload = "saving://intent?mid=\(intent.mid)&rid=\(intent.requestID)&amount=\(intent.amount)"
         } catch {
             self.error = error.localizedDescription
