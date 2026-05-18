@@ -106,6 +106,34 @@ int db_record_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount
 /* Fill out[0..max_count-1] sorted newest-first. Returns count or -1 on error. */
 int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count);
 
+/* ─── TOTP Enrollments ───────────────────────────────────────────────────── */
+
+/* Upsert customer TOTP secret for a merchant. secret must be 20 bytes. */
+int db_totp_enroll(DB *db, uint32_t merchant_id, uint32_t customer_id,
+                   const uint8_t *secret);
+
+/* Fill secret_out[20]. Returns 0 on success, -1 if not found / error. */
+int db_totp_get_secret(DB *db, uint32_t merchant_id, uint32_t customer_id,
+                       uint8_t *secret_out);
+
+/* ─── Payment Intents ────────────────────────────────────────────────────── */
+
+typedef struct {
+    uint64_t amount;
+    int      status;   /* 0=pending, 1=settled */
+} IntentInfo;
+
+/* Insert intent, idempotency key (mid, request_id).
+ * Returns 1=created, 0=already exists (replay OK), -1=error. */
+int db_intent_create(DB *db, uint32_t mid, uint64_t request_id,
+                     uint64_t order_id, uint64_t amount);
+
+/* Fill *out. Returns 0 on success, -1 if not found / error. */
+int db_intent_get(DB *db, uint32_t mid, uint64_t request_id, IntentInfo *out);
+
+/* Mark intent as settled. Returns 0 on success, -1 on error. */
+int db_intent_settle(DB *db, uint32_t mid, uint64_t request_id);
+
 /* ─── Social Recovery ────────────────────────────────────────────────────── */
 
 /* Opens (or resets) a recovery request. Returns 0 on success, -1 on error. */

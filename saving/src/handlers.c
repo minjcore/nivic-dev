@@ -5,6 +5,7 @@
 #include <time.h>
 #include <limits.h>
 #include <pthread.h>
+#include <CommonCrypto/CommonHMAC.h>
 
 /* ─── Session table ──────────────────────────────────────────────────────── */
 
@@ -319,6 +320,118 @@ static void handle_get_history(DB *db, SessionTable *st, int fd, const WireFrame
     send_ack(fd, f->seq, WIRE_OK, extra, (uint16_t)(1 + n * 13));
 }
 
+/* ─── TOTP verify (HMAC-SHA256, 30s window ±1 step) ─────────────────────── */
+
+static int totp_verify(const uint8_t *secret, uint32_t code) {
+    time_t now = time(NULL);
+    for (int delta = -1; delta <= 1; delta++) {
+        uint64_t T = (uint64_t)(now / 30) + (uint64_t)delta;
+        uint8_t msg[8];
+        for (int i = 7; i >= 0; i--) { msg[i] = T & 0xff; T >>= 8; }
+        uint8_t hmac[CC_SHA256_DIGEST_LENGTH];
+        CCHmac(kCCHmacAlgSHA256, secret, 20, msg, 8, hmac);
+        int offset = hmac[CC_SHA256_DIGEST_LENGTH - 1] & 0x0f;
+        uint32_t otp = ((uint32_t)(hmac[offset]     & 0x7f) << 24) |
+                       ((uint32_t) hmac[offset + 1]         << 16) |
+                       ((uint32_t) hmac[offset + 2]         <<  8) |
+                        (uint32_t) hmac[offset + 3];
+        if (otp % 1000000 == code) return 1;
+    }
+    return 0;
+}
+
+/* ENROLL_TOTP  body: [merchant_token 32B][customer_id 4B][secret 20B] */
+static void handle_enroll_totp(DB *db, SessionTable *st, int fd, const WireFrame *f) {
+    if (f->body_len < 56) {
+        send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
+    }
+    uint32_t merchant_id = st_lookup(st, f->body);
+    if (!merchant_id) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
+    uint32_t customer_id    = rd32(f->body + 32);
+    const uint8_t *secret   = f->body + 36;
+
+    if (db_totp_enroll(db, merchant_id, customer_id, secret) != 0) {
+        send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return;
+    }
+    send_ack(fd, f->seq, WIRE_OK, NULL, 0);
+}
+
+/* CREATE_INTENT  body: [merchant_token 32B][request_id 8B][order_id 8B][amount 8B] */
+static void handle_create_intent(DB *db, SessionTable *st, int fd, const WireFrame *f) {
+    if (f->body_len < 56) {
+        send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
+    }
+    uint32_t mid        = st_lookup(st, f->body);
+    if (!mid) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
+    uint64_t request_id = rd64(f->body + 32);
+    uint64_t order_id   = rd64(f->body + 40);
+    uint64_t amount     = rd64(f->body + 48);
+
+    int rc = db_intent_create(db, mid, request_id, order_id, amount);
+    if (rc < 0) { send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return; }
+
+    /* Reply with [status 1B][mid 4B][request_id 8B][amount 8B] so client can build QR */
+    uint8_t extra[21];
+    extra[0] = (uint8_t)(rc == 0 ? 0 : 1);  /* 0=already existed (replay), 1=created */
+    wr32(extra + 1,  mid);
+    wr64(extra + 5,  request_id);
+    wr64(extra + 13, amount);
+    send_ack(fd, f->seq, WIRE_OK, extra, 21);
+}
+
+/* PAY_INTENT  body: [customer_token 32B][merchant_id 4B][request_id 8B][totp_code 4B] */
+static void handle_pay_intent(DB *db, SessionTable *st, int fd, const WireFrame *f) {
+    if (f->body_len < 48) {
+        send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
+    }
+    uint32_t customer_id = st_lookup(st, f->body);
+    if (!customer_id) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
+    uint32_t merchant_id = rd32(f->body + 32);
+    uint64_t request_id  = rd64(f->body + 36);
+    uint32_t totp_code   = rd32(f->body + 44);
+
+    /* Verify TOTP secret enrolled for this merchant↔customer pair */
+    uint8_t secret[20];
+    if (db_totp_get_secret(db, merchant_id, customer_id, secret) != 0) {
+        send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND, NULL, 0); return;
+    }
+    if (!totp_verify(secret, totp_code)) {
+        send_ack(fd, f->seq, WIRE_ERR_TOTP_INVALID, NULL, 0); return;
+    }
+
+    /* Load intent */
+    IntentInfo intent;
+    if (db_intent_get(db, merchant_id, request_id, &intent) != 0) {
+        send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND, NULL, 0); return;
+    }
+    if (intent.status != 0) {
+        send_ack(fd, f->seq, WIRE_ERR_INTENT_SETTLED, NULL, 0); return;
+    }
+
+    /* Atomic debit customer → credit merchant */
+    int rc = db_transfer(db, customer_id, merchant_id, intent.amount);
+    if (rc == -1) { send_ack(fd, f->seq, WIRE_ERR_LOW_BALANCE, NULL, 0); return; }
+    if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
+    if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
+
+    db_record_transfer(db, customer_id, merchant_id, intent.amount);
+    db_intent_settle(db, merchant_id, request_id);
+
+    /* Push EVT_TRANSFER_IN to merchant if online */
+    int64_t merch_bal = db_account_balance(db, merchant_id);
+    if (merch_bal >= 0) {
+        uint8_t body[20], evt[WIRE_MAX_FRAME];
+        wr32(body,      customer_id);
+        wr64(body + 4,  intent.amount);
+        wr64(body + 12, (uint64_t)merch_bal);
+        size_t n = wire_frame_encode(WIRE_EVT_TRANSFER_IN, 0, body, 20,
+                                     evt, sizeof(evt));
+        if (n > 0) registry_push(merchant_id, evt, n);
+    }
+
+    send_ack(fd, f->seq, WIRE_OK, NULL, 0);
+}
+
 /* ─── Dispatch ───────────────────────────────────────────────────────────── */
 
 void handle_frame(DB *db, SessionTable *st, int fd, const WireFrame *f) {
@@ -333,6 +446,9 @@ void handle_frame(DB *db, SessionTable *st, int fd, const WireFrame *f) {
         case WIRE_RECOVERY_REQ:     handle_recovery_req(db, fd, f);               break;
         case WIRE_RECOVERY_APPROVE: handle_recovery_approve(db, st, fd, f);       break;
         case WIRE_GET_HISTORY:      handle_get_history(db, st, fd, f);            break;
+        case WIRE_ENROLL_TOTP:      handle_enroll_totp(db, st, fd, f);            break;
+        case WIRE_CREATE_INTENT:    handle_create_intent(db, st, fd, f);          break;
+        case WIRE_PAY_INTENT:       handle_pay_intent(db, st, fd, f);             break;
         default:
             send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0);
     }

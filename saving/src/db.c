@@ -81,7 +81,26 @@ static const char SCHEMA[] =
     "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
     ");"
     "CREATE INDEX IF NOT EXISTS transfers_from_idx ON transfers(from_id, created_at DESC);"
-    "CREATE INDEX IF NOT EXISTS transfers_to_idx   ON transfers(to_id,   created_at DESC);";
+    "CREATE INDEX IF NOT EXISTS transfers_to_idx   ON transfers(to_id,   created_at DESC);"
+
+    /* TOTP secrets enrolled by merchants for customers */
+    "CREATE TABLE IF NOT EXISTS totp_enrollments ("
+    "  merchant_id BIGINT NOT NULL,"
+    "  customer_id BIGINT NOT NULL,"
+    "  secret      BYTEA  NOT NULL,"
+    "  PRIMARY KEY (merchant_id, customer_id)"
+    ");"
+
+    /* Payment intents created by merchants */
+    "CREATE TABLE IF NOT EXISTS payment_intents ("
+    "  mid        BIGINT  NOT NULL,"
+    "  request_id BIGINT  NOT NULL,"
+    "  order_id   BIGINT  NOT NULL,"
+    "  amount     BIGINT  NOT NULL,"
+    "  status     SMALLINT NOT NULL DEFAULT 0,"
+    "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+    "  PRIMARY KEY (mid, request_id)"
+    ");";
 
 /* ══════════════════════════════════════════════════════════════════════════
  *  Lifecycle
@@ -602,4 +621,151 @@ int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count) {
 
     PQclear(r);
     return n;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  TOTP Enrollments
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+int db_totp_enroll(DB *db, uint32_t merchant_id, uint32_t customer_id,
+                   const uint8_t *secret) {
+    static const char SQL[] =
+        "INSERT INTO totp_enrollments (merchant_id, customer_id, secret) "
+        "VALUES ($1, $2, $3) "
+        "ON CONFLICT (merchant_id, customer_id) DO UPDATE SET secret = EXCLUDED.secret";
+
+    uint64_t mid = pg_int8((uint64_t)merchant_id);
+    uint64_t cid = pg_int8((uint64_t)customer_id);
+
+    const char *vals[3] = { (char *)&mid, (char *)&cid, (char *)secret };
+    int         lens[3] = { 8, 8, 20 };
+    int         fmts[3] = { 1, 1, 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 3, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+
+    int ok = (PQresultStatus(r) == PGRES_COMMAND_OK);
+    if (!ok) fprintf(stderr, "[db] totp_enroll: %s\n", PQerrorMessage(db->conn));
+    PQclear(r);
+    return ok ? 0 : -1;
+}
+
+int db_totp_get_secret(DB *db, uint32_t merchant_id, uint32_t customer_id,
+                       uint8_t *secret_out) {
+    static const char SQL[] =
+        "SELECT secret FROM totp_enrollments WHERE merchant_id = $1 AND customer_id = $2";
+
+    uint64_t mid = pg_int8((uint64_t)merchant_id);
+    uint64_t cid = pg_int8((uint64_t)customer_id);
+
+    const char *vals[2] = { (char *)&mid, (char *)&cid };
+    int         lens[2] = { 8, 8 };
+    int         fmts[2] = { 1, 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 1);
+    DB_UNLOCK(db);
+
+    if (PQresultStatus(r) != PGRES_TUPLES_OK || PQntuples(r) == 0) {
+        PQclear(r);
+        return -1;
+    }
+
+    int slen = PQgetlength(r, 0, 0);
+    if (slen != 20) { PQclear(r); return -1; }
+    memcpy(secret_out, PQgetvalue(r, 0, 0), 20);
+    PQclear(r);
+    return 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Payment Intents
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+int db_intent_create(DB *db, uint32_t mid, uint64_t request_id,
+                     uint64_t order_id, uint64_t amount) {
+    static const char SQL[] =
+        "INSERT INTO payment_intents (mid, request_id, order_id, amount) "
+        "VALUES ($1, $2, $3, $4) ON CONFLICT (mid, request_id) DO NOTHING";
+
+    uint64_t m  = pg_int8((uint64_t)mid);
+    uint64_t ri = pg_int8(request_id);
+    uint64_t oi = pg_int8(order_id);
+    uint64_t am = pg_int8(amount);
+
+    const char *vals[4] = { (char *)&m, (char *)&ri, (char *)&oi, (char *)&am };
+    int         lens[4] = { 8, 8, 8, 8 };
+    int         fmts[4] = { 1, 1, 1, 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 4, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+
+    if (PQresultStatus(r) != PGRES_COMMAND_OK) {
+        fprintf(stderr, "[db] intent_create: %s\n", PQerrorMessage(db->conn));
+        PQclear(r);
+        return -1;
+    }
+
+    char *affected = PQcmdTuples(r);
+    int created = (affected && affected[0] == '1');
+    PQclear(r);
+    return created ? 1 : 0;
+}
+
+int db_intent_get(DB *db, uint32_t mid, uint64_t request_id, IntentInfo *out) {
+    static const char SQL[] =
+        "SELECT amount, status FROM payment_intents WHERE mid = $1 AND request_id = $2";
+
+    uint64_t m  = pg_int8((uint64_t)mid);
+    uint64_t ri = pg_int8(request_id);
+
+    const char *vals[2] = { (char *)&m, (char *)&ri };
+    int         lens[2] = { 8, 8 };
+    int         fmts[2] = { 1, 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 1);
+    DB_UNLOCK(db);
+
+    if (PQresultStatus(r) != PGRES_TUPLES_OK || PQntuples(r) == 0) {
+        PQclear(r);
+        return -1;
+    }
+
+    out->amount = from_be64((uint8_t *)PQgetvalue(r, 0, 0));
+    /* SMALLINT binary result is 2 bytes big-endian */
+    uint8_t *sp = (uint8_t *)PQgetvalue(r, 0, 1);
+    out->status = (sp[0] << 8) | sp[1];
+    PQclear(r);
+    return 0;
+}
+
+int db_intent_settle(DB *db, uint32_t mid, uint64_t request_id) {
+    static const char SQL[] =
+        "UPDATE payment_intents SET status = 1 "
+        "WHERE mid = $1 AND request_id = $2 AND status = 0";
+
+    uint64_t m  = pg_int8((uint64_t)mid);
+    uint64_t ri = pg_int8(request_id);
+
+    const char *vals[2] = { (char *)&m, (char *)&ri };
+    int         lens[2] = { 8, 8 };
+    int         fmts[2] = { 1, 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+
+    if (PQresultStatus(r) != PGRES_COMMAND_OK) {
+        fprintf(stderr, "[db] intent_settle: %s\n", PQerrorMessage(db->conn));
+        PQclear(r);
+        return -1;
+    }
+
+    char *affected = PQcmdTuples(r);
+    int settled = (affected && affected[0] == '1');
+    PQclear(r);
+    return settled ? 0 : -1;
 }

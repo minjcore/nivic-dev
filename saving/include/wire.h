@@ -102,6 +102,14 @@
 #define WIRE_RECOVERY_APPROVE 0x15
 #define WIRE_GET_HISTORY     0x16
 
+/* ─── Payment Intent commands ────────────────────────────────────────────── */
+/* ENROLL_TOTP    body: [merchant_token 32B][customer_id 4B][secret 20B]      */
+/* CREATE_INTENT  body: [merchant_token 32B][request_id 8B][order_id 8B][amount 8B] */
+/* PAY_INTENT     body: [customer_token 32B][merchant_id 4B][request_id 8B][totp_code 4B] */
+#define WIRE_ENROLL_TOTP     0x22
+#define WIRE_CREATE_INTENT   0x20
+#define WIRE_PAY_INTENT      0x21
+
 #define WIRE_PONG            0x80
 #define WIRE_LOGIN_ACK       0x81
 #define WIRE_ACK             0x82
@@ -124,6 +132,8 @@
 #define WIRE_ERR_GUARDIAN_FULL 0x09
 #define WIRE_ERR_NOT_GUARDIAN  0x0A
 #define WIRE_ERR_NEED_GUARDIANS 0x0B
+#define WIRE_ERR_TOTP_INVALID  0x0C
+#define WIRE_ERR_INTENT_SETTLED 0x0D
 #define WIRE_ERR_INTERNAL      0xFF
 
 /* ─── Session token ──────────────────────────────────────────────────────── */
