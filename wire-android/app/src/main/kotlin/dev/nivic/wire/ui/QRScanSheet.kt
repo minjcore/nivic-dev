@@ -39,6 +39,7 @@ import java.util.concurrent.Executors
 // saving://pay?pr=BASE64URL(PaymentRequest JSON)      → signed merchant payment
 // saving://totp-enroll?uid=X&secret=BASE32            → enroll user TOTP
 // saving://totp-pay?uid=X&token=32CHARTOKEN           → TOTP payment token
+// saving://intent?mid=X&rid=Y&amount=Z               → Wire payment intent
 
 data class MerchantPayload(val mid: Long, val amount: Long?, val ref: String?) {
     companion object {
@@ -98,6 +99,19 @@ data class TOTPPayPayload(val uid: Long, val token: String) {
     }
 }
 
+data class IntentPayload(val mid: Long, val requestId: Long, val amount: Long) {
+    companion object {
+        fun parse(raw: String): IntentPayload? {
+            val uri = android.net.Uri.parse(raw)
+            if (uri.scheme != "saving" || uri.host != "intent") return null
+            val mid = uri.getQueryParameter("mid")?.toLongOrNull() ?: return null
+            val rid = uri.getQueryParameter("rid")?.toLongOrNull() ?: return null
+            val amt = uri.getQueryParameter("amount")?.toLongOrNull() ?: return null
+            return IntentPayload(mid, rid, amt)
+        }
+    }
+}
+
 // ─── QR Scan screen ────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -110,10 +124,11 @@ fun QRScanSheet(
     onDone:          () -> Unit,
     onDismiss:       () -> Unit,
 ) {
-    var payload      by remember { mutableStateOf<MerchantPayload?>(null) }
+    var payload       by remember { mutableStateOf<MerchantPayload?>(null) }
     var enrollPayload by remember { mutableStateOf<TOTPEnrollPayload?>(null) }
-    var totpPayload  by remember { mutableStateOf<TOTPPayPayload?>(null) }
-    var scanError    by remember { mutableStateOf<String?>(null) }
+    var totpPayload   by remember { mutableStateOf<TOTPPayPayload?>(null) }
+    var intentPayload by remember { mutableStateOf<IntentPayload?>(null) }
+    var scanError     by remember { mutableStateOf<String?>(null) }
     val ctx          = LocalContext.current
 
     ModalBottomSheet(
@@ -132,21 +147,30 @@ fun QRScanSheet(
             ) {
                 Text(
                     when {
-                        payload != null      -> "Xác nhận thanh toán"
+                        intentPayload != null -> "Xác nhận đơn hàng"
+                        payload != null       -> "Xác nhận thanh toán"
                         enrollPayload != null -> "Đăng ký TOTP"
-                        totpPayload != null  -> "Xác nhận TOTP"
-                        else                 -> "Quét QR"
+                        totpPayload != null   -> "Xác nhận TOTP"
+                        else                  -> "Quét QR"
                     },
                     color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp
                 )
-                if (payload != null || enrollPayload != null || totpPayload != null) {
-                    TextButton(onClick = { payload = null; enrollPayload = null; totpPayload = null; scanError = null }) {
+                if (payload != null || enrollPayload != null || totpPayload != null || intentPayload != null) {
+                    TextButton(onClick = { payload = null; enrollPayload = null; totpPayload = null; intentPayload = null; scanError = null }) {
                         Text("Quét lại", color = Color.Gray)
                     }
                 }
             }
 
             when {
+                intentPayload != null -> {
+                    IntentPayContent(
+                        client    = client,
+                        prefs     = prefs,
+                        payload   = intentPayload!!,
+                        onDone    = { onDone(); onDismiss() }
+                    )
+                }
                 enrollPayload != null -> {
                     TOTPEnrollContent(
                         p      = enrollPayload!!,
@@ -178,10 +202,12 @@ fun QRScanSheet(
                             .padding(horizontal = 20.dp)
                             .background(Color.Black, RoundedCornerShape(16.dp)),
                         onCode = { raw ->
+                            val ip = IntentPayload.parse(raw)
                             val ep = TOTPEnrollPayload.parse(raw)
                             val tp = TOTPPayPayload.parse(raw)
                             val mp = MerchantPayload.parse(raw)
                             when {
+                                ip != null -> { intentPayload = ip; scanError = null }
                                 ep != null -> { enrollPayload = ep; scanError = null }
                                 tp != null -> { totpPayload = tp;  scanError = null }
                                 mp != null -> { payload = mp;      scanError = null }
@@ -281,6 +307,78 @@ private fun TOTPPayContent(
 }
 
 // ─── Merchant pay confirmation ──────────────────────────────────────────────
+
+// ─── Wire intent payment ──────────────────────────────────────────────────────
+
+@Composable
+private fun IntentPayContent(
+    client:  SavingClient,
+    prefs:   android.content.SharedPreferences,
+    payload: IntentPayload,
+    onDone:  () -> Unit,
+) {
+    var error   by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    var success by remember { mutableStateOf(false) }
+    val scope   = rememberCoroutineScope()
+
+    Column(
+        modifier            = Modifier.fillMaxWidth().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        Icon(Icons.Default.Store, null, modifier = Modifier.size(64.dp),
+            tint = Color.White.copy(alpha = 0.85f))
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Người bán", color = Color.Gray, fontSize = 12.sp)
+            Text("#${payload.mid}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+        }
+
+        Text(payload.amount.vndFormatted(), color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Black)
+
+        error?.let { Text(it, color = Color.Red, fontSize = 13.sp) }
+
+        if (success) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.CheckCircleOutline, null, tint = Color(0xFF4CAF50))
+                Text("Thanh toán thành công!", color = Color(0xFF4CAF50), fontWeight = FontWeight.SemiBold)
+            }
+        } else {
+            WirePrimaryButton(title = "XÁC NHẬN THANH TOÁN", loading = loading, enabled = !loading) {
+                scope.launch {
+                    val secret = TOTPStore.getSecret(prefs, payload.mid)
+                    if (secret == null) {
+                        error = "Chưa đăng ký TOTP với merchant này"
+                        return@launch
+                    }
+                    loading = true; error = null
+                    try {
+                        val code = TOTP.generateCode(secret)
+                        client.payIntent(payload.mid, payload.requestId, code)
+                        success = true
+                        kotlinx.coroutines.delay(1500)
+                        onDone()
+                    } catch (e: WireError) {
+                        error = when (e.code) {
+                            WireCode.ERR_LOW_BALANCE    -> "Không đủ số dư"
+                            WireCode.ERR_TOTP_INVALID   -> "Mã TOTP không hợp lệ"
+                            WireCode.ERR_INTENT_SETTLED -> "Đơn đã thanh toán rồi"
+                            WireCode.ERR_NOT_FOUND      -> "Không tìm thấy đơn hàng"
+                            else -> "Lỗi: 0x${e.code.toInt().and(0xFF).toString(16)}"
+                        }
+                    } catch (e: Exception) {
+                        error = e.message
+                    } finally {
+                        loading = false
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+}
 
 @Composable
 private fun MerchantPayContent(

@@ -81,6 +81,15 @@ class SavingClient(
 
     suspend fun payMerchant(mid: Long, amount: Long) = transfer(mid, amount)
 
+    // ─── Payment Intent ───────────────────────────────────────────────────────
+
+    suspend fun payIntent(merchantId: Long, requestId: Long, totpCode: Int) {
+        val ack = conn.send(
+            WireFrame.payIntent(requireToken(), merchantId, requestId, totpCode, conn.nextSeq())
+        ).parseAck()
+        if (ack.code != WireCode.OK) throw WireError(ack.code)
+    }
+
     // ─── History ─────────────────────────────────────────────────────────────
 
     suspend fun history(): List<Transaction> {

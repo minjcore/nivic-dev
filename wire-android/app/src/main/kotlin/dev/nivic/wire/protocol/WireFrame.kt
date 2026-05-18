@@ -17,6 +17,9 @@ object WireCmd {
     const val RECOVERY_REQ:      Byte = 0x14.toByte()
     const val RECOVERY_APPROVE:  Byte = 0x15.toByte()
     const val GET_HISTORY:       Byte = 0x16.toByte()
+    const val CREATE_INTENT:     Byte = 0x20.toByte()
+    const val PAY_INTENT:        Byte = 0x21.toByte()
+    const val ENROLL_TOTP:       Byte = 0x22.toByte()
 
     const val PONG:              Byte = 0x80.toByte()
     const val LOGIN_ACK:         Byte = 0x81.toByte()
@@ -40,8 +43,10 @@ object WireCode {
     const val ERR_LOW_BALANCE:   Byte = 0x08
     const val ERR_GUARDIAN_FULL: Byte = 0x09
     const val ERR_NOT_GUARDIAN:  Byte = 0x0A
-    const val ERR_NEED_GUARDIANS: Byte = 0x0B
-    const val ERR_INTERNAL:      Byte = 0xFF.toByte()
+    const val ERR_NEED_GUARDIANS:  Byte = 0x0B
+    const val ERR_TOTP_INVALID:    Byte = 0x0C
+    const val ERR_INTENT_SETTLED:  Byte = 0x0D
+    const val ERR_INTERNAL:        Byte = 0xFF.toByte()
 }
 
 object AccountID {
@@ -126,6 +131,12 @@ fun WireFrame.Companion.logout(token: ByteArray, seq: Int) =
 
 fun WireFrame.Companion.ping(seq: Int) =
     WireFrame(WireCmd.PING, seq)
+
+/* PAY_INTENT  body: [token 32B][merchant_id 4B][request_id 8B][totp_code 4B] */
+fun WireFrame.Companion.payIntent(token: ByteArray, merchantId: Long, requestId: Long,
+                                   totpCode: Int, seq: Int) =
+    WireFrame(WireCmd.PAY_INTENT, seq,
+        token + merchantId.toUInt32Bytes() + requestId.toInt64Bytes() + totpCode.toLong().toUInt32Bytes())
 
 // ─── Body parsers ──────────────────────────────────────────────────────────
 

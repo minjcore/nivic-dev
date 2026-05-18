@@ -60,6 +60,21 @@ object TOTP {
         return false
     }
 
+    /* RFC 6238 dynamic truncation → 6-digit Int, matches C server totp_verify */
+    fun generateCode(secret: ByteArray, timeMs: Long = System.currentTimeMillis()): Int {
+        val counter = timeMs / 1000 / STEP
+        val msg = ByteBuffer.allocate(8).putLong(counter).array()
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(secret, "HmacSHA256"))
+        val hash = mac.doFinal(msg)
+        val offset = hash.last().toInt() and 0x0f
+        val code = ((hash[offset].toInt() and 0x7f) shl 24) or
+                   ((hash[offset + 1].toInt() and 0xff) shl 16) or
+                   ((hash[offset + 2].toInt() and 0xff) shl 8) or
+                    (hash[offset + 3].toInt() and 0xff)
+        return code % 1_000_000
+    }
+
     fun secondsRemaining(): Int {
         val elapsed = (System.currentTimeMillis() / 1000 % STEP).toInt()
         return STEP.toInt() - elapsed
