@@ -13,80 +13,148 @@ import (
 )
 
 const (
-	url      = "amqp://admin:admin@localhost:5672/"
-	queue    = "nivic.test"
-	exchange = ""
-	nPublish = 20
+	url   = "amqp://admin:admin@localhost:5672/"
+	queue = "nivic.test"
 )
 
+func dial(label string) *amqp.Connection {
+	for attempt := 1; ; attempt++ {
+		conn, err := amqp.Dial(url)
+		if err == nil {
+			log.Printf("[%s] connected → %s", label, conn.RemoteAddr())
+			return conn
+		}
+		log.Printf("[%s] attempt %d failed: %v — retry 1s", label, attempt, err)
+		time.Sleep(time.Second)
+	}
+}
+
+func openChannel(conn *amqp.Connection) (*amqp.Channel, error) {
+	ch, err := conn.Channel()
+	if err != nil {
+		return nil, err
+	}
+	_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
+	return ch, err
+}
+
+// runPublisher publishes one message every 300ms; auto-reconnects on failure.
+func runPublisher(ctx context.Context, id int, seq *atomic.Int64, sent, errs *atomic.Int64) {
+	label := fmt.Sprintf("pub-%d", id)
+
+	connect := func() (*amqp.Connection, *amqp.Channel) {
+		for {
+			conn := dial(label)
+			ch, err := openChannel(conn)
+			if err == nil {
+				return conn, ch
+			}
+			log.Printf("[%s] channel err: %v", label, err)
+			conn.Close()
+			time.Sleep(time.Second)
+		}
+	}
+
+	conn, ch := connect()
+	closed := conn.NotifyClose(make(chan *amqp.Error, 1))
+	ticker := time.NewTicker(300 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			conn.Close()
+			return
+
+		case err := <-closed:
+			log.Printf("[%s] *** connection lost: %v — reconnecting…", label, err)
+			conn, ch = connect()
+			closed = conn.NotifyClose(make(chan *amqp.Error, 1))
+
+		case <-ticker.C:
+			n := seq.Add(1)
+			body := fmt.Sprintf("msg-%04d  pub=%d  t=%d", n, id, time.Now().UnixMilli())
+			err := ch.PublishWithContext(ctx, "", queue, false, false,
+				amqp.Publishing{
+					ContentType:  "text/plain",
+					DeliveryMode: amqp.Persistent,
+					Body:         []byte(body),
+				})
+			if err != nil {
+				log.Printf("[%s] *** publish FAIL #%04d: %v", label, n, err)
+				errs.Add(1)
+			} else {
+				sent.Add(1)
+				log.Printf("[%s] sent #%04d", label, n)
+			}
+		}
+	}
+}
+
+// runConsumer consumes from the queue; auto-reconnects on failure.
+func runConsumer(ctx context.Context, received *atomic.Int64) {
+	label := "consumer"
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		conn := dial(label)
+		ch, err := openChannel(conn)
+		if err != nil {
+			log.Printf("[%s] channel: %v", label, err)
+			conn.Close()
+			time.Sleep(time.Second)
+			continue
+		}
+		msgs, err := ch.Consume(queue, "nivic-consumer", true, false, false, false, nil)
+		if err != nil {
+			log.Printf("[%s] consume: %v", label, err)
+			conn.Close()
+			time.Sleep(time.Second)
+			continue
+		}
+
+		closed := conn.NotifyClose(make(chan *amqp.Error, 1))
+		log.Printf("[%s] ready on %s", label, conn.RemoteAddr())
+
+	drain:
+		for {
+			select {
+			case <-ctx.Done():
+				conn.Close()
+				return
+			case err := <-closed:
+				log.Printf("[%s] *** connection lost: %v — reconnecting…", label, err)
+				conn.Close()
+				break drain
+			case msg, ok := <-msgs:
+				if !ok {
+					break drain
+				}
+				n := received.Add(1)
+				log.Printf("[%s] recv #%04d: %s", label, n, msg.Body)
+			}
+		}
+	}
+}
+
 func main() {
-	// ── Publisher ──────────────────────────────────────────────────────────
-	pubConn, err := amqp.Dial(url)
-	fatal(err, "dial publisher")
-	defer pubConn.Close()
-
-	pubCh, err := pubConn.Channel()
-	fatal(err, "open publisher channel")
-	defer pubCh.Close()
-
-	_, err = pubCh.QueueDeclare(queue, true, false, false, false, nil)
-	fatal(err, "declare queue")
-
-	log.Printf("publisher connected via %s", pubConn.RemoteAddr())
-
-	// ── Consumer ───────────────────────────────────────────────────────────
-	conConn, err := amqp.Dial(url)
-	fatal(err, "dial consumer")
-	defer conConn.Close()
-
-	conCh, err := conConn.Channel()
-	fatal(err, "open consumer channel")
-	defer conCh.Close()
-
-	log.Printf("consumer  connected via %s", conConn.RemoteAddr())
-
-	msgs, err := conCh.Consume(queue, "nivic-consumer", true, false, false, false, nil)
-	fatal(err, "consume")
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	var received atomic.Int64
+	var seq, sent, errs, received atomic.Int64
 
-	go func() {
-		for msg := range msgs {
-			n := received.Add(1)
-			log.Printf("  [%02d] recv: %s", n, msg.Body)
-			if received.Load() >= nPublish {
-				stop()
-			}
-		}
-	}()
-
-	// ── Publish nPublish messages ──────────────────────────────────────────
-	for i := 1; i <= nPublish; i++ {
-		body := fmt.Sprintf("msg-%02d  t=%d", i, time.Now().UnixMilli())
-		err = pubCh.PublishWithContext(ctx, exchange, queue, false, false,
-			amqp.Publishing{
-				ContentType:  "text/plain",
-				DeliveryMode: amqp.Persistent,
-				Body:         []byte(body),
-			})
-		if err != nil {
-			log.Printf("publish #%d error: %v", i, err)
-			break
-		}
-		log.Printf("  [%02d] sent: %s", i, body)
-		time.Sleep(100 * time.Millisecond)
+	// 3 publishers → roundrobin guarantees 1 connection per node
+	for i := 1; i <= 3; i++ {
+		go runPublisher(ctx, i, &seq, &sent, &errs)
 	}
+	go runConsumer(ctx, &received)
 
-	log.Println("waiting for all messages...")
+	log.Println("3 publishers running (one per node via roundrobin)")
+	log.Println("kill any rabbitmq node to trigger failover — Ctrl-C to stop")
+
 	<-ctx.Done()
-	log.Printf("done — sent %d, received %d", nPublish, received.Load())
-}
-
-func fatal(err error, msg string) {
-	if err != nil {
-		log.Fatalf("%s: %v", msg, err)
-	}
+	time.Sleep(400 * time.Millisecond)
+	log.Printf("─── result: sent=%d  received=%d  pub_errors=%d ───",
+		sent.Load(), received.Load(), errs.Load())
 }
