@@ -17,11 +17,12 @@ import (
 const (
 	typeLogin    = 0x02
 	typeTransfer = 0x11
+	typeCashIn   = 0x24
 	typeLoginAck = 0x81
 	typeAck      = 0x82
 
-	codeOK           = 0x00
-	codeLowBalance   = 0x08
+	codeOK         = 0x00
+	codeLowBalance = 0x08
 
 	frameOverhead = 41 // 4(len) + 1(type) + 4(seq) + 32(hmac)
 )
@@ -85,7 +86,7 @@ func (c *WireClient) Login(uid uint32, password string) ([]byte, error) {
 	return token, nil
 }
 
-// Transfer sends amount from the logged-in account to toUID.
+// Transfer sends amount from the logged-in account to toUID (regular transfer).
 func (c *WireClient) Transfer(token []byte, toUID uint32, amount uint64) error {
 	body := make([]byte, 32+4+8)
 	copy(body, token)
@@ -95,7 +96,6 @@ func (c *WireClient) Transfer(token []byte, toUID uint32, amount uint64) error {
 	if err := c.sendFrame(typeTransfer, body); err != nil {
 		return fmt.Errorf("transfer send: %w", err)
 	}
-
 	frame, err := c.recvFrame()
 	if err != nil {
 		return fmt.Errorf("transfer recv: %w", err)
@@ -105,6 +105,32 @@ func (c *WireClient) Transfer(token []byte, toUID uint32, amount uint64) error {
 	}
 	if frame.body[0] != codeOK {
 		return fmt.Errorf("transfer failed: code 0x%x", frame.body[0])
+	}
+	return nil
+}
+
+// CashIn credits toUID's wallet using the bank entity token.
+// topupID is used as an idempotency key — safe to retry on failure.
+func (c *WireClient) CashIn(token []byte, toUID uint32, amount uint64, topupID string) error {
+	tid := []byte(topupID)
+	body := make([]byte, 32+4+8+len(tid))
+	copy(body, token)
+	binary.BigEndian.PutUint32(body[32:], toUID)
+	binary.BigEndian.PutUint64(body[36:], amount)
+	copy(body[44:], tid)
+
+	if err := c.sendFrame(typeCashIn, body); err != nil {
+		return fmt.Errorf("cash_in send: %w", err)
+	}
+	frame, err := c.recvFrame()
+	if err != nil {
+		return fmt.Errorf("cash_in recv: %w", err)
+	}
+	if frame.typ != typeAck || len(frame.body) < 1 {
+		return fmt.Errorf("unexpected response 0x%x", frame.typ)
+	}
+	if frame.body[0] != codeOK {
+		return fmt.Errorf("cash_in failed: code 0x%x", frame.body[0])
 	}
 	return nil
 }

@@ -540,6 +540,68 @@ static void gateway_notify_async(const char *gateway_order_id, uint32_t paid_by)
         free(arg);
 }
 
+/* CASH_IN  body: [bank_token 32B][to_uid 4B][amount 8B][topup_id N bytes]
+ * Caller must be logged in as a bank entity (uid 1-999).
+ * Credits to_uid and records a CASH_IN transfer (type=2).
+ * topup_id is hashed for idempotency — safe to retry.
+ */
+static uint64_t fnv64(const uint8_t *data, int len) {
+    uint64_t h = 14695981039346656037ULL;
+    for (int i = 0; i < len; i++)
+        h = (h ^ data[i]) * 1099511628211ULL;
+    return h;
+}
+
+static void handle_cash_in(DB *db, SessionTable *st, int fd, const WireFrame *f) {
+    if (f->body_len < 44) {
+        send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
+    }
+    uint32_t bank_mid = st_lookup(st, f->body);
+    if (!bank_mid) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
+
+    /* Only bank entities (uid 1–999) may call CASH_IN */
+    if (bank_mid > 999) {
+        send_ack(fd, f->seq, WIRE_ERR_NOT_MERCHANT, NULL, 0); return;
+    }
+
+    uint32_t to_uid = rd32(f->body + 32);
+    uint64_t amount = rd64(f->body + 36);
+
+    /* Idempotency: hash of topup_id bytes (or fall back to seq) */
+    uint64_t idem_key;
+    if (f->body_len > 44) {
+        idem_key = fnv64(f->body + 44, f->body_len - 44);
+    } else {
+        idem_key = (uint64_t)f->seq;
+    }
+
+    int claim = db_idempotency_claim(db, (uint64_t)bank_mid, idem_key, 0);
+    if (claim == 0) { send_ack(fd, f->seq, WIRE_OK, NULL, 0); return; } /* already done */
+    if (claim <  0) { send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return; }
+
+    /* Transfer from bank_mid to to_uid — bank_mid must have sufficient balance */
+    int rc = db_transfer(db, bank_mid, to_uid, amount);
+    if (rc == -1) { send_ack(fd, f->seq, WIRE_ERR_LOW_BALANCE, NULL, 0); return; }
+    if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
+    if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
+
+    db_record_transfer(db, bank_mid, to_uid, amount, 2); /* type=CASH_IN */
+
+    /* Push EVT_TRANSFER_IN to recipient if online */
+    int64_t new_bal = db_account_balance(db, to_uid);
+    if (new_bal >= 0) {
+        uint8_t body[20], evt[WIRE_MAX_FRAME];
+        wr32(body,      bank_mid);
+        wr64(body + 4,  amount);
+        wr64(body + 12, (uint64_t)new_bal);
+        size_t n = wire_frame_encode(WIRE_EVT_TRANSFER_IN, 0, body, 20,
+                                     evt, sizeof(evt));
+        if (n > 0) registry_push(to_uid, evt, n);
+    }
+
+    send_ack(fd, f->seq, WIRE_OK, NULL, 0);
+}
+
 /* ─── Dispatch ───────────────────────────────────────────────────────────── */
 
 void handle_frame(DB *db, SessionTable *st, int fd, const WireFrame *f) {
@@ -558,6 +620,7 @@ void handle_frame(DB *db, SessionTable *st, int fd, const WireFrame *f) {
         case WIRE_ENROLL_TOTP:      handle_enroll_totp(db, st, fd, f);            break;
         case WIRE_CREATE_INTENT:    handle_create_intent(db, st, fd, f);          break;
         case WIRE_PAY_INTENT:       handle_pay_intent(db, st, fd, f);             break;
+        case WIRE_CASH_IN:          handle_cash_in(db, st, fd, f);                break;
         default:
             send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0);
     }

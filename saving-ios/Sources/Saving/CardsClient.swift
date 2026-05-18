@@ -69,12 +69,15 @@ public struct CardsClient {
         return try JSONDecoder().decode([CardInfo].self, from: data)
     }
 
-    public func addCard(uid: UInt32, last4: String, bank: String,
-                        expiry: String, label: String) async throws -> String {
+    public func addCard(uid: UInt32, pan: String, bank: String,
+                        expiry: String, label: String,
+                        holderName: String = "") async throws -> String {
         var req = try authedRequest(method: "POST", path: "/users/\(uid)/cards")
-        req.httpBody = try JSONEncoder().encode([
-            "last4": last4, "bank": bank, "expiry": expiry, "label": label
-        ])
+        var body: [String: String] = [
+            "pan": pan, "bank": bank, "expiry": expiry, "label": label
+        ]
+        if !holderName.isEmpty { body["holder_name"] = holderName }
+        req.httpBody = try JSONEncoder().encode(body)
         let (data, resp) = try await URLSession.shared.data(for: req)
         try checkResponse(data, resp)
         struct R: Decodable { let card_id: String }

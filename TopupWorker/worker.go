@@ -143,7 +143,7 @@ func (w *Worker) creditWithRetry(evt TopUpEvent) TopUpResult {
 	return TopUpResult{TopUpID: evt.TopUpID, UID: evt.UID, Amount: evt.Amount, Status: "failed", Reason: lastErr.Error()}
 }
 
-// credit makes one attempt to connect to Wire and transfer funds.
+// credit makes one attempt to connect to Wire and credit the user via CASH_IN.
 // Returns nil on success, error on any failure.
 func (w *Worker) credit(evt TopUpEvent) error {
 	wire, err := Dial(w.wireHost, w.wirePort, w.wireSecret)
@@ -157,8 +157,8 @@ func (w *Worker) credit(evt TopUpEvent) error {
 		return fmt.Errorf("wire login: %w", err)
 	}
 
-	if err := wire.Transfer(token, evt.UID, evt.Amount); err != nil {
-		return fmt.Errorf("wire transfer: %w", err)
+	if err := wire.CashIn(token, evt.UID, evt.Amount, evt.TopUpID); err != nil {
+		return fmt.Errorf("wire cash_in: %w", err)
 	}
 	return nil
 }

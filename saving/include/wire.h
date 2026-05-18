@@ -107,6 +107,7 @@
 /* ENROLL_TOTP       body: [merchant_token 32B][customer_id 4B][secret 20B]   */
 /* CREATE_INTENT     body: [merchant_token 32B][request_id 8B][order_id 8B][amount 8B] */
 /* PAY_INTENT        body: [customer_token 32B][merchant_id 4B][request_id 8B][totp_code 4B] */
+#define WIRE_CASH_IN           0x24   /* body: [bank_token 32B][to_uid 4B][amount 8B][topup_id N bytes] */
 #define WIRE_REGISTER_MERCHANT 0x23
 #define WIRE_ENROLL_TOTP     0x22
 #define WIRE_CREATE_INTENT   0x20

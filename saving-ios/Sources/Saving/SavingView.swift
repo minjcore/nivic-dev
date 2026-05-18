@@ -1505,10 +1505,11 @@ struct CardManagementSheet: View {
     let onTopUp:     () async -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var cards:       [CardInfo] = []
-    @State private var showAddCard  = false
-    @State private var loading      = false
-    @State private var error:       String?
+    @State private var cards:         [CardInfo] = []
+    @State private var showAddCard    = false
+    @State private var topUpCard:     CardInfo?
+    @State private var loading        = false
+    @State private var error:         String?
 
     var body: some View {
         NavigationStack {
@@ -1528,7 +1529,7 @@ struct CardManagementSheet: View {
                         List {
                             ForEach(cards) { card in
                                 CardRow(card: card) {
-                                    await topUp(card: card)
+                                    topUp(card: card)
                                 } onRemove: {
                                     await remove(card: card)
                                 }
@@ -1558,6 +1559,11 @@ struct CardManagementSheet: View {
                     await loadCards()
                 }
             }
+            .sheet(item: $topUpCard) { card in
+                TopUpAmountSheet(cardsClient: cardsClient, uid: uid, card: card) {
+                    await onTopUp()
+                }
+            }
             .task { await loadCards() }
         }
     }
@@ -1568,10 +1574,8 @@ struct CardManagementSheet: View {
         cards = (try? await cardsClient.listCards(uid: uid)) ?? []
     }
 
-    private func topUp(card: CardInfo) async {
-        guard let result = try? await cardsClient.topUp(uid: uid, cardID: card.id, amount: 100_000) else { return }
-        _ = result
-        await onTopUp()
+    private func topUp(card: CardInfo) {
+        topUpCard = card
     }
 
     private func remove(card: CardInfo) async {
@@ -1582,7 +1586,7 @@ struct CardManagementSheet: View {
 
 private struct CardRow: View {
     let card:     CardInfo
-    let onTopUp:  () async -> Void
+    let onTopUp:  () -> Void
     let onRemove: () async -> Void
 
     var body: some View {
@@ -1600,7 +1604,7 @@ private struct CardRow: View {
             }
             HStack(spacing: 12) {
                 Button {
-                    Task { await onTopUp() }
+                    onTopUp()
                 } label: {
                     Label("Nạp tiền", systemImage: "arrow.down.circle")
                         .font(.caption).fontWeight(.semibold)
@@ -1624,34 +1628,107 @@ private struct CardRow: View {
     }
 }
 
+private struct TopUpAmountSheet: View {
+    let cardsClient: CardsClient
+    let uid:         UInt32
+    let card:        CardInfo
+    let onDone:      () async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var amountText = ""
+    @State private var loading    = false
+    @State private var error:     String?
+
+    private var amount: UInt64? {
+        guard let v = UInt64(amountText.replacingOccurrences(of: ".", with: "")),
+              v >= 10_000 else { return nil }
+        return v
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                VStack(spacing: 20) {
+                    VStack(spacing: 4) {
+                        Text("\(card.bank)  ···· \(card.last4)")
+                            .font(.caption).foregroundStyle(.gray)
+                        Text(card.label?.isEmpty == false ? card.label! : card.bank)
+                            .font(.headline).foregroundStyle(.white)
+                    }
+
+                    WireField("Số tiền nạp (VND)", text: $amountText)
+                        .keyboardType(.numberPad)
+
+                    Text("Tối thiểu 10,000 ₫")
+                        .font(.caption2).foregroundStyle(.gray)
+
+                    if let error { Text(error).foregroundStyle(.red).font(.caption) }
+
+                    WirePrimaryButton(title: "NẠP TIỀN", loading: loading,
+                                      disabled: amount == nil) {
+                        Task { await doTopUp() }
+                    }
+                }
+                .padding(24)
+            }
+            .navigationTitle("Nạp tiền")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Huỷ") { dismiss() }.foregroundStyle(.white)
+                }
+            }
+        }
+    }
+
+    private func doTopUp() async {
+        guard let amt = amount else { return }
+        loading = true; error = nil
+        defer { loading = false }
+        do {
+            _ = try await cardsClient.topUp(uid: uid, cardID: card.id, amount: amt)
+            await onDone()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
 private struct AddCardSheet: View {
     let cardsClient: CardsClient
     let uid:         UInt32
     let onAdded:     () async -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var last4   = ""
-    @State private var bank    = ""
-    @State private var expiry  = ""
-    @State private var label   = ""
-    @State private var loading = false
-    @State private var error:  String?
+    @State private var pan        = ""
+    @State private var bank       = ""
+    @State private var expiry     = ""
+    @State private var label      = ""
+    @State private var holderName = ""
+    @State private var loading    = false
+    @State private var error:     String?
+
+    private var canAdd: Bool { pan.count >= 13 && bank.isEmpty == false && expiry.isEmpty == false }
 
     var body: some View {
         NavigationStack {
             ZStack {
                 Color.black.ignoresSafeArea()
                 VStack(spacing: 16) {
-                    WireField("4 số cuối thẻ", text: $last4)
+                    WireField("Số thẻ (13-19 chữ số)", text: $pan)
                         .keyboardType(.numberPad)
-                    WireField("Ngân hàng (VD: VCB)", text: $bank)
+                    WireField("Tên chủ thẻ (VD: NGUYEN VAN A)", text: $holderName)
+                        .textInputAutocapitalization(.characters)
+                    WireField("Ngân hàng (VD: BIDV)", text: $bank)
                     WireField("Hạn thẻ (MM/YY)", text: $expiry)
                     WireField("Tên thẻ (tuỳ chọn)", text: $label)
 
                     if let error { Text(error).foregroundStyle(.red).font(.caption) }
 
-                    WirePrimaryButton(title: "THÊM THẺ", loading: loading,
-                                      disabled: last4.count != 4 || bank.isEmpty || expiry.isEmpty) {
+                    WirePrimaryButton(title: "THÊM THẺ", loading: loading, disabled: !canAdd) {
                         Task { await add() }
                     }
                 }
@@ -1672,8 +1749,9 @@ private struct AddCardSheet: View {
         loading = true; error = nil
         defer { loading = false }
         do {
-            _ = try await cardsClient.addCard(uid: uid, last4: last4,
-                                              bank: bank, expiry: expiry, label: label)
+            _ = try await cardsClient.addCard(uid: uid, pan: pan, bank: bank,
+                                              expiry: expiry, label: label,
+                                              holderName: holderName)
             await onAdded()
             dismiss()
         } catch {
