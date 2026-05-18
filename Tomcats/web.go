@@ -151,12 +151,14 @@ func writeWireErr(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	if we, ok := err.(*WireError); ok {
 		switch we.Code {
+		case 0x03, 0x04:
+			status = http.StatusConflict
+		case 0x05:
+			status = http.StatusNotFound
 		case 0x06, 0x07:
 			status = http.StatusUnauthorized
 		case 0x08:
 			status = http.StatusPaymentRequired
-		case 0x05:
-			status = http.StatusNotFound
 		}
 	}
 	http.Error(w, err.Error(), status)
