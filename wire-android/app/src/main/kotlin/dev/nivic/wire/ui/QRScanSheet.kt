@@ -348,13 +348,15 @@ private fun IntentPayContent(
         } else {
             WirePrimaryButton(title = "XÁC NHẬN THANH TOÁN", loading = loading, enabled = !loading) {
                 scope.launch {
-                    val secret = TOTPStore.getSecret(prefs, payload.mid)
-                    if (secret == null) {
-                        error = "Chưa đăng ký TOTP với merchant này"
+                    /* Customer pays using their own TOTP secret (enrolled with merchant) */
+                    val ownB32 = prefs.getString("own_totp_secret", null)
+                    if (ownB32 == null) {
+                        error = "Chưa đăng ký TOTP với shop này"
                         return@launch
                     }
                     loading = true; error = null
                     try {
+                        val secret = base32Decode(ownB32)
                         val code = TOTP.generateCode(secret)
                         client.payIntent(payload.mid, payload.requestId, code)
                         success = true
@@ -365,7 +367,7 @@ private fun IntentPayContent(
                             WireCode.ERR_LOW_BALANCE    -> "Không đủ số dư"
                             WireCode.ERR_TOTP_INVALID   -> "Mã TOTP không hợp lệ"
                             WireCode.ERR_INTENT_SETTLED -> "Đơn đã thanh toán rồi"
-                            WireCode.ERR_NOT_FOUND      -> "Không tìm thấy đơn hàng"
+                            WireCode.ERR_NOT_FOUND      -> "Chưa đăng ký TOTP với shop này"
                             else -> "Lỗi: 0x${e.code.toInt().and(0xFF).toString(16)}"
                         }
                     } catch (e: Exception) {
