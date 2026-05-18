@@ -1060,9 +1060,11 @@ struct QRScanSheet: View {
 
     private enum ScanState {
         case scanning
-        case verifying(MerchantPayload)   // spinner while hitting Merchants Host
-        case ready(MerchantPayload)       // show pay screen
-        case failed(String)               // verification or parse error
+        case verifying(MerchantPayload)
+        case ready(MerchantPayload)
+        case totpEnroll(uid: UInt32, secretB32: String)
+        case totpPay(uid: UInt32, token: String, isValid: Bool)
+        case failed(String)
     }
 
     var body: some View {
@@ -1080,6 +1082,10 @@ struct QRScanSheet: View {
                         Task { await onDone() }
                         dismiss()
                     }
+                case .totpEnroll(let uid, _):
+                    totpEnrollSuccessView(uid: uid)
+                case .totpPay(let uid, let token, let isValid):
+                    totpPayResultView(uid: uid, token: token, isValid: isValid)
                 case .failed(let msg):
                     failedView(msg)
                 }
@@ -1106,15 +1112,30 @@ struct QRScanSheet: View {
     private var scanningView: some View {
         VStack(spacing: 24) {
             QRCameraPreview { raw in
-                guard let payload = MerchantPayload.parse(raw) else {
-                    state = .failed("QR không hợp lệ hoặc không phải của người bán")
-                    return
-                }
-                if payload.paymentReq != nil {
-                    state = .verifying(payload)
-                    Task { await verify(payload) }
+                if let comps = URLComponents(string: raw),
+                   comps.scheme == "saving", comps.host == "totp-enroll",
+                   let uidStr = comps.queryItems?.first(where: { $0.name == "uid" })?.value,
+                   let uid    = UInt32(uidStr),
+                   let secret = comps.queryItems?.first(where: { $0.name == "secret" })?.value {
+                    TOTPEnrollmentStore.save(uid: uid, secretB32: secret)
+                    state = .totpEnroll(uid: uid, secretB32: secret)
+                } else if let comps = URLComponents(string: raw),
+                          comps.scheme == "saving", comps.host == "totp-pay",
+                          let uidStr = comps.queryItems?.first(where: { $0.name == "uid" })?.value,
+                          let uid    = UInt32(uidStr),
+                          let token  = comps.queryItems?.first(where: { $0.name == "token" })?.value {
+                    let secret  = TOTPEnrollmentStore.secret(for: uid)
+                    let isValid = secret.map { TOTP.verify(secret: $0, token: token) } ?? false
+                    state = .totpPay(uid: uid, token: token, isValid: isValid)
+                } else if let payload = MerchantPayload.parse(raw) {
+                    if payload.paymentReq != nil {
+                        state = .verifying(payload)
+                        Task { await verify(payload) }
+                    } else {
+                        state = .ready(payload)
+                    }
                 } else {
-                    state = .ready(payload)
+                    state = .failed("QR không hợp lệ")
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 20))
@@ -1152,16 +1173,66 @@ struct QRScanSheet: View {
 
     private var navTitle: String {
         switch state {
-        case .scanning:  return "Quét QR"
-        case .verifying: return "Đang xác thực..."
-        case .ready:     return "Xác nhận thanh toán"
-        case .failed:    return "Lỗi xác thực"
+        case .scanning:    return "Quét QR"
+        case .verifying:   return "Đang xác thực..."
+        case .ready:       return "Xác nhận thanh toán"
+        case .totpEnroll:  return "Đăng ký TOTP"
+        case .totpPay(_, _, let ok): return ok ? "Xác thực thành công" : "Xác thực thất bại"
+        case .failed:      return "Lỗi"
         }
     }
 
     private var leadingLabel: String {
         if case .scanning = state { return "Đóng" }
         return "Quét lại"
+    }
+
+    private func totpEnrollSuccessView(uid: UInt32) -> some View {
+        VStack(spacing: 20) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 64)).foregroundStyle(.green)
+            Text("Đã đăng ký thành công!")
+                .font(.title3.bold()).foregroundStyle(.white)
+            Text("UID #\(uid) đã được lưu.\nLần sau chỉ cần quét mã thanh toán.")
+                .font(.subheadline).foregroundStyle(.gray)
+                .multilineTextAlignment(.center)
+            Button("Xong") { dismiss() }
+                .frame(maxWidth: .infinity).padding(14)
+                .background(Color.white).foregroundStyle(.black)
+                .fontWeight(.semibold).cornerRadius(14)
+                .padding(.horizontal, 32)
+        }
+    }
+
+    private func totpPayResultView(uid: UInt32, token: String, isValid: Bool) -> some View {
+        VStack(spacing: 20) {
+            Image(systemName: isValid ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .font(.system(size: 64))
+                .foregroundStyle(isValid ? Color.green : Color.red)
+            Text(isValid ? "Xác thực thành công" : "Xác thực thất bại")
+                .font(.title3.bold()).foregroundStyle(.white)
+            if isValid {
+                Text("UID #\(uid) đã xác nhận.\nTiến hành tạo đơn hàng.")
+                    .font(.subheadline).foregroundStyle(.gray)
+                    .multilineTextAlignment(.center)
+                Text(stride(from: 0, to: token.count, by: 8)
+                        .map { token.dropFirst($0).prefix(8) }
+                        .joined(separator: " "))
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.green)
+            } else {
+                Text(TOTPEnrollmentStore.secret(for: uid) == nil
+                     ? "Chưa đăng ký người dùng này.\nYêu cầu quét QR đăng ký trước."
+                     : "Mã hết hạn hoặc không đúng.\nYêu cầu làm mới mã.")
+                    .font(.subheadline).foregroundStyle(.gray)
+                    .multilineTextAlignment(.center)
+            }
+            Button("Đóng") { dismiss() }
+                .frame(maxWidth: .infinity).padding(14)
+                .background(Color.white).foregroundStyle(.black)
+                .fontWeight(.semibold).cornerRadius(14)
+                .padding(.horizontal, 32)
+        }
     }
 
     private func verify(_ payload: MerchantPayload) async {
@@ -1590,11 +1661,12 @@ struct MerchantOnboardingView: View {
     let uid: UInt32
     let onDone: (String, String) -> Void
 
-    @State private var shopName  = ""
-    @State private var loading   = false
+    @State private var shopName   = ""
+    @State private var loading    = false
     @State private var error: String?
-    @State private var step      = 0  // 0=form, 1=success
-    @State private var newToken  = ""
+    @State private var step       = 0  // 0=form, 1=success, 2=enter existing token
+    @State private var newToken   = ""
+    @State private var existToken = ""
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -1603,6 +1675,8 @@ struct MerchantOnboardingView: View {
                 Color.black.ignoresSafeArea()
                 if step == 0 {
                     onboardForm
+                } else if step == 2 {
+                    enterTokenView
                 } else {
                     successView
                 }
@@ -1733,13 +1807,56 @@ struct MerchantOnboardingView: View {
 
     @AppStorage("merchant_name") private var savedName = ""
 
+    private var enterTokenView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            Image(systemName: "key.fill")
+                .font(.system(size: 52)).foregroundStyle(.white)
+            Text("Nhập token cũ")
+                .font(.title2.bold()).foregroundStyle(.white)
+            Text("Bạn đã đăng ký trước đó.\nNhập token để vào dashboard.")
+                .font(.subheadline).foregroundStyle(.gray)
+                .multilineTextAlignment(.center)
+
+            TextField("Token", text: $existToken)
+                .padding(14)
+                .background(Color.white.opacity(0.08))
+                .cornerRadius(12)
+                .foregroundStyle(.white)
+                .font(.system(.caption, design: .monospaced))
+                .padding(.horizontal, 24)
+
+            if let e = error { Text(e).font(.caption).foregroundStyle(.red) }
+
+            Button("Xác nhận") {
+                let t = existToken.trimmingCharacters(in: .whitespaces)
+                guard !t.isEmpty else { error = "Nhập token"; return }
+                onDone(shopName.isEmpty ? "Merchant" : shopName, t)
+                dismiss()
+            }
+            .frame(maxWidth: .infinity).padding(16)
+            .background(existToken.isEmpty ? Color.gray : Color.white)
+            .foregroundStyle(.black).fontWeight(.semibold).cornerRadius(14)
+            .disabled(existToken.isEmpty)
+            .padding(.horizontal, 24)
+
+            Button("Quay lại") { step = 0; error = nil }
+                .foregroundStyle(.gray).font(.caption)
+            Spacer()
+        }
+    }
+
     private func register() async {
         loading = true; error = nil
         defer { loading = false }
         let name = shopName.trimmingCharacters(in: .whitespaces)
         do {
             newToken = try await merchantsClient.onboard(uid: uid, name: name)
+            savedName = name
             step = 1
+        } catch VerifyError.rejected(let msg) where msg.contains("đã là merchant") || msg.contains("already") {
+            error = "Bạn đã đăng ký. Nhập token cũ để tiếp tục."
+            step = 2
         } catch let e as VerifyError {
             error = e.localizedDescription
         } catch {

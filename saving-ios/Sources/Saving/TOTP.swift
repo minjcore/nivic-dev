@@ -76,6 +76,19 @@ enum TOTP {
     }
 }
 
+// ─── Enrollment store (merchant side: uid → secret) ──────────────────────────
+
+enum TOTPEnrollmentStore {
+    private static func key(_ uid: UInt32) -> String { "totp_enrolled_\(uid)" }
+    static func save(uid: UInt32, secretB32: String) {
+        UserDefaults.standard.set(secretB32, forKey: key(uid))
+    }
+    static func secret(for uid: UInt32) -> Data? {
+        guard let b32 = UserDefaults.standard.string(forKey: key(uid)) else { return nil }
+        return base32Decode(b32)
+    }
+}
+
 // ─── TOTPManager ──────────────────────────────────────────────────────────────
 
 class TOTPManager: ObservableObject {
