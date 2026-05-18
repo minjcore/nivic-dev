@@ -33,6 +33,7 @@ public struct Transaction: Identifiable {
     public let direction: Direction
     public let counterpartID: UInt32
     public let amount: UInt64
+    public let afterBalance: UInt64
 
     public enum Direction {
         case sent, received          // transfer
@@ -148,15 +149,15 @@ public final class SavingClient: ObservableObject {
         let ack   = try await conn.send(WireFrame.getHistory(token: token, seq: nextSeq())).parseAck()
         guard ack.code == .ok else { throw WireError.serverError(ack.code) }
 
-        /* extra layout: [count 1B][direction 1B | counterpart 4B | amount 8B] × count */
+        /* extra layout: [count 1B][direction 1B | counterpart 4B | amount 8B | after_balance 8B] × count */
         let data  = ack.data
         guard !data.isEmpty else { return [] }
         let count = Int(data[0])
         var txs: [Transaction] = []
         txs.reserveCapacity(count)
         for i in 0..<count {
-            let base = 1 + i * 13
-            guard base + 13 <= data.count else { break }
+            let base = 1 + i * 21
+            guard base + 21 <= data.count else { break }
             let kind = data[base]
             let dir: Transaction.Direction = switch kind {
                 case 0: .sent
@@ -167,9 +168,11 @@ public final class SavingClient: ObservableObject {
                 case 5: .cashOut
                 default: .sent
             }
-            let counterpart = data.readBigEndianUInt32(at: base + 1)
-            let amount      = data.readBigEndianUInt64(at: base + 5)
-            txs.append(Transaction(direction: dir, counterpartID: counterpart, amount: amount))
+            let counterpart  = data.readBigEndianUInt32(at: base + 1)
+            let amount       = data.readBigEndianUInt64(at: base + 5)
+            let afterBalance = data.readBigEndianUInt64(at: base + 13)
+            txs.append(Transaction(direction: dir, counterpartID: counterpart,
+                                   amount: amount, afterBalance: afterBalance))
         }
         return txs
     }

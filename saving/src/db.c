@@ -662,10 +662,17 @@ int db_record_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount
 }
 
 int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count) {
+    /* Window SUM over all rows (incl. seed type=99) gives correct running balance.
+     * Outer WHERE type != 99 hides seed rows from the visible history. */
     static const char SQL[] =
-        "SELECT from_id, to_id, amount, type FROM transfers "
-        "WHERE from_id = $1 OR to_id = $1 "
-        "ORDER BY created_at DESC LIMIT $2";
+        "SELECT from_id, to_id, amount, type, after_balance FROM ("
+        "  SELECT from_id, to_id, amount, type, created_at,"
+        "    CAST(SUM(CASE WHEN to_id = $1 THEN amount ELSE -amount END)"
+        "         OVER (ORDER BY id ASC ROWS UNBOUNDED PRECEDING) AS BIGINT) AS after_balance"
+        "  FROM transfers"
+        "  WHERE from_id = $1 OR to_id = $1"
+        ") t WHERE type != 99"
+        " ORDER BY created_at DESC LIMIT $2";
 
     uint64_t id_be = pg_int8((uint64_t)account_id);
     char     limit_str[8];
@@ -695,11 +702,9 @@ int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count) {
         uint8_t *tp   = (uint8_t *)PQgetvalue(r, i, 3);
         int      type = (tp[0] << 8) | tp[1];  /* SMALLINT big-endian */
 
+        int64_t after_bal = (int64_t)from_be64((uint8_t *)PQgetvalue(r, i, 4));
+
         int sent = (from == (uint64_t)account_id);
-        /* tx_kind encoding:
-         * 0=transfer_sent, 1=transfer_recv,
-         * 2=payment_sent,  3=payment_recv,
-         * 4=cash_in,       5=cash_out      */
         int kind;
         switch (type) {
             case 1:  kind = sent ? 2 : 3; break;  /* payment */
@@ -707,9 +712,10 @@ int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count) {
             case 3:  kind = 5;            break;  /* cash_out */
             default: kind = sent ? 0 : 1; break;  /* transfer */
         }
-        out[i].direction   = kind;
-        out[i].counterpart = (uint32_t)(sent ? to : from);
-        out[i].amount      = amt;
+        out[i].direction     = kind;
+        out[i].counterpart   = (uint32_t)(sent ? to : from);
+        out[i].amount        = amt;
+        out[i].after_balance = after_bal;
     }
 
     PQclear(r);

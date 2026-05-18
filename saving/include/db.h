@@ -110,9 +110,11 @@ int db_guardian_list(DB *db, uint32_t account_id, uint32_t ids[3]);
 /* ─── Transfer history ───────────────────────────────────────────────────── */
 
 typedef struct {
-    int      direction;    /* 0 = sent, 1 = received */
+    int      direction;    /* 0=transfer_sent, 1=transfer_recv, 2=payment_sent,
+                              3=payment_recv,  4=cash_in,       5=cash_out */
     uint32_t counterpart;
     uint64_t amount;
+    int64_t  after_balance; /* running balance after this tx */
 } TxEntry;
 
 /* Fill out[0..max_count-1] sorted newest-first. Returns count or -1 on error. */

@@ -309,7 +309,7 @@ static void handle_recovery_approve(DB *db, SessionTable *st, int fd, const Wire
 }
 
 /* GET_HISTORY  body: [token 32B]
- * ACK extra:  [count 1B][direction 1B | counterpart 4B | amount 8B] × count  */
+ * ACK extra:  [count 1B][direction 1B | counterpart 4B | amount 8B | after_balance 8B] × count */
 static void handle_get_history(DB *db, SessionTable *st, int fd, const WireFrame *f) {
     if (f->body_len < 32) {
         send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
@@ -321,16 +321,17 @@ static void handle_get_history(DB *db, SessionTable *st, int fd, const WireFrame
     int n = db_history(db, mid, entries, 20);
     if (n < 0) { send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return; }
 
-    /* Pack: [count 1B][per entry: direction 1B + counterpart 4B + amount 8B] */
-    uint8_t extra[1 + 20 * 13];
+    /* Pack: [count 1B][direction 1B + counterpart 4B + amount 8B + after_balance 8B] × n */
+    uint8_t extra[1 + 20 * 21];
     extra[0] = (uint8_t)n;
     for (int i = 0; i < n; i++) {
-        uint8_t *e = extra + 1 + i * 13;
+        uint8_t *e = extra + 1 + i * 21;
         e[0] = (uint8_t)entries[i].direction;
-        wr32(e + 1, entries[i].counterpart);
-        wr64(e + 5, entries[i].amount);
+        wr32(e + 1,  entries[i].counterpart);
+        wr64(e + 5,  entries[i].amount);
+        wr64(e + 13, (uint64_t)entries[i].after_balance);
     }
-    send_ack(fd, f->seq, WIRE_OK, extra, (uint16_t)(1 + n * 13));
+    send_ack(fd, f->seq, WIRE_OK, extra, (uint16_t)(1 + n * 21));
 }
 
 /* ─── TOTP verify (HMAC-SHA256, 30s window ±1 step) ─────────────────────── */

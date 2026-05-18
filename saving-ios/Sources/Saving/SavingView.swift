@@ -508,6 +508,9 @@ struct TxRow: View {
                 Text(txSign(tx.direction) + tx.amount.vndFormatted)
                     .font(.system(.callout, weight: .semibold))
                     .foregroundStyle(txColor(tx.direction))
+                Text(tx.afterBalance.vndFormatted)
+                    .font(.caption2)
+                    .foregroundStyle(.gray)
                 if tx.direction == .sent || tx.direction == .paymentSent {
                     let pts = tx.amount / 10_000
                     if pts > 0 {
