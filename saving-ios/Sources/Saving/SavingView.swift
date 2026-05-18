@@ -155,7 +155,7 @@ struct HomeView: View {
     let cardsClient:     CardsClient
     let tomcatsClient:   TomcatsClient
 
-    @State private var balance: UInt64 = 0
+    @State private var balanceInfo: BalanceInfo = BalanceInfo(balance: 0, pending: 0, availableBalance: 0, version: 0)
     @State private var showTransfer = false
     @State private var showHistory  = false
     @State private var showQR       = false
@@ -324,11 +324,16 @@ struct HomeView: View {
                 Text("#\(accountID)")
                     .font(.system(size: 13, weight: .medium, design: .monospaced))
                     .foregroundStyle(.gray)
-                Text(balance.vndFormatted)
+                Text(balanceInfo.availableBalance.vndFormatted)
                     .font(.system(size: 38, weight: .black))
                     .foregroundStyle(.white)
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
+                if balanceInfo.pending > 0 {
+                    Text("Đang giữ: \(balanceInfo.pending.vndFormatted)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.yellow.opacity(0.8))
+                }
             }
             Spacer()
             Button {
@@ -344,7 +349,9 @@ struct HomeView: View {
     }
 
     private func refreshBalance() async {
-        balance = (try? await client.balance()) ?? balance
+        if let info = try? await client.balance() {
+            balanceInfo = info
+        }
     }
 }
 

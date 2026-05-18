@@ -40,7 +40,9 @@
  *    0x03  LOGOUT          body: [ token 32B ]
  *    0x10  CREATE_ACCOUNT  body: [ mid 4B ][ pw_hash 32B ]
  *    0x11  TRANSFER        body: [ token 32B ][ to 4B ][ amount 8B ]
+ *                        ACK extra: [ after_balance 8B ]
  *    0x12  GET_BALANCE     body: [ token 32B ]
+ *                        ACK extra: [ balance 8B ][ pending 8B ][ available 8B ][ version 8B ]
  *    0x13  ADD_GUARDIAN    body: [ token 32B ][ guardian_id 4B ]
  *    0x14  RECOVERY_REQ    body: [ mid 4B ]        ← no token (new device)
  *    0x15  RECOVERY_APPROVE body: [ token 32B ][ target_id 4B ]

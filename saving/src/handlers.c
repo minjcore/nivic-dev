@@ -198,12 +198,11 @@ static void handle_transfer(DB *db, SessionTable *st, int fd, const WireFrame *f
     if (claim == 0) { send_ack(fd, f->seq, WIRE_OK, NULL, 0); return; }
     if (claim <  0) { send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return; }
 
-    int rc = db_transfer(db, mid, to_id, amount);
+    int64_t after_bal = 0;
+    int rc = db_transfer(db, mid, to_id, amount, 0, &after_bal);
     if (rc == -1) { send_ack(fd, f->seq, WIRE_ERR_LOW_BALANCE, NULL, 0); return; }
     if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
     if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
-
-    db_record_transfer(db, mid, to_id, amount, 0);  /* type=transfer */
 
     /* Push EVT_TRANSFER_IN to recipient if online */
     int64_t new_bal = db_account_balance(db, to_id);
@@ -217,10 +216,13 @@ static void handle_transfer(DB *db, SessionTable *st, int fd, const WireFrame *f
         if (n > 0) registry_push(to_id, evt, n);
     }
 
-    send_ack(fd, f->seq, WIRE_OK, NULL, 0);
+    uint8_t extra[8];
+    wr64(extra, (uint64_t)after_bal);
+    send_ack(fd, f->seq, WIRE_OK, extra, 8);
 }
 
-/* GET_BALANCE  body: [token 32B] */
+/* GET_BALANCE  body: [token 32B]
+ * ACK extra:  [balance 8B][pending 8B][available_balance 8B][version 8B] */
 static void handle_get_balance(DB *db, SessionTable *st, int fd, const WireFrame *f) {
     if (f->body_len < 32) {
         send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
@@ -228,12 +230,17 @@ static void handle_get_balance(DB *db, SessionTable *st, int fd, const WireFrame
     uint32_t mid = st_lookup(st, f->body);
     if (!mid) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
 
-    int64_t bal = db_account_balance(db, mid);
-    if (bal < 0) { send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return; }
+    BalanceDetail detail;
+    if (db_account_balance_detail(db, mid, &detail) != 0) {
+        send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return;
+    }
 
-    uint8_t extra[8];
-    wr64(extra, (uint64_t)bal);
-    send_ack(fd, f->seq, WIRE_OK, extra, 8);
+    uint8_t extra[32];
+    wr64(extra,      (uint64_t)detail.balance);
+    wr64(extra +  8, (uint64_t)detail.pending);
+    wr64(extra + 16, (uint64_t)detail.available_balance);
+    wr64(extra + 24, (uint64_t)detail.version);
+    send_ack(fd, f->seq, WIRE_OK, extra, 32);
 }
 
 /* ADD_GUARDIAN  body: [token 32B][guardian_id 4B] */
@@ -454,12 +461,10 @@ static void handle_pay_intent(DB *db, SessionTable *st, int fd, const WireFrame 
     }
 
     /* Atomic debit customer → credit merchant */
-    int rc = db_transfer(db, customer_id, merchant_id, intent.amount);
+    int rc = db_transfer(db, customer_id, merchant_id, intent.amount, 1, NULL);
     if (rc == -1) { send_ack(fd, f->seq, WIRE_ERR_LOW_BALANCE, NULL, 0); return; }
     if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
     if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
-
-    db_record_transfer(db, customer_id, merchant_id, intent.amount, 1);  /* type=payment */
     db_intent_settle(db, merchant_id, request_id);
 
     /* Sổ cái: append audit row for this payment */
@@ -580,12 +585,10 @@ static void handle_cash_in(DB *db, SessionTable *st, int fd, const WireFrame *f)
     if (claim <  0) { send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return; }
 
     /* Transfer from bank_mid to to_uid — bank_mid must have sufficient balance */
-    int rc = db_transfer(db, bank_mid, to_uid, amount);
+    int rc = db_transfer(db, bank_mid, to_uid, amount, 2, NULL);
     if (rc == -1) { send_ack(fd, f->seq, WIRE_ERR_LOW_BALANCE, NULL, 0); return; }
     if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
     if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
-
-    db_record_transfer(db, bank_mid, to_uid, amount, 2); /* type=CASH_IN */
 
     /* Push EVT_TRANSFER_IN to recipient if online */
     int64_t new_bal = db_account_balance(db, to_uid);

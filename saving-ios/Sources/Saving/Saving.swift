@@ -8,6 +8,13 @@ public struct SavingAccount {
     public let id: UInt32
 }
 
+public struct BalanceInfo {
+    public let balance:          UInt64
+    public let pending:          UInt64
+    public let availableBalance: UInt64
+    public let version:          UInt64
+}
+
 public struct SavingTransfer: Equatable {
     public let fromID:  UInt32
     public let amount:  UInt64
@@ -97,12 +104,22 @@ public final class SavingClient: ObservableObject {
 
     // ─── Balance ─────────────────────────────────────────────────────────────
 
-    public func balance() async throws -> UInt64 {
+    public func balance() async throws -> BalanceInfo {
         let token = try requireToken()
         let ack   = try await conn.send(WireFrame.getBalance(token: token, seq: nextSeq())).parseAck()
         guard ack.code == .ok else { throw WireError.serverError(ack.code) }
-        guard ack.data.count >= 8 else { return 0 }
-        return ack.data.readBigEndianUInt64(at: 0)
+        let d = ack.data
+        if d.count >= 32 {
+            return BalanceInfo(
+                balance:          d.readBigEndianUInt64(at: 0),
+                pending:          d.readBigEndianUInt64(at: 8),
+                availableBalance: d.readBigEndianUInt64(at: 16),
+                version:          d.readBigEndianUInt64(at: 24)
+            )
+        }
+        // Legacy server: single 8-byte balance
+        let bal = d.count >= 8 ? d.readBigEndianUInt64(at: 0) : 0
+        return BalanceInfo(balance: bal, pending: 0, availableBalance: bal, version: 0)
     }
 
     // ─── Transfer ────────────────────────────────────────────────────────────

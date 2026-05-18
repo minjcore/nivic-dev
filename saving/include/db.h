@@ -47,17 +47,32 @@ int db_account_get_hash(DB *db, uint32_t id, uint8_t *hash);
 /* Returns balance in VND minor units, or -1 on error. */
 int64_t db_account_balance(DB *db, uint32_t id);
 
+typedef struct {
+    int64_t  balance;           /* running SUM of transfers */
+    int64_t  pending;           /* sum of open payment intents (status=0) */
+    int64_t  available_balance; /* balance - pending */
+    int64_t  version;           /* number of transfer rows (lamport clock) */
+} BalanceDetail;
+
+/* Fills *out. Returns 0 on success, -1 on error. */
+int db_account_balance_detail(DB *db, uint32_t id, BalanceDetail *out);
+
 /* ─── Transfer ───────────────────────────────────────────────────────────── *
  *
- *  Atomic CTE: debit sender + credit receiver in one round-trip.
+ *  Balance is the running SUM of the transfers log (no accounts.balance write).
+ *  Inserts a new transfers row atomically if balance is sufficient.
+ *  type: 0=transfer, 1=payment, 2=cash_in, 3=cash_out
  *  Returns:
  *    0  = success
- *   -1  = sender not found or insufficient balance
+ *   -1  = sender insufficient balance
  *   -2  = receiver not found
  *   -3  = other DB error
  *
+ *  after_out: if non-NULL, filled with sender's balance after the transfer.
+ *
  * ─────────────────────────────────────────────────────────────────────────── */
-int db_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount);
+int db_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount, int type,
+                int64_t *after_out);
 
 /* ─── Idempotency  (ported from Java JdbcIdempotencyGate) ───────────────── *
  *
@@ -99,9 +114,6 @@ typedef struct {
     uint32_t counterpart;
     uint64_t amount;
 } TxEntry;
-
-/* Record a completed transfer. type: 0=transfer, 1=payment, 2=cash_in, 3=cash_out */
-int db_record_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount, int type);
 
 /* Fill out[0..max_count-1] sorted newest-first. Returns count or -1 on error. */
 int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count);
