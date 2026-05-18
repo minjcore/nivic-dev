@@ -962,7 +962,8 @@ struct PaymentTokenSheet: View {
         filter.setValue("M", forKey: "inputCorrectionLevel")
         guard let ci = filter.outputImage else { return nil }
         let scaled = ci.transformed(by: CGAffineTransform(scaleX: 6, y: 6))
-        return UIImage(ciImage: scaled)
+        guard let cg = CIContext().createCGImage(scaled, from: scaled.extent) else { return nil }
+        return UIImage(cgImage: cg)
     }
 }
 
@@ -2182,9 +2183,9 @@ struct CreateOrderSheet: View {
         filter.setValue(data, forKey: "inputMessage")
         filter.setValue("M", forKey: "inputCorrectionLevel")
         guard let ci = filter.outputImage else { return nil }
-        let scale: CGFloat = 10
-        let scaled = ci.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        return UIImage(ciImage: scaled)
+        let scaled = ci.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
+        guard let cg = CIContext().createCGImage(scaled, from: scaled.extent) else { return nil }
+        return UIImage(cgImage: cg)
     }
 }
 
