@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Saving</title>
+  <style>
+    :root {
+      --bg: #0a0a0a; --card: #161616; --border: #262626;
+      --muted: #666; --green: #4ade80; --red: #f87171; --yellow: #facc15;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0 }
+    body { background: var(--bg); color: #fff; font-family: -apple-system, 'Segoe UI', sans-serif; min-height: 100vh }
+
+    /* ── Login ── */
+    #view-login { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px }
+    .login-card { background: var(--card); border-radius: 20px; padding: 40px; width: 100%; max-width: 360px }
+    .login-card h1 { font-size: 28px; font-weight: 700; margin-bottom: 6px }
+    .login-card p { color: var(--muted); font-size: 14px; margin-bottom: 32px }
+    label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px }
+    input[type=number], input[type=password], input[type=text] {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 14px; color: #fff; font-size: 16px;
+      outline: none; -moz-appearance: textfield; appearance: textfield;
+    }
+    input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none }
+    input:focus { border-color: #444 }
+    .field { margin-bottom: 14px }
+    .btn { display: block; width: 100%; background: #fff; color: #000; border: none;
+           border-radius: 10px; padding: 14px; font-size: 15px; font-weight: 600;
+           cursor: pointer; margin-top: 6px; text-align: center }
+    .btn:hover { opacity: .9 }
+    .btn:disabled { opacity: .5; cursor: default }
+    .errmsg { color: var(--red); font-size: 13px; margin-top: 10px; min-height: 18px }
+
+    /* ── App shell ── */
+    #view-app { display: none; max-width: 520px; margin: 0 auto; padding: 0 20px 100px }
+    .topbar { display: flex; justify-content: space-between; align-items: center; padding: 22px 0 4px }
+    .topbar .wordmark { font-weight: 700; font-size: 18px; letter-spacing: -0.5px }
+    .topbar .uid-tag { color: var(--muted); font-size: 13px }
+    .topbar button { background: none; border: none; color: var(--muted); font-size: 13px; cursor: pointer; padding: 6px 0 }
+    .topbar button:hover { color: #fff }
+
+    /* ── Balance hero ── */
+    .balance-hero { padding: 28px 0 24px }
+    .balance-hero .lbl { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px }
+    .balance-hero .amount { font-size: 44px; font-weight: 700; letter-spacing: -1.5px; line-height: 1 }
+    .balance-hero .pending { color: var(--yellow); font-size: 13px; margin-top: 8px }
+
+    /* ── Quick actions ── */
+    .actions { display: flex; gap: 10px; margin-bottom: 28px }
+    .act-btn { flex: 1; background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+               padding: 14px 10px; cursor: pointer; color: #fff; font-size: 13px; font-weight: 500;
+               display: flex; flex-direction: column; align-items: center; gap: 5px; transition: background .15s }
+    .act-btn .ico { font-size: 22px; line-height: 1 }
+    .act-btn:hover { background: #202020 }
+
+    /* ── Send form ── */
+    .send-form { background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+                 padding: 22px; margin-bottom: 24px }
+    .send-form h3 { font-size: 15px; font-weight: 600; margin-bottom: 18px }
+    .row2 { display: flex; gap: 10px }
+    .row2 .field { flex: 1 }
+    .send-footer { display: flex; align-items: center; gap: 12px; margin-top: 4px }
+    .btn-sm { background: #fff; color: #000; border: none; border-radius: 8px; padding: 11px 22px;
+              font-size: 14px; font-weight: 600; cursor: pointer }
+    .btn-sm:hover { opacity: .9 }
+    .btn-sm:disabled { opacity: .5; cursor: default }
+    .btn-ghost { background: none; border: none; color: var(--muted); font-size: 13px; cursor: pointer }
+    .btn-ghost:hover { color: #fff }
+
+    /* ── History ── */
+    .sec-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px }
+    .tx-item { display: flex; align-items: center; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--border) }
+    .tx-item:last-child { border-bottom: none }
+    .tx-ico { width: 42px; height: 42px; border-radius: 12px; background: var(--card); border: 1px solid var(--border);
+              display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0 }
+    .tx-body { flex: 1; min-width: 0 }
+    .tx-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+    .tx-sub { font-size: 12px; color: var(--muted); margin-top: 2px }
+    .tx-right { text-align: right; flex-shrink: 0 }
+    .tx-amt { font-size: 15px; font-weight: 600 }
+    .tx-after { font-size: 11px; color: var(--muted); margin-top: 2px }
+    .pos { color: var(--green) } .neg { color: var(--red) }
+    .empty { color: var(--muted); text-align: center; padding: 40px 0; font-size: 14px }
+  </style>
+</head>
+<body>
+
+<!-- ── Login ── -->
+<div id="view-login">
+  <div class="login-card">
+    <h1>Saving</h1>
+    <p>Đăng nhập để tiếp tục</p>
+    <div class="field"><label>Số tài khoản</label><input type="number" id="inp-id" placeholder="16777219" inputmode="numeric"></div>
+    <div class="field"><label>Mật khẩu</label><input type="password" id="inp-pw" placeholder="••••••••"></div>
+    <button class="btn" id="btn-login">Đăng nhập</button>
+    <div class="errmsg" id="login-err"></div>
+  </div>
+</div>
+
+<!-- ── App ── -->
+<div id="view-app">
+  <div class="topbar">
+    <div>
+      <div class="wordmark">Saving</div>
+      <div class="uid-tag" id="uid-tag"></div>
+    </div>
+    <button id="btn-logout">Đăng xuất</button>
+  </div>
+
+  <div class="balance-hero">
+    <div class="lbl">Số dư khả dụng</div>
+    <div class="amount" id="bal-amount">—</div>
+    <div class="pending" id="bal-pending" style="display:none"></div>
+  </div>
+
+  <div class="actions">
+    <button class="act-btn" id="btn-open-send">
+      <span class="ico">↑</span><span>Gửi tiền</span>
+    </button>
+    <button class="act-btn" id="btn-refresh">
+      <span class="ico">↻</span><span>Làm mới</span>
+    </button>
+  </div>
+
+  <div class="send-form" id="send-form" style="display:none">
+    <h3>Gửi tiền</h3>
+    <div class="row2">
+      <div class="field"><label>Tài khoản nhận</label><input type="number" id="inp-to" placeholder="ID" inputmode="numeric"></div>
+      <div class="field"><label>Số tiền (₫)</label><input type="number" id="inp-amt" placeholder="10000" inputmode="numeric"></div>
+    </div>
+    <div class="errmsg" id="send-err"></div>
+    <div class="send-footer">
+      <button class="btn-sm" id="btn-do-send">Gửi</button>
+      <button class="btn-ghost" id="btn-cancel-send">Huỷ</button>
+    </div>
+  </div>
+
+  <div class="sec-title">Lịch sử</div>
+  <div id="tx-list"><div class="empty">Đang tải...</div></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmtVND = n => new Intl.NumberFormat('vi-VN').format(n) + ' ₫';
+
+const DIR = [
+  { name: 'Đã chuyển',  ico: '↑', pos: false },
+  { name: 'Nhận',       ico: '↓', pos: true  },
+  { name: 'Thanh toán', ico: '🛒', pos: false },
+  { name: 'Thu tiền',   ico: '💰', pos: true  },
+  { name: 'Nạp tiền',   ico: '＋', pos: true  },
+  { name: 'Rút tiền',   ico: '－', pos: false },
+];
+
+async function api(method, path, body) {
+  const opts = { method, headers: {} };
+  if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const res = await fetch(path, opts);
+  if (res.status === 401) { showLogin(); return null; }
+  if (res.status === 204) return true;
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+function showLogin() {
+  $('view-login').style.display = 'flex';
+  $('view-app').style.display = 'none';
+}
+
+function showApp(uid) {
+  $('view-login').style.display = 'none';
+  $('view-app').style.display = 'block';
+  $('uid-tag').textContent = '#' + uid;
+  loadDashboard();
+}
+
+async function loadDashboard() {
+  $('bal-amount').textContent = '…';
+  $('tx-list').innerHTML = '<div class="empty">Đang tải...</div>';
+
+  const [bal, txs] = await Promise.all([
+    api('GET', '/api/balance').catch(() => null),
+    api('GET', '/api/history').catch(() => null),
+  ]);
+
+  if (bal) {
+    $('bal-amount').textContent = fmtVND(bal.available_balance);
+    if (bal.pending > 0) {
+      $('bal-pending').textContent = 'Đang giữ: ' + fmtVND(bal.pending);
+      $('bal-pending').style.display = 'block';
+    } else {
+      $('bal-pending').style.display = 'none';
+    }
+  } else {
+    $('bal-amount').textContent = 'Lỗi';
+  }
+
+  if (txs && txs.length > 0) {
+    $('tx-list').innerHTML = txs.map(tx => {
+      const d = DIR[tx.direction] ?? DIR[0];
+      const sign = d.pos ? '+' : '-';
+      return `<div class="tx-item">
+        <div class="tx-ico">${d.ico}</div>
+        <div class="tx-body">
+          <div class="tx-name">${d.name} · #${tx.counterpart}</div>
+          <div class="tx-sub">Sau: ${fmtVND(tx.after_balance)}</div>
+        </div>
+        <div class="tx-right">
+          <div class="tx-amt ${d.pos ? 'pos' : 'neg'}">${sign}${fmtVND(tx.amount)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } else if (txs) {
+    $('tx-list').innerHTML = '<div class="empty">Chưa có giao dịch nào</div>';
+  } else {
+    $('tx-list').innerHTML = '<div class="empty">Không tải được lịch sử</div>';
+  }
+}
+
+// ── Login ──
+$('btn-login').addEventListener('click', async () => {
+  const id = parseInt($('inp-id').value);
+  const pw = $('inp-pw').value.trim();
+  if (!id || !pw) { $('login-err').textContent = 'Vui lòng nhập đủ thông tin'; return; }
+  $('login-err').textContent = '';
+  const btn = $('btn-login');
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, password: pw }),
+    });
+    if (!res.ok) { $('login-err').textContent = await res.text(); return; }
+    const data = await res.json();
+    showApp(data.uid);
+  } catch { $('login-err').textContent = 'Lỗi kết nối'; }
+  finally { btn.disabled = false; btn.textContent = 'Đăng nhập'; }
+});
+$('inp-pw').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-login').click(); });
+
+// ── Logout ──
+$('btn-logout').addEventListener('click', async () => {
+  await api('POST', '/api/logout').catch(() => {});
+  showLogin();
+});
+
+// ── Refresh ──
+$('btn-refresh').addEventListener('click', loadDashboard);
+
+// ── Send form ──
+$('btn-open-send').addEventListener('click', () => {
+  $('send-form').style.display = 'block';
+  $('btn-open-send').style.display = 'none';
+  $('inp-to').focus();
+});
+$('btn-cancel-send').addEventListener('click', () => {
+  $('send-form').style.display = 'none';
+  $('btn-open-send').style.display = 'block';
+  $('send-err').textContent = '';
+  $('inp-to').value = ''; $('inp-amt').value = '';
+});
+$('btn-do-send').addEventListener('click', async () => {
+  const to = parseInt($('inp-to').value);
+  const amount = parseInt($('inp-amt').value);
+  if (!to || !amount || amount <= 0) { $('send-err').textContent = 'Nhập ID và số tiền hợp lệ'; return; }
+  $('send-err').textContent = '';
+  const btn = $('btn-do-send');
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    await api('POST', '/api/transfer', { to, amount });
+    $('send-form').style.display = 'none';
+    $('btn-open-send').style.display = 'block';
+    $('inp-to').value = ''; $('inp-amt').value = '';
+    loadDashboard();
+  } catch (e) { $('send-err').textContent = e.message; }
+  finally { btn.disabled = false; btn.textContent = 'Gửi'; }
+});
+
+// ── Init ──
+(async () => {
+  const me = await api('GET', '/api/me').catch(() => null);
+  if (me) showApp(me.uid); else showLogin();
+})();
+</script>
+</body>
+</html>
