@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import dev.nivic.wire.data.MerchantsClient
 import dev.nivic.wire.data.SavingClient
@@ -29,7 +30,7 @@ private fun WireRoot() {
     val client           = remember { SavingClient() }
     val merchantsClient  = remember { MerchantsClient() }
     val prefs            = remember { ctx.getSharedPreferences("merchant", Context.MODE_PRIVATE) }
-    var session          by remember { mutableStateOf<Long?>(null) }
+    var session          by rememberSaveable { mutableStateOf<Long?>(null) }
 
     LaunchedEffect(Unit) {
         runCatching { client.connect() }.onFailure {

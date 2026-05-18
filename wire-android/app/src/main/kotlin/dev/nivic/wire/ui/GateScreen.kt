@@ -80,6 +80,7 @@ fun GateScreen(client: SavingClient, onLogin: (Long) -> Unit) {
                             WireCode.ERR_ID_TAKEN     -> "ID này đã có chủ."
                             WireCode.ERR_ID_RESERVED  -> "ID này nằm trong kho VIP."
                             WireCode.ERR_BAD_PASSWORD -> "Sai mật khẩu."
+                            WireCode.ERR_NOT_FOUND    -> "Tài khoản không tồn tại."
                             else -> "Lỗi: 0x${e.code.toInt().and(0xFF).toString(16)}"
                         }
                     } catch (e: Exception) {
