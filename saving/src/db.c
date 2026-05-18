@@ -111,6 +111,13 @@ static const char SCHEMA[] =
     "  mid           BIGINT PRIMARY KEY,"
     "  name          TEXT   NOT NULL,"
     "  registered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+    ");"
+
+    /* Balance cache — separated from accounts so profile updates don't lock balance rows */
+    "CREATE TABLE IF NOT EXISTS balances ("
+    "  account_id BIGINT PRIMARY KEY REFERENCES accounts(id),"
+    "  balance    BIGINT NOT NULL DEFAULT 0,"
+    "  version    BIGINT NOT NULL DEFAULT 0"
     ");";
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -137,17 +144,19 @@ int db_open(DB *db, const char *conninfo) {
     /* Migration: seed initial balances into transfers so balance is computed
      * purely from SUM(transfers).  Runs once per account that has a non-zero
      * balance column and no existing seed row (type=99).  After this the
-     * balance column is no longer written and can be ignored. */
+     * Seed balances table from SUM of all transfers for accounts not yet present. */
     static const char SEED_SQL[] =
-        "INSERT INTO transfers (from_id, to_id, amount, type)"
-        " SELECT 0, id, balance, 99 FROM accounts"
-        " WHERE balance > 0"
-        "   AND NOT EXISTS ("
-        "     SELECT 1 FROM transfers WHERE to_id = accounts.id AND type = 99"
-        "   )";
+        "INSERT INTO balances (account_id, balance, version)"
+        " SELECT a.id,"
+        "   CAST(COALESCE(SUM(CASE WHEN t.to_id = a.id THEN t.amount ELSE -t.amount END), 0) AS BIGINT),"
+        "   COUNT(t.id)"
+        " FROM accounts a"
+        " LEFT JOIN transfers t ON t.from_id = a.id OR t.to_id = a.id"
+        " GROUP BY a.id"
+        " ON CONFLICT (account_id) DO NOTHING";
     PGresult *rs = PQexec(db->conn, SEED_SQL);
     if (PQresultStatus(rs) != PGRES_COMMAND_OK)
-        fprintf(stderr, "[db] seed migration: %s\n", PQerrorMessage(db->conn));
+        fprintf(stderr, "[db] seed balances: %s\n", PQerrorMessage(db->conn));
     PQclear(rs);
 
     return 0;
@@ -164,13 +173,16 @@ void db_close(DB *db) {
 
 int db_account_create(DB *db, uint32_t id, const uint8_t *password_hash) {
     static const char SQL[] =
-        "INSERT INTO accounts (id, password_hash) VALUES ($1, $2)";
+        "WITH ins AS ("
+        "  INSERT INTO accounts (id, password_hash) VALUES ($1, $2) RETURNING id"
+        ")"
+        "INSERT INTO balances (account_id) SELECT id FROM ins";
 
     uint64_t id_be = pg_int8((uint64_t)id);
 
     const char *vals[2]  = { (char *)&id_be, (char *)password_hash };
     int         lens[2]  = { 8, 32 };
-    int         fmts[2]  = { 1, 1 };  /* binary */
+    int         fmts[2]  = { 1, 1 };
 
     DB_LOCK(db);
     PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
@@ -226,13 +238,8 @@ int db_account_get_hash(DB *db, uint32_t id, uint8_t *hash) {
 }
 
 int64_t db_account_balance(DB *db, uint32_t id) {
-    /* Balance = SUM of all credits to this account minus all debits from it.
-     * The transfers table is the single source of truth; accounts.balance is
-     * no longer written after the seed migration in db_open. */
     static const char SQL[] =
-        "SELECT CAST(COALESCE(SUM(CASE WHEN to_id = $1 THEN amount ELSE -amount END), 0) AS BIGINT)"
-        " FROM transfers"
-        " WHERE from_id = $1 OR to_id = $1";
+        "SELECT balance FROM balances WHERE account_id = $1";
 
     uint64_t id_be = pg_int8((uint64_t)id);
     const char *vals[1] = { (char *)&id_be };
@@ -244,12 +251,8 @@ int64_t db_account_balance(DB *db, uint32_t id) {
     DB_UNLOCK(db);
 
     int64_t bal = -1;
-    if (PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) {
-        const char *raw = PQgetvalue(r, 0, 0);
-        uint64_t v = 0;
-        for (int i = 0; i < 8; i++) v = (v << 8) | (uint8_t)raw[i];
-        bal = (int64_t)v;
-    }
+    if (PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0)
+        bal = (int64_t)from_be64((const uint8_t *)PQgetvalue(r, 0, 0));
     PQclear(r);
     return bal;
 }
@@ -257,12 +260,11 @@ int64_t db_account_balance(DB *db, uint32_t id) {
 int db_account_balance_detail(DB *db, uint32_t id, BalanceDetail *out) {
     static const char SQL[] =
         "SELECT"
-        "  CAST(COALESCE(SUM(CASE WHEN to_id = $1 THEN amount ELSE -amount END), 0) AS BIGINT),"
+        "  b.balance,"
         "  CAST(COALESCE((SELECT SUM(amount) FROM payment_intents"
-        "            WHERE mid = $1 AND status = 0), 0) AS BIGINT),"
-        "  COUNT(*)"
-        " FROM transfers"
-        " WHERE from_id = $1 OR to_id = $1";
+        "                 WHERE mid = $1 AND status = 0), 0) AS BIGINT),"
+        "  b.version"
+        " FROM balances b WHERE b.account_id = $1";
 
     uint64_t id_be = pg_int8((uint64_t)id);
     const char *vals[1] = { (char *)&id_be };
@@ -306,23 +308,31 @@ int db_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount, int t
      *         -2  receiver not found
      *         -3  internal error
      */
+    /* Atomically debit sender, credit receiver, append audit row.
+     * upd_to depends on upd_from so receiver is never credited on sender failure. */
     static const char SQL[] =
         "WITH"
-        "  bal AS ("
-        "    SELECT CAST(COALESCE(SUM(CASE WHEN to_id = $2 THEN amount ELSE -amount END), 0) AS BIGINT) AS v"
-        "    FROM transfers WHERE from_id = $2 OR to_id = $2"
+        "  upd_from AS ("
+        "    UPDATE balances SET balance = balance - $1, version = version + 1"
+        "    WHERE account_id = $2 AND balance >= $1"
+        "    RETURNING balance AS after_bal"
+        "  ),"
+        "  upd_to AS ("
+        "    UPDATE balances SET balance = balance + $1, version = version + 1"
+        "    WHERE account_id = $3"
+        "      AND EXISTS (SELECT 1 FROM upd_from)"
+        "    RETURNING 1"
         "  ),"
         "  ins AS ("
         "    INSERT INTO transfers (from_id, to_id, amount, type)"
         "    SELECT $2, $3, $1, $4"
-        "    WHERE (SELECT v FROM bal) >= $1"
-        "      AND EXISTS (SELECT 1 FROM accounts WHERE id = $3)"
+        "    WHERE EXISTS (SELECT 1 FROM upd_from) AND EXISTS (SELECT 1 FROM upd_to)"
         "    RETURNING 1"
         "  )"
         "SELECT"
-        "  (SELECT v   FROM bal)                          AS bal,"
-        "  (SELECT 1   FROM ins)                          AS inserted,"
-        "  EXISTS(SELECT 1 FROM accounts WHERE id = $3)  AS recv_exists";
+        "  (SELECT after_bal FROM upd_from)                       AS after_bal,"
+        "  EXISTS (SELECT 1 FROM balances WHERE account_id = $3) AS recv_exists,"
+        "  EXISTS (SELECT 1 FROM ins)                            AS inserted";
 
     uint64_t amount_be  = pg_int8(amount);
     uint64_t from_id_be = pg_int8((uint64_t)from_id);
@@ -338,15 +348,17 @@ int db_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount, int t
     PGresult *r = PQexecParams(db->conn, SQL, 4, NULL, vals, lens, fmts, 1);
     DB_UNLOCK(db);
 
+    /* col0 = after_bal (NULL if sender had insufficient balance or no row)
+     * col1 = recv_exists (bool)
+     * col2 = inserted (NULL if transfer did not happen) */
     int rc = -3;
     if (PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) {
-        int64_t  pre_bal    = (int64_t)from_be64((const uint8_t *)PQgetvalue(r, 0, 0));
-        int      inserted   = !PQgetisnull(r, 0, 1);
-        int recv_exists = !PQgetisnull(r, 0, 2) &&
-                          PQgetvalue(r, 0, 2)[0];  /* bool byte */
+        int inserted    = !PQgetisnull(r, 0, 2);
+        int recv_exists = !PQgetisnull(r, 0, 1) && PQgetvalue(r, 0, 1)[0];
         if (inserted) {
             rc = 0;
-            if (after_out) *after_out = pre_bal - (int64_t)amount;
+            if (after_out)
+                *after_out = (int64_t)from_be64((const uint8_t *)PQgetvalue(r, 0, 0));
         } else if (!recv_exists) rc = -2;
         else                     rc = -1;  /* low balance */
     }
