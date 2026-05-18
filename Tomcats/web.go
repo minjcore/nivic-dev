@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -10,6 +11,24 @@ import (
 
 func addWebRoutes(mux *http.ServeMux, authURL, wireAddr, staticDir string) {
 	mux.Handle("GET /", http.FileServer(http.Dir(staticDir)))
+
+	// ── Register ───────────────────────────────────────────────────────────────
+	mux.HandleFunc("POST /api/register", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID       uint32 `json:"id"`
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ID == 0 || req.Password == "" {
+			http.Error(w, "id and password required", http.StatusBadRequest)
+			return
+		}
+		hash := sha256.Sum256([]byte(req.Password))
+		if err := wireCreateAccount(wireAddr, req.ID, hash[:]); err != nil {
+			writeWireErr(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 
 	// ── Login: proxy → auth service → set JWT cookie ──────────────────────────
 	mux.HandleFunc("POST /api/login", func(w http.ResponseWriter, r *http.Request) {

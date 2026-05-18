@@ -14,10 +14,11 @@ const (
 	wireOverhead = 41 // 4+1+4+32
 	wireMaxFrame = 4096
 
-	msgLogin      byte = 0x02
-	msgGetBalance byte = 0x12
-	msgGetHistory byte = 0x16
-	msgTransfer   byte = 0x11
+	msgLogin         byte = 0x02
+	msgCreateAccount byte = 0x10
+	msgGetBalance    byte = 0x12
+	msgGetHistory    byte = 0x16
+	msgTransfer      byte = 0x11
 
 	codeOK byte = 0x00
 )
@@ -205,17 +206,39 @@ func wireTransfer(addr string, token []byte, toID uint32, amount uint64) error {
 	return nil
 }
 
+func wireCreateAccount(addr string, uid uint32, pwHash []byte) error {
+	w, err := dialWire(addr)
+	if err != nil {
+		return err
+	}
+	defer w.close()
+
+	body := make([]byte, 36)
+	binary.BigEndian.PutUint32(body[0:4], uid)
+	copy(body[4:], pwHash)
+
+	resp, err := w.rpc(msgCreateAccount, body)
+	if err != nil {
+		return err
+	}
+	if len(resp) < 1 || resp[0] != codeOK {
+		return wireCodeErr(resp)
+	}
+	return nil
+}
+
 // ─── Error ────────────────────────────────────────────────────────────────────
 
 type WireError struct{ Code byte }
 
 func (e *WireError) Error() string {
 	m := map[byte]string{
+		0x03: "ID đã được đăng ký",
+		0x04: "ID không hợp lệ (nằm trong vùng reserved)",
 		0x05: "tài khoản không tồn tại",
 		0x06: "sai mật khẩu",
 		0x07: "phiên hết hạn, đăng nhập lại",
 		0x08: "số dư không đủ",
-		0x03: "ID đã được đăng ký",
 		0xFF: "lỗi server",
 	}
 	if s, ok := m[e.Code]; ok {

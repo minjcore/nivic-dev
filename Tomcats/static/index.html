@@ -32,6 +32,11 @@
     .btn:hover { opacity: .9 }
     .btn:disabled { opacity: .5; cursor: default }
     .errmsg { color: var(--red); font-size: 13px; margin-top: 10px; min-height: 18px }
+    .tab-row { display: flex; gap: 0; margin-bottom: 28px; border-bottom: 1px solid var(--border) }
+    .tab { flex: 1; background: none; border: none; color: var(--muted); font-size: 14px; font-weight: 500;
+           padding: 10px 0; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px }
+    .tab.active { color: #fff; border-bottom-color: #fff }
+    .successmsg { color: var(--green); font-size: 13px; margin-top: 10px; min-height: 18px }
 
     /* ── App shell ── */
     #view-app { display: none; max-width: 520px; margin: 0 auto; padding: 0 20px 100px }
@@ -87,15 +92,32 @@
 </head>
 <body>
 
-<!-- ── Login ── -->
+<!-- ── Login / Register ── -->
 <div id="view-login">
   <div class="login-card">
     <h1>Saving</h1>
-    <p>Đăng nhập để tiếp tục</p>
-    <div class="field"><label>Số tài khoản</label><input type="number" id="inp-id" placeholder="16777219" inputmode="numeric"></div>
-    <div class="field"><label>Mật khẩu</label><input type="password" id="inp-pw" placeholder="••••••••"></div>
-    <button class="btn" id="btn-login">Đăng nhập</button>
-    <div class="errmsg" id="login-err"></div>
+    <div class="tab-row">
+      <button class="tab active" id="tab-login" onclick="switchTab('login')">Đăng nhập</button>
+      <button class="tab" id="tab-register" onclick="switchTab('register')">Tạo tài khoản</button>
+    </div>
+
+    <!-- Login form -->
+    <div id="form-login">
+      <div class="field"><label>Số tài khoản</label><input type="number" id="inp-id" placeholder="16777219" inputmode="numeric"></div>
+      <div class="field"><label>Mật khẩu</label><input type="password" id="inp-pw" placeholder="••••••••"></div>
+      <button class="btn" id="btn-login">Đăng nhập</button>
+      <div class="errmsg" id="login-err"></div>
+    </div>
+
+    <!-- Register form -->
+    <div id="form-register" style="display:none">
+      <div class="field"><label>Số tài khoản</label><input type="number" id="reg-id" placeholder="≥ 16777216" inputmode="numeric"></div>
+      <div class="field"><label>Mật khẩu</label><input type="password" id="reg-pw" placeholder="••••••••"></div>
+      <div class="field"><label>Xác nhận mật khẩu</label><input type="password" id="reg-pw2" placeholder="••••••••"></div>
+      <button class="btn" id="btn-register">Tạo tài khoản</button>
+      <div class="errmsg" id="reg-err"></div>
+      <div class="successmsg" id="reg-ok"></div>
+    </div>
   </div>
 </div>
 
@@ -144,6 +166,14 @@
 <script>
 const $ = id => document.getElementById(id);
 const fmtVND = n => new Intl.NumberFormat('vi-VN').format(n) + ' ₫';
+
+function switchTab(tab) {
+  $('form-login').style.display    = tab === 'login'    ? 'block' : 'none';
+  $('form-register').style.display = tab === 'register' ? 'block' : 'none';
+  $('tab-login').classList.toggle('active',    tab === 'login');
+  $('tab-register').classList.toggle('active', tab === 'register');
+  $('login-err').textContent = ''; $('reg-err').textContent = ''; $('reg-ok').textContent = '';
+}
 
 const DIR = [
   { name: 'Đã chuyển',  ico: '↑', pos: false },
@@ -239,6 +269,36 @@ $('btn-login').addEventListener('click', async () => {
   finally { btn.disabled = false; btn.textContent = 'Đăng nhập'; }
 });
 $('inp-pw').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-login').click(); });
+
+// ── Register ──
+$('btn-register').addEventListener('click', async () => {
+  const id  = parseInt($('reg-id').value);
+  const pw  = $('reg-pw').value.trim();
+  const pw2 = $('reg-pw2').value.trim();
+  $('reg-err').textContent = ''; $('reg-ok').textContent = '';
+  if (!id || !pw) { $('reg-err').textContent = 'Vui lòng nhập đủ thông tin'; return; }
+  if (pw !== pw2) { $('reg-err').textContent = 'Mật khẩu không khớp'; return; }
+  if (id < 16777216) { $('reg-err').textContent = 'ID phải ≥ 16777216'; return; }
+  const btn = $('btn-register');
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    const res = await fetch('/api/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, password: pw }),
+    });
+    if (!res.ok) { $('reg-err').textContent = await res.text(); return; }
+    $('reg-ok').textContent = 'Tạo tài khoản thành công! Đang đăng nhập...';
+    // Auto-login after register
+    setTimeout(() => {
+      $('inp-id').value = id;
+      $('inp-pw').value = pw;
+      switchTab('login');
+      $('btn-login').click();
+    }, 800);
+  } catch { $('reg-err').textContent = 'Lỗi kết nối'; }
+  finally { btn.disabled = false; btn.textContent = 'Tạo tài khoản'; }
+});
+$('reg-pw2').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-register').click(); });
 
 // ── Logout ──
 $('btn-logout').addEventListener('click', async () => {
