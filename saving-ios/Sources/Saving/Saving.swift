@@ -183,6 +183,14 @@ public final class SavingClient: ObservableObject {
         guard ack.code == .ok else { throw WireError.serverError(ack.code) }
     }
 
+    /// Register or update merchant name in the Wire server.
+    public func registerMerchant(name: String) async throws {
+        let token = try requireToken()
+        let frame = WireFrame.registerMerchant(token: token, name: name, seq: nextSeq())
+        let ack = try await conn.send(frame).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+    }
+
     // ─── Guardians ───────────────────────────────────────────────────────────
 
     public func addGuardian(id: UInt32) async throws {

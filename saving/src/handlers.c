@@ -341,12 +341,37 @@ static int totp_verify(const uint8_t *secret, uint32_t code) {
 }
 
 /* ENROLL_TOTP  body: [merchant_token 32B][customer_id 4B][secret 20B] */
+/* REGISTER_MERCHANT body: [token 32B][name N bytes] */
+static void handle_register_merchant(DB *db, SessionTable *st, int fd, const WireFrame *f) {
+    if (f->body_len < 32) {
+        send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
+    }
+    uint32_t mid = st_lookup(st, f->body);
+    if (!mid) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
+
+    size_t name_len = f->body_len - 32;
+    char name[256];
+    if (name_len >= sizeof(name)) name_len = sizeof(name) - 1;
+    memcpy(name, f->body + 32, name_len);
+    name[name_len] = '\0';
+
+    if (db_merchant_register(db, mid, name) < 0) {
+        send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return;
+    }
+    send_ack(fd, f->seq, WIRE_OK, NULL, 0);
+}
+
 static void handle_enroll_totp(DB *db, SessionTable *st, int fd, const WireFrame *f) {
     if (f->body_len < 56) {
         send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
     }
     uint32_t merchant_id = st_lookup(st, f->body);
     if (!merchant_id) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
+
+    if (db_merchant_exists(db, merchant_id) != 1) {
+        send_ack(fd, f->seq, WIRE_ERR_NOT_MERCHANT, NULL, 0); return;
+    }
+
     uint32_t customer_id    = rd32(f->body + 32);
     const uint8_t *secret   = f->body + 36;
 
@@ -363,6 +388,11 @@ static void handle_create_intent(DB *db, SessionTable *st, int fd, const WireFra
     }
     uint32_t mid        = st_lookup(st, f->body);
     if (!mid) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
+
+    if (db_merchant_exists(db, mid) != 1) {
+        send_ack(fd, f->seq, WIRE_ERR_NOT_MERCHANT, NULL, 0); return;
+    }
+
     uint64_t request_id = rd64(f->body + 32);
     uint64_t order_id   = rd64(f->body + 40);
     uint64_t amount     = rd64(f->body + 48);
@@ -446,6 +476,7 @@ void handle_frame(DB *db, SessionTable *st, int fd, const WireFrame *f) {
         case WIRE_RECOVERY_REQ:     handle_recovery_req(db, fd, f);               break;
         case WIRE_RECOVERY_APPROVE: handle_recovery_approve(db, st, fd, f);       break;
         case WIRE_GET_HISTORY:      handle_get_history(db, st, fd, f);            break;
+        case WIRE_REGISTER_MERCHANT: handle_register_merchant(db, st, fd, f);     break;
         case WIRE_ENROLL_TOTP:      handle_enroll_totp(db, st, fd, f);            break;
         case WIRE_CREATE_INTENT:    handle_create_intent(db, st, fd, f);          break;
         case WIRE_PAY_INTENT:       handle_pay_intent(db, st, fd, f);             break;

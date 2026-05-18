@@ -100,6 +100,13 @@ static const char SCHEMA[] =
     "  status     SMALLINT NOT NULL DEFAULT 0,"
     "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
     "  PRIMARY KEY (mid, request_id)"
+    ");"
+
+    /* Merchant registry — mid mirrors the Wire account ID */
+    "CREATE TABLE IF NOT EXISTS merchants ("
+    "  mid           BIGINT PRIMARY KEY,"
+    "  name          TEXT   NOT NULL,"
+    "  registered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
     ");";
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -768,4 +775,54 @@ int db_intent_settle(DB *db, uint32_t mid, uint64_t request_id) {
     int settled = (affected && affected[0] == '1');
     PQclear(r);
     return settled ? 0 : -1;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Merchant registry
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+int db_merchant_register(DB *db, uint32_t mid, const char *name) {
+    static const char SQL[] =
+        "INSERT INTO merchants (mid, name) VALUES ($1, $2) "
+        "ON CONFLICT (mid) DO UPDATE SET name = EXCLUDED.name";
+
+    uint64_t m = pg_int8((uint64_t)mid);
+    const char *vals[2] = { (char *)&m, name };
+    int         lens[2] = { 8, (int)strlen(name) };
+    int         fmts[2] = { 1, 0 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+
+    if (PQresultStatus(r) != PGRES_COMMAND_OK) {
+        fprintf(stderr, "[db] merchant_register: %s\n", PQerrorMessage(db->conn));
+        PQclear(r);
+        return -1;
+    }
+    char *aff = PQcmdTuples(r);
+    int created = (aff && aff[0] == '1');
+    PQclear(r);
+    return created ? 1 : 0;
+}
+
+int db_merchant_exists(DB *db, uint32_t mid) {
+    static const char SQL[] = "SELECT 1 FROM merchants WHERE mid = $1";
+
+    uint64_t m = pg_int8((uint64_t)mid);
+    const char *vals[1] = { (char *)&m };
+    int         lens[1] = { 8 };
+    int         fmts[1] = { 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+
+    if (PQresultStatus(r) != PGRES_TUPLES_OK) {
+        PQclear(r);
+        return -1;
+    }
+    int found = (PQntuples(r) > 0);
+    PQclear(r);
+    return found;
 }

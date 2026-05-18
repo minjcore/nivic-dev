@@ -1648,8 +1648,8 @@ struct MerchantSheet: View {
 
     var body: some View {
         if savedToken.isEmpty {
-            MerchantOnboardingView(merchantsClient: merchantsClient, uid: uid,
-                                   onDone: { name, token in
+            MerchantOnboardingView(merchantsClient: merchantsClient, savingClient: savingClient,
+                                   uid: uid, onDone: { name, token in
                 savedName  = name
                 savedToken = token
             })
@@ -1664,6 +1664,7 @@ struct MerchantSheet: View {
 
 struct MerchantOnboardingView: View {
     let merchantsClient: MerchantsClient
+    let savingClient: SavingClient
     let uid: UInt32
     let onDone: (String, String) -> Void
 
@@ -1858,6 +1859,7 @@ struct MerchantOnboardingView: View {
         let name = shopName.trimmingCharacters(in: .whitespaces)
         do {
             newToken = try await merchantsClient.onboard(uid: uid, name: name)
+            try? await savingClient.registerMerchant(name: name)
             savedName = name
             step = 1
         } catch VerifyError.rejected(let msg) where msg.contains("đã là merchant") || msg.contains("already") {

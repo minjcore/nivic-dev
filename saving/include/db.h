@@ -134,6 +134,14 @@ int db_intent_get(DB *db, uint32_t mid, uint64_t request_id, IntentInfo *out);
 /* Mark intent as settled. Returns 0 on success, -1 on error. */
 int db_intent_settle(DB *db, uint32_t mid, uint64_t request_id);
 
+/* ─── Merchant registry ──────────────────────────────────────────────────── */
+
+/* Upsert merchant record. Returns 1=inserted, 0=updated, -1=error. */
+int db_merchant_register(DB *db, uint32_t mid, const char *name);
+
+/* Returns 1 if mid is a registered merchant, 0 if not, -1 on error. */
+int db_merchant_exists(DB *db, uint32_t mid);
+
 /* ─── Social Recovery ────────────────────────────────────────────────────── */
 
 /* Opens (or resets) a recovery request. Returns 0 on success, -1 on error. */

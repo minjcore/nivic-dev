@@ -15,9 +15,10 @@ enum WireType: UInt8 {
     case recoveryReq     = 0x14
     case recoveryApprove = 0x15
     case getHistory      = 0x16
-    case createIntent    = 0x20
-    case payIntent       = 0x21
-    case enrollTotp      = 0x22
+    case createIntent      = 0x20
+    case payIntent         = 0x21
+    case enrollTotp        = 0x22
+    case registerMerchant  = 0x23
 
     // Server → Client (responses)
     case pong            = 0x80
@@ -46,6 +47,7 @@ enum WireCode: UInt8 {
     case errNeedGuardians  = 0x0B
     case errTotpInvalid    = 0x0C
     case errIntentSettled  = 0x0D
+    case errNotMerchant    = 0x0E
     case errInternal       = 0xFF
 }
 
@@ -210,6 +212,13 @@ extension WireFrame {
         body.appendBigEndian(customerID)
         body.append(secret.prefix(20))
         return WireFrame(type: .enrollTotp, seq: seq, body: body)
+    }
+
+    /* REGISTER_MERCHANT  body: [token 32B][name N bytes] */
+    static func registerMerchant(token: Data, name: String, seq: UInt32) -> WireFrame {
+        var body = token
+        body.append(Data(name.utf8))
+        return WireFrame(type: .registerMerchant, seq: seq, body: body)
     }
 }
 
