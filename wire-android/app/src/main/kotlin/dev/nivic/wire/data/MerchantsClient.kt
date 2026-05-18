@@ -38,14 +38,14 @@ class MerchantsClient(private val baseURL: String = "http://127.0.0.1:8090") {
 
     suspend fun stats(mid: Long, token: String): MerchantStats = withContext(Dispatchers.IO) {
         val conn = get("$baseURL/merchants/$mid/stats", token)
-        val resp = conn.inputStream.bufferedReader().readText()
+        val resp = readResponse(conn)
         val j    = JSONObject(resp)
         MerchantStats(j.getLong("total_earned"), j.getInt("order_count"))
     }
 
     suspend fun listOrders(mid: Long, token: String): List<MerchantOrder> = withContext(Dispatchers.IO) {
         val conn = get("$baseURL/merchants/$mid/orders", token)
-        val resp = conn.inputStream.bufferedReader().readText()
+        val resp = readResponse(conn)
         val arr  = JSONArray(resp)
         (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
@@ -62,13 +62,13 @@ class MerchantsClient(private val baseURL: String = "http://127.0.0.1:8090") {
 
     suspend fun loyaltyBalance(mid: Long, uid: Long): LoyaltyBalance = withContext(Dispatchers.IO) {
         val conn = get("$baseURL/merchants/$mid/loyalty/$uid")
-        val j    = JSONObject(conn.inputStream.bufferedReader().readText())
+        val j    = JSONObject(readResponse(conn))
         LoyaltyBalance(j.getLong("uid"), j.getLong("mid"), j.getLong("points"), j.getLong("value_vnd"))
     }
 
     suspend fun loyaltyMembers(mid: Long, token: String): List<LoyaltyMember> = withContext(Dispatchers.IO) {
         val conn = get("$baseURL/merchants/$mid/loyalty", token)
-        val arr  = JSONArray(conn.inputStream.bufferedReader().readText())
+        val arr  = JSONArray(readResponse(conn))
         (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
             LoyaltyMember(o.getLong("uid"), o.getLong("points"))
@@ -77,7 +77,7 @@ class MerchantsClient(private val baseURL: String = "http://127.0.0.1:8090") {
 
     suspend fun userLoyalty(uid: Long): List<UserLoyaltyEntry> = withContext(Dispatchers.IO) {
         val conn = get("$baseURL/loyalty/user/$uid")
-        val arr  = JSONArray(conn.inputStream.bufferedReader().readText())
+        val arr  = JSONArray(readResponse(conn))
         (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
             UserLoyaltyEntry(o.getLong("mid"), o.getString("merchant_name"), o.getLong("points"))
@@ -95,6 +95,17 @@ class MerchantsClient(private val baseURL: String = "http://127.0.0.1:8090") {
             val j = JSONObject(conn.inputStream.bufferedReader().readText())
             CreateOrderResult(j.getString("order_id"), j.getString("pr"), j.getString("qr_url"))
         }
+
+    private fun readResponse(conn: HttpURLConnection): String {
+        val code = conn.responseCode
+        val body = (if (code in 200..299) conn.inputStream else conn.errorStream)
+            .bufferedReader().readText()
+        if (code !in 200..299) {
+            val msg = runCatching { JSONObject(body).optString("error", body) }.getOrDefault(body)
+            throw Exception(msg.ifBlank { "HTTP $code" })
+        }
+        return body
+    }
 
     private fun get(url: String, token: String? = null): HttpURLConnection {
         val conn = URL(url).openConnection() as HttpURLConnection

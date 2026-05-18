@@ -78,11 +78,17 @@ private fun TxRow(tx: Transaction) {
                 Text("#${tx.counterpartId}", color = Color.White, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
             }
         }
-        Text(
-            (if (received) "+" else "−") + tx.amount.vndFormatted(),
-            color      = if (received) Color(0xFF4CAF50) else Color.White,
-            fontWeight = FontWeight.SemiBold,
-            fontSize   = 14.sp
-        )
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                (if (received) "+" else "−") + tx.amount.vndFormatted(),
+                color      = if (received) Color(0xFF4CAF50) else Color.White,
+                fontWeight = FontWeight.SemiBold,
+                fontSize   = 14.sp
+            )
+            if (!received) {
+                val pts = tx.amount / 10_000L
+                if (pts > 0) Text("+$pts điểm", color = Color(0xFFFFC107), fontSize = 11.sp)
+            }
+        }
     }
 }

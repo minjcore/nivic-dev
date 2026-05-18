@@ -318,6 +318,10 @@ private fun OrderRow(order: MerchantOrder) {
                 color = if (order.status == "paid") Color(0xFF4CAF50) else Color(0xFFFFA726),
                 fontSize = 11.sp
             )
+            if (order.status == "paid") {
+                val pts = order.amount / 10_000L
+                if (pts > 0) Text("+$pts điểm KH", color = Color(0xFFFFC107), fontSize = 11.sp)
+            }
         }
     }
     HorizontalDivider(color = Color.White.copy(alpha = 0.06f))

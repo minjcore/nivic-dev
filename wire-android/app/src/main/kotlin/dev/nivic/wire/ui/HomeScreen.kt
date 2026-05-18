@@ -39,6 +39,7 @@ fun HomeScreen(
     var showQRScan    by remember { mutableStateOf(false) }
     var showGuardian  by remember { mutableStateOf(false) }
     var showMerchant  by remember { mutableStateOf(false) }
+    var showTOTP      by remember { mutableStateOf(false) }
     var toast         by remember { mutableStateOf<String?>(null) }
     val scope         = rememberCoroutineScope()
 
@@ -102,7 +103,7 @@ fun HomeScreen(
                     MiniTile(Icons.Default.Store, "Bán hàng", Modifier.weight(1f)) { showMerchant = true }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MiniTile(Icons.Default.VpnKey, "Mã TT", Modifier.weight(1f)) { }
+                    MiniTile(Icons.Default.VpnKey, "Mã TT", Modifier.weight(1f)) { showTOTP = true }
                     MiniTile(Icons.Default.Refresh, "Phục hồi", Modifier.weight(1f)) { }
                     Spacer(Modifier.weight(2f))
                 }
@@ -137,6 +138,7 @@ fun HomeScreen(
     if (showQRScan)   QRScanSheet(client, prefs, onDone = { scope.launch { refresh() } }) { showQRScan   = false }
     if (showGuardian) GuardianSheet(client)                                             { showGuardian = false }
     if (showMerchant) MerchantSheet(accountId, merchantsClient, prefs)                 { showMerchant = false }
+    if (showTOTP)     TOTPPaySheet(accountId, prefs)                                   { showTOTP     = false }
 }
 
 @Composable
