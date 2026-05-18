@@ -182,14 +182,16 @@ extension WireFrame {
         WireFrame(type: .logout, seq: seq, body: token)
     }
 
-    /* CREATE_INTENT  body: [token 32B][request_id 8B][order_id 8B][amount 8B] */
+    /* CREATE_INTENT  body: [token 32B][request_id 8B][order_id 8B][amount 8B][gateway_order_id N bytes] */
     static func createIntent(token: Data, requestID: UInt64, orderID: UInt64,
-                              amount: UInt64, seq: UInt32) -> WireFrame {
+                              amount: UInt64, gatewayOrderID: String = "",
+                              seq: UInt32) -> WireFrame {
         var body = Data()
         body.append(token)
         body.appendBigEndian(requestID)
         body.appendBigEndian(orderID)
         body.appendBigEndian(amount)
+        if !gatewayOrderID.isEmpty { body.append(Data(gatewayOrderID.utf8)) }
         return WireFrame(type: .createIntent, seq: seq, body: body)
     }
 

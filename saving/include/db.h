@@ -121,12 +121,14 @@ int db_totp_get_secret(DB *db, uint32_t merchant_id, uint32_t customer_id,
 typedef struct {
     uint64_t amount;
     int      status;   /* 0=pending, 1=settled */
+    char     gateway_order_id[256];
 } IntentInfo;
 
 /* Insert intent, idempotency key (mid, request_id).
  * Returns 1=created, 0=already exists (replay OK), -1=error. */
 int db_intent_create(DB *db, uint32_t mid, uint64_t request_id,
-                     uint64_t order_id, uint64_t amount);
+                     uint64_t order_id, uint64_t amount,
+                     const char *gateway_order_id);
 
 /* Fill *out. Returns 0 on success, -1 if not found / error. */
 int db_intent_get(DB *db, uint32_t mid, uint64_t request_id, IntentInfo *out);

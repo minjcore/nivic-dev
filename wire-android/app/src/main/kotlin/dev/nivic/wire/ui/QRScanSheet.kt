@@ -99,7 +99,7 @@ data class TOTPPayPayload(val uid: Long, val token: String) {
     }
 }
 
-data class IntentPayload(val mid: Long, val requestId: Long, val amount: Long) {
+data class IntentPayload(val mid: Long, val requestId: Long, val amount: Long, val orderID: String?) {
     companion object {
         fun parse(raw: String): IntentPayload? {
             val uri = android.net.Uri.parse(raw)
@@ -107,7 +107,8 @@ data class IntentPayload(val mid: Long, val requestId: Long, val amount: Long) {
             val mid = uri.getQueryParameter("mid")?.toLongOrNull() ?: return null
             val rid = uri.getQueryParameter("rid")?.toLongOrNull() ?: return null
             val amt = uri.getQueryParameter("amount")?.toLongOrNull() ?: return null
-            return IntentPayload(mid, rid, amt)
+            val oid = uri.getQueryParameter("oid")
+            return IntentPayload(mid, rid, amt, oid)
         }
     }
 }
@@ -165,10 +166,12 @@ fun QRScanSheet(
             when {
                 intentPayload != null -> {
                     IntentPayContent(
-                        client    = client,
-                        prefs     = prefs,
-                        payload   = intentPayload!!,
-                        onDone    = { onDone(); onDismiss() }
+                        client          = client,
+                        merchantsClient = merchantsClient,
+                        prefs           = prefs,
+                        accountId       = accountId,
+                        payload         = intentPayload!!,
+                        onDone          = { onDone(); onDismiss() }
                     )
                 }
                 enrollPayload != null -> {
@@ -312,10 +315,12 @@ private fun TOTPPayContent(
 
 @Composable
 private fun IntentPayContent(
-    client:  SavingClient,
-    prefs:   android.content.SharedPreferences,
-    payload: IntentPayload,
-    onDone:  () -> Unit,
+    client:          SavingClient,
+    merchantsClient: dev.nivic.wire.data.MerchantsClient,
+    prefs:           android.content.SharedPreferences,
+    accountId:       Long,
+    payload:         IntentPayload,
+    onDone:          () -> Unit,
 ) {
     var error   by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }

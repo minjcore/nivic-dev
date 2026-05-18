@@ -93,14 +93,16 @@ static const char SCHEMA[] =
 
     /* Payment intents created by merchants */
     "CREATE TABLE IF NOT EXISTS payment_intents ("
-    "  mid        BIGINT  NOT NULL,"
-    "  request_id BIGINT  NOT NULL,"
-    "  order_id   BIGINT  NOT NULL,"
-    "  amount     BIGINT  NOT NULL,"
-    "  status     SMALLINT NOT NULL DEFAULT 0,"
-    "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+    "  mid              BIGINT   NOT NULL,"
+    "  request_id       BIGINT   NOT NULL,"
+    "  order_id         BIGINT   NOT NULL,"
+    "  amount           BIGINT   NOT NULL,"
+    "  status           SMALLINT NOT NULL DEFAULT 0,"
+    "  gateway_order_id TEXT     NOT NULL DEFAULT '',"
+    "  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
     "  PRIMARY KEY (mid, request_id)"
     ");"
+    "ALTER TABLE payment_intents ADD COLUMN IF NOT EXISTS gateway_order_id TEXT NOT NULL DEFAULT '';"
 
     /* Merchant registry — mid mirrors the Wire account ID */
     "CREATE TABLE IF NOT EXISTS merchants ("
@@ -691,22 +693,24 @@ int db_totp_get_secret(DB *db, uint32_t merchant_id, uint32_t customer_id,
  * ══════════════════════════════════════════════════════════════════════════ */
 
 int db_intent_create(DB *db, uint32_t mid, uint64_t request_id,
-                     uint64_t order_id, uint64_t amount) {
+                     uint64_t order_id, uint64_t amount,
+                     const char *gateway_order_id) {
     static const char SQL[] =
-        "INSERT INTO payment_intents (mid, request_id, order_id, amount) "
-        "VALUES ($1, $2, $3, $4) ON CONFLICT (mid, request_id) DO NOTHING";
+        "INSERT INTO payment_intents (mid, request_id, order_id, amount, gateway_order_id) "
+        "VALUES ($1, $2, $3, $4, $5) ON CONFLICT (mid, request_id) DO NOTHING";
 
     uint64_t m  = pg_int8((uint64_t)mid);
     uint64_t ri = pg_int8(request_id);
     uint64_t oi = pg_int8(order_id);
     uint64_t am = pg_int8(amount);
+    const char *goid = gateway_order_id ? gateway_order_id : "";
 
-    const char *vals[4] = { (char *)&m, (char *)&ri, (char *)&oi, (char *)&am };
-    int         lens[4] = { 8, 8, 8, 8 };
-    int         fmts[4] = { 1, 1, 1, 1 };
+    const char *vals[5] = { (char *)&m, (char *)&ri, (char *)&oi, (char *)&am, goid };
+    int         lens[5] = { 8, 8, 8, 8, (int)strlen(goid) };
+    int         fmts[5] = { 1, 1, 1, 1, 0 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 4, NULL, vals, lens, fmts, 0);
+    PGresult *r = PQexecParams(db->conn, SQL, 5, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     if (PQresultStatus(r) != PGRES_COMMAND_OK) {
@@ -723,7 +727,7 @@ int db_intent_create(DB *db, uint32_t mid, uint64_t request_id,
 
 int db_intent_get(DB *db, uint32_t mid, uint64_t request_id, IntentInfo *out) {
     static const char SQL[] =
-        "SELECT amount, status FROM payment_intents WHERE mid = $1 AND request_id = $2";
+        "SELECT amount, status, gateway_order_id FROM payment_intents WHERE mid = $1 AND request_id = $2";
 
     uint64_t m  = pg_int8((uint64_t)mid);
     uint64_t ri = pg_int8(request_id);
@@ -745,6 +749,12 @@ int db_intent_get(DB *db, uint32_t mid, uint64_t request_id, IntentInfo *out) {
     /* SMALLINT binary result is 2 bytes big-endian */
     uint8_t *sp = (uint8_t *)PQgetvalue(r, 0, 1);
     out->status = (sp[0] << 8) | sp[1];
+    /* gateway_order_id is text (format 0) */
+    const char *goid = PQgetvalue(r, 0, 2);
+    size_t glen = goid ? strlen(goid) : 0;
+    if (glen >= sizeof(out->gateway_order_id)) glen = sizeof(out->gateway_order_id) - 1;
+    if (goid) memcpy(out->gateway_order_id, goid, glen);
+    out->gateway_order_id[glen] = '\0';
     PQclear(r);
     return 0;
 }

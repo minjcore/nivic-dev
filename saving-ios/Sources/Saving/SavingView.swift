@@ -2186,10 +2186,11 @@ struct CreateOrderSheet: View {
             let requestID = UInt64(Date().timeIntervalSince1970 * 1000)
             let orderIDNum = UInt64(resp.orderID) ?? requestID
             let intent = try await savingClient.createIntent(
-                requestID: requestID, orderID: orderIDNum, amount: amount)
+                requestID: requestID, orderID: orderIDNum, amount: amount,
+                gatewayOrderID: resp.orderID)
 
             /* QR for customer to scan and call PAY_INTENT */
-            qrPayload = "saving://intent?mid=\(intent.mid)&rid=\(intent.requestID)&amount=\(intent.amount)"
+            qrPayload = "saving://intent?mid=\(intent.mid)&rid=\(intent.requestID)&amount=\(intent.amount)&oid=\(resp.orderID)"
         } catch {
             self.error = error.localizedDescription
         }

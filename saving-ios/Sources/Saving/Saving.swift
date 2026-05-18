@@ -151,10 +151,12 @@ public final class SavingClient: ObservableObject {
     }
 
     /// Merchant creates a payment intent. requestID and orderID must be unique per merchant.
-    public func createIntent(requestID: UInt64, orderID: UInt64, amount: UInt64) async throws -> IntentResult {
+    public func createIntent(requestID: UInt64, orderID: UInt64, amount: UInt64,
+                             gatewayOrderID: String = "") async throws -> IntentResult {
         let token = try requireToken()
         let frame = WireFrame.createIntent(token: token, requestID: requestID,
-                                           orderID: orderID, amount: amount, seq: nextSeq())
+                                           orderID: orderID, amount: amount,
+                                           gatewayOrderID: gatewayOrderID, seq: nextSeq())
         let ack = try await conn.send(frame).parseAck()
         guard ack.code == .ok else { throw WireError.serverError(ack.code) }
         /* extra: [status 1B][mid 4B][request_id 8B][amount 8B] = 21 bytes */

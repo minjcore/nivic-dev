@@ -6,6 +6,12 @@
 #include <limits.h>
 #include <pthread.h>
 #include <CommonCrypto/CommonHMAC.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+
+/* ─── Gateway notification (forward-declared before use) ─────────────────── */
+static void gateway_notify_async(const char *gateway_order_id, uint32_t paid_by);
 
 /* ─── Session table ──────────────────────────────────────────────────────── */
 
@@ -381,7 +387,7 @@ static void handle_enroll_totp(DB *db, SessionTable *st, int fd, const WireFrame
     send_ack(fd, f->seq, WIRE_OK, NULL, 0);
 }
 
-/* CREATE_INTENT  body: [merchant_token 32B][request_id 8B][order_id 8B][amount 8B] */
+/* CREATE_INTENT  body: [merchant_token 32B][request_id 8B][order_id 8B][amount 8B][gateway_order_id N bytes] */
 static void handle_create_intent(DB *db, SessionTable *st, int fd, const WireFrame *f) {
     if (f->body_len < 56) {
         send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
@@ -397,7 +403,16 @@ static void handle_create_intent(DB *db, SessionTable *st, int fd, const WireFra
     uint64_t order_id   = rd64(f->body + 40);
     uint64_t amount     = rd64(f->body + 48);
 
-    int rc = db_intent_create(db, mid, request_id, order_id, amount);
+    /* Optional gateway_order_id string appended after the 56 mandatory bytes */
+    char gateway_order_id[256] = "";
+    if (f->body_len > 56) {
+        size_t n = f->body_len - 56;
+        if (n >= sizeof(gateway_order_id)) n = sizeof(gateway_order_id) - 1;
+        memcpy(gateway_order_id, f->body + 56, n);
+        gateway_order_id[n] = '\0';
+    }
+
+    int rc = db_intent_create(db, mid, request_id, order_id, amount, gateway_order_id);
     if (rc < 0) { send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return; }
 
     /* Reply with [status 1B][mid 4B][request_id 8B][amount 8B] so client can build QR */
@@ -447,6 +462,18 @@ static void handle_pay_intent(DB *db, SessionTable *st, int fd, const WireFrame 
     db_record_transfer(db, customer_id, merchant_id, intent.amount);
     db_intent_settle(db, merchant_id, request_id);
 
+    /* Sổ cái: append audit row for this payment */
+    uint8_t extra[4];
+    extra[0] = (merchant_id >> 24) & 0xff;
+    extra[1] = (merchant_id >> 16) & 0xff;
+    extra[2] = (merchant_id >>  8) & 0xff;
+    extra[3] =  merchant_id        & 0xff;
+    db_ledger_append(db, customer_id, request_id, (uint64_t)merchant_id,
+                     0x21 /* PAY_INTENT */, intent.amount, extra, 4);
+
+    /* Notify Merchant Gateway to mark order as paid */
+    gateway_notify_async(intent.gateway_order_id, customer_id);
+
     /* Push EVT_TRANSFER_IN to merchant if online */
     int64_t merch_bal = db_account_balance(db, merchant_id);
     if (merch_bal >= 0) {
@@ -460,6 +487,57 @@ static void handle_pay_intent(DB *db, SessionTable *st, int fd, const WireFrame 
     }
 
     send_ack(fd, f->seq, WIRE_OK, NULL, 0);
+}
+
+/* ─── Gateway notification ───────────────────────────────────────────────── */
+
+/* Fire-and-forget: POST /orders/{gateway_order_id}/confirm to localhost:8090 */
+static void *gateway_confirm_thread(void *arg) {
+    char *s = (char *)arg;           /* "ORDER_ID|PAID_BY" */
+    char *sep = strchr(s, '|');
+    if (!sep) { free(s); return NULL; }
+    *sep = '\0';
+    const char *order_id = s;
+    int paid_by = atoi(sep + 1);
+
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) { free(s); return NULL; }
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family      = AF_INET;
+    addr.sin_port        = htons(8090);
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
+        char body[64];
+        int blen = snprintf(body, sizeof(body), "{\"paid_by\":%d}", paid_by);
+        char req[512];
+        int rlen = snprintf(req, sizeof(req),
+            "POST /orders/%s/confirm HTTP/1.1\r\n"
+            "Host: localhost\r\n"
+            "Content-Type: application/json\r\n"
+            "Content-Length: %d\r\n"
+            "Connection: close\r\n"
+            "\r\n%s",
+            order_id, blen, body);
+        (void)write(fd, req, rlen);
+    }
+    close(fd);
+    free(s);
+    return NULL;
+}
+
+static void gateway_notify_async(const char *gateway_order_id, uint32_t paid_by) {
+    if (!gateway_order_id || gateway_order_id[0] == '\0') return;
+    char *arg = malloc(strlen(gateway_order_id) + 32);
+    if (!arg) return;
+    sprintf(arg, "%s|%u", gateway_order_id, paid_by);
+    pthread_t t;
+    if (pthread_create(&t, NULL, gateway_confirm_thread, arg) == 0)
+        pthread_detach(t);
+    else
+        free(arg);
 }
 
 /* ─── Dispatch ───────────────────────────────────────────────────────────── */
