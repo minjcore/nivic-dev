@@ -137,7 +137,8 @@ func addMerchantsProxy(mux *http.ServeMux, merchantsURL string) {
 	}
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	for _, prefix := range []string{"/merchants/", "/orders/", "/loyalty/", "/payment_request/"} {
-		mux.Handle(prefix, proxy)
+		mux.Handle("GET "+prefix, proxy)
+		mux.Handle("POST "+prefix, proxy)
 	}
 }
 
