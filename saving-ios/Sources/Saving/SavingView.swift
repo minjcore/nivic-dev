@@ -430,17 +430,48 @@ struct HistorySheet: View {
     }
 }
 
+private func txIcon(_ d: Transaction.Direction) -> String {
+    switch d {
+    case .received, .paymentReceived, .cashIn: return "arrow.down.left.circle.fill"
+    case .cashOut: return "arrow.up.right.circle.fill"
+    case .paymentSent: return "storefront.fill"
+    default: return "arrow.up.right.circle.fill"
+    }
+}
+private func txColor(_ d: Transaction.Direction) -> Color {
+    switch d {
+    case .received, .paymentReceived, .cashIn: return .green
+    case .cashOut: return .red
+    default: return .orange
+    }
+}
+private func txLabel(_ d: Transaction.Direction) -> String {
+    switch d {
+    case .sent: return "Gửi đến"
+    case .received: return "Nhận từ"
+    case .paymentSent: return "Thanh toán"
+    case .paymentReceived: return "Thu từ"
+    case .cashIn: return "Nạp tiền"
+    case .cashOut: return "Rút tiền"
+    }
+}
+private func txSign(_ d: Transaction.Direction) -> String {
+    switch d {
+    case .received, .paymentReceived, .cashIn: return "+"
+    default: return "−"
+    }
+}
+
 struct TxRow: View {
     let tx: Transaction
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: tx.direction == .received ? "arrow.down.left.circle.fill"
-                                                        : "arrow.up.right.circle.fill")
+            Image(systemName: txIcon(tx.direction))
                 .font(.title2)
-                .foregroundStyle(tx.direction == .received ? .green : .orange)
+                .foregroundStyle(txColor(tx.direction))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(tx.direction == .received ? "Nhận từ" : "Gửi đến")
+                Text(txLabel(tx.direction))
                     .font(.caption).foregroundStyle(.gray)
                 Text("#\(tx.counterpartID)")
                     .font(.system(.body, design: .monospaced))
@@ -450,10 +481,10 @@ struct TxRow: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text((tx.direction == .received ? "+" : "−") + tx.amount.vndFormatted)
+                Text(txSign(tx.direction) + tx.amount.vndFormatted)
                     .font(.system(.callout, weight: .semibold))
-                    .foregroundStyle(tx.direction == .received ? .green : .white)
-                if tx.direction == .sent {
+                    .foregroundStyle(txColor(tx.direction))
+                if tx.direction == .sent || tx.direction == .paymentSent {
                     let pts = tx.amount / 10_000
                     if pts > 0 {
                         Text("+\(pts) điểm")

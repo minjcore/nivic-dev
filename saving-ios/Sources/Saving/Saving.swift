@@ -27,7 +27,13 @@ public struct Transaction: Identifiable {
     public let counterpartID: UInt32
     public let amount: UInt64
 
-    public enum Direction { case sent, received }
+    public enum Direction {
+        case sent, received          // transfer
+        case paymentSent             // customer paid merchant
+        case paymentReceived         // merchant received payment
+        case cashIn                  // deposit
+        case cashOut                 // withdrawal
+    }
 }
 
 // ─── Main client ───────────────────────────────────────────────────────────
@@ -134,7 +140,16 @@ public final class SavingClient: ObservableObject {
         for i in 0..<count {
             let base = 1 + i * 13
             guard base + 13 <= data.count else { break }
-            let dir         = data[base] == 0 ? Transaction.Direction.sent : .received
+            let kind = data[base]
+            let dir: Transaction.Direction = switch kind {
+                case 0: .sent
+                case 1: .received
+                case 2: .paymentSent
+                case 3: .paymentReceived
+                case 4: .cashIn
+                case 5: .cashOut
+                default: .sent
+            }
             let counterpart = data.readBigEndianUInt32(at: base + 1)
             let amount      = data.readBigEndianUInt64(at: base + 5)
             txs.append(Transaction(direction: dir, counterpartID: counterpart, amount: amount))

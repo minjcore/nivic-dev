@@ -203,7 +203,7 @@ static void handle_transfer(DB *db, SessionTable *st, int fd, const WireFrame *f
     if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
     if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
 
-    db_record_transfer(db, mid, to_id, amount);
+    db_record_transfer(db, mid, to_id, amount, 0);  /* type=transfer */
 
     /* Push EVT_TRANSFER_IN to recipient if online */
     int64_t new_bal = db_account_balance(db, to_id);
@@ -459,7 +459,7 @@ static void handle_pay_intent(DB *db, SessionTable *st, int fd, const WireFrame 
     if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
     if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
 
-    db_record_transfer(db, customer_id, merchant_id, intent.amount);
+    db_record_transfer(db, customer_id, merchant_id, intent.amount, 1);  /* type=payment */
     db_intent_settle(db, merchant_id, request_id);
 
     /* Sổ cái: append audit row for this payment */

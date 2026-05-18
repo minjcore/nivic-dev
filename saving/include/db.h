@@ -100,8 +100,8 @@ typedef struct {
     uint64_t amount;
 } TxEntry;
 
-/* Record a completed transfer. Call after db_transfer succeeds. */
-int db_record_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount);
+/* Record a completed transfer. type: 0=transfer, 1=payment, 2=cash_in, 3=cash_out */
+int db_record_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount, int type);
 
 /* Fill out[0..max_count-1] sorted newest-first. Returns count or -1 on error. */
 int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count);

@@ -9,7 +9,13 @@ data class Transaction(
     val counterpartId: Long,
     val amount:        Long
 ) {
-    enum class Direction { SENT, RECEIVED }
+    enum class Direction {
+        SENT, RECEIVED,          // transfer
+        PAYMENT_SENT,            // customer paid merchant
+        PAYMENT_RECEIVED,        // merchant received payment
+        CASH_IN,                 // deposit
+        CASH_OUT                 // withdrawal
+    }
 }
 
 data class TransferEvent(val fromId: Long, val amount: Long, val balance: Long)
@@ -102,7 +108,15 @@ class SavingClient(
             val base = 1 + i * 13
             if (base + 13 > data.size) return@mapNotNull null
             Transaction(
-                direction     = if (data[base] == 0.toByte()) Transaction.Direction.SENT else Transaction.Direction.RECEIVED,
+                direction     = when (data[base].toInt() and 0xFF) {
+                    0 -> Transaction.Direction.SENT
+                    1 -> Transaction.Direction.RECEIVED
+                    2 -> Transaction.Direction.PAYMENT_SENT
+                    3 -> Transaction.Direction.PAYMENT_RECEIVED
+                    4 -> Transaction.Direction.CASH_IN
+                    5 -> Transaction.Direction.CASH_OUT
+                    else -> Transaction.Direction.SENT
+                },
                 counterpartId = data.getInt(base + 1).toLong() and 0xFFFFFFFFL,
                 amount        = data.getLong(base + 5)
             )

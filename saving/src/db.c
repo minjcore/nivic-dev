@@ -78,8 +78,10 @@ static const char SCHEMA[] =
     "  from_id    BIGINT NOT NULL,"
     "  to_id      BIGINT NOT NULL,"
     "  amount     BIGINT NOT NULL,"
+    "  type       SMALLINT NOT NULL DEFAULT 0,"   /* 0=transfer, 1=payment */
     "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
     ");"
+    "ALTER TABLE transfers ADD COLUMN IF NOT EXISTS type SMALLINT NOT NULL DEFAULT 0;"
     "CREATE INDEX IF NOT EXISTS transfers_from_idx ON transfers(from_id, created_at DESC);"
     "CREATE INDEX IF NOT EXISTS transfers_to_idx   ON transfers(to_id,   created_at DESC);"
 
@@ -569,20 +571,21 @@ void db_recovery_close(DB *db, uint32_t account_id) {
  *  Transfer history
  * ══════════════════════════════════════════════════════════════════════════ */
 
-int db_record_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount) {
+int db_record_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount, int type) {
     static const char SQL[] =
-        "INSERT INTO transfers (from_id, to_id, amount) VALUES ($1, $2, $3)";
+        "INSERT INTO transfers (from_id, to_id, amount, type) VALUES ($1, $2, $3, $4)";
 
-    uint64_t f = pg_int8((uint64_t)from_id);
-    uint64_t t = pg_int8((uint64_t)to_id);
-    uint64_t a = pg_int8(amount);
+    uint64_t f  = pg_int8((uint64_t)from_id);
+    uint64_t t  = pg_int8((uint64_t)to_id);
+    uint64_t a  = pg_int8(amount);
+    uint16_t tp = htons((uint16_t)type);
 
-    const char *vals[3] = { (char *)&f, (char *)&t, (char *)&a };
-    int         lens[3] = { 8, 8, 8 };
-    int         fmts[3] = { 1, 1, 1 };
+    const char *vals[4] = { (char *)&f, (char *)&t, (char *)&a, (char *)&tp };
+    int         lens[4] = { 8, 8, 8, 2 };
+    int         fmts[4] = { 1, 1, 1, 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 3, NULL, vals, lens, fmts, 0);
+    PGresult *r = PQexecParams(db->conn, SQL, 4, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     int ok = (PQresultStatus(r) == PGRES_COMMAND_OK);
@@ -593,7 +596,7 @@ int db_record_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount
 
 int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count) {
     static const char SQL[] =
-        "SELECT from_id, to_id, amount FROM transfers "
+        "SELECT from_id, to_id, amount, type FROM transfers "
         "WHERE from_id = $1 OR to_id = $1 "
         "ORDER BY created_at DESC LIMIT $2";
 
@@ -622,9 +625,23 @@ int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count) {
         uint64_t from = from_be64((uint8_t *)PQgetvalue(r, i, 0));
         uint64_t to   = from_be64((uint8_t *)PQgetvalue(r, i, 1));
         uint64_t amt  = from_be64((uint8_t *)PQgetvalue(r, i, 2));
+        uint8_t *tp   = (uint8_t *)PQgetvalue(r, i, 3);
+        int      type = (tp[0] << 8) | tp[1];  /* SMALLINT big-endian */
 
-        out[i].direction   = (from == (uint64_t)account_id) ? 0 : 1;
-        out[i].counterpart = (uint32_t)((from == (uint64_t)account_id) ? to : from);
+        int sent = (from == (uint64_t)account_id);
+        /* tx_kind encoding:
+         * 0=transfer_sent, 1=transfer_recv,
+         * 2=payment_sent,  3=payment_recv,
+         * 4=cash_in,       5=cash_out      */
+        int kind;
+        switch (type) {
+            case 1:  kind = sent ? 2 : 3; break;  /* payment */
+            case 2:  kind = 4;            break;  /* cash_in */
+            case 3:  kind = 5;            break;  /* cash_out */
+            default: kind = sent ? 0 : 1; break;  /* transfer */
+        }
+        out[i].direction   = kind;
+        out[i].counterpart = (uint32_t)(sent ? to : from);
         out[i].amount      = amt;
     }
 
