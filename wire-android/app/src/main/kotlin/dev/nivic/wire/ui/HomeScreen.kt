@@ -40,6 +40,7 @@ fun HomeScreen(
     var showGuardian  by remember { mutableStateOf(false) }
     var showMerchant  by remember { mutableStateOf(false) }
     var showTOTP      by remember { mutableStateOf(false) }
+    var showLoyalty   by remember { mutableStateOf(false) }
     var showSearch    by remember { mutableStateOf(false) }
     var transferToId  by remember { mutableStateOf("") }
     var toast         by remember { mutableStateOf<String?>(null) }
@@ -105,9 +106,10 @@ fun HomeScreen(
                     MiniTile(Icons.Default.Store, "Bán hàng", Modifier.weight(1f)) { showMerchant = true }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MiniTile(Icons.Default.VpnKey, "Mã TT", Modifier.weight(1f)) { showTOTP = true }
-                    MiniTile(Icons.Default.Refresh, "Phục hồi", Modifier.weight(1f)) { }
-                    Spacer(Modifier.weight(2f))
+                    MiniTile(Icons.Default.VpnKey,  "Mã TT",     Modifier.weight(1f)) { showTOTP    = true }
+                    MiniTile(Icons.Default.Star,    "Tích điểm", Modifier.weight(1f)) { showLoyalty = true }
+                    MiniTile(Icons.Default.Refresh, "Phục hồi",  Modifier.weight(1f)) { }
+                    Spacer(Modifier.weight(1f))
                 }
             }
 
@@ -158,6 +160,7 @@ fun HomeScreen(
     if (showQRScan)   QRScanSheet(client, prefs, onDone = { scope.launch { refresh() } }) { showQRScan   = false }
     if (showGuardian) GuardianSheet(client)                                             { showGuardian = false }
     if (showMerchant) MerchantSheet(accountId, merchantsClient, prefs)                 { showMerchant = false }
+    if (showLoyalty)  MyLoyaltySheet(merchantsClient, accountId)                       { showLoyalty  = false }
     if (showTOTP)     TOTPPaySheet(accountId, prefs)                                   { showTOTP     = false }
     if (showSearch)   SearchSheet(
         client     = client,

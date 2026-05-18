@@ -90,6 +90,15 @@ object TOTPStore {
         return load(prefs).keys.mapNotNull { it.removePrefix("uid_").toLongOrNull() }
     }
 
+    // Device-owned secret — auto-generated on first call, persisted in prefs
+    fun getOrCreateOwnSecretB32(prefs: SharedPreferences): String {
+        prefs.getString("own_totp_secret", null)?.let { return it }
+        val secret = ByteArray(20).also { java.security.SecureRandom().nextBytes(it) }
+        val b32 = base32Encode(secret)
+        prefs.edit().putString("own_totp_secret", b32).apply()
+        return b32
+    }
+
     private fun load(prefs: SharedPreferences): MutableMap<String, String> {
         val raw = prefs.getString(PREF_KEY, null) ?: return mutableMapOf()
         val json = runCatching { JSONObject(raw) }.getOrNull() ?: return mutableMapOf()

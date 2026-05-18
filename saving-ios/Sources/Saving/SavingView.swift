@@ -447,9 +447,19 @@ struct TxRow: View {
 
             Spacer()
 
-            Text((tx.direction == .received ? "+" : "−") + tx.amount.vndFormatted)
-                .font(.system(.callout, weight: .semibold))
-                .foregroundStyle(tx.direction == .received ? .green : .white)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text((tx.direction == .received ? "+" : "−") + tx.amount.vndFormatted)
+                    .font(.system(.callout, weight: .semibold))
+                    .foregroundStyle(tx.direction == .received ? .green : .white)
+                if tx.direction == .sent {
+                    let pts = tx.amount / 10_000
+                    if pts > 0 {
+                        Text("+\(pts) điểm")
+                            .font(.caption2)
+                            .foregroundStyle(Color.yellow)
+                    }
+                }
+            }
         }
         .padding(.vertical, 4)
     }
@@ -1879,6 +1889,14 @@ struct OrderRow: View {
                 Text(statusLabel(order.status))
                     .font(.caption2)
                     .foregroundStyle(order.status == "paid" ? .green : .orange)
+                if order.status == "paid" {
+                    let pts = order.amount / 10_000
+                    if pts > 0 {
+                        Text("+\(pts) điểm KH")
+                            .font(.caption2)
+                            .foregroundStyle(Color.yellow)
+                    }
+                }
             }
         }
         .padding(.horizontal, 16)
