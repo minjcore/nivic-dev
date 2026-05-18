@@ -7,7 +7,7 @@ ifeq ($(UNAME), Darwin)
   LDFLAGS = -L/opt/homebrew/lib/postgresql@17 -lpq -lpthread
 else
   CC      = gcc
-  CFLAGS  = -std=c11 -O2 -Wall -Wextra -Iinclude
+  CFLAGS  = -std=c11 -O2 -Wall -Wextra -Iinclude -I/usr/include/postgresql
   LDFLAGS = -lpq -lpthread -lssl -lcrypto
 endif
 
