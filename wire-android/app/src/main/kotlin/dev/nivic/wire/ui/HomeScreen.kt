@@ -40,6 +40,8 @@ fun HomeScreen(
     var showGuardian  by remember { mutableStateOf(false) }
     var showMerchant  by remember { mutableStateOf(false) }
     var showTOTP      by remember { mutableStateOf(false) }
+    var showSearch    by remember { mutableStateOf(false) }
+    var transferToId  by remember { mutableStateOf("") }
     var toast         by remember { mutableStateOf<String?>(null) }
     val scope         = rememberCoroutineScope()
 
@@ -112,6 +114,19 @@ fun HomeScreen(
             Spacer(Modifier.height(120.dp))
         }
 
+        // ── Search FAB ────────────────────────────────────────────────────────
+        FloatingActionButton(
+            onClick           = { showSearch = true },
+            modifier          = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(24.dp),
+            containerColor    = Color.White,
+            contentColor      = Color.Black,
+            shape             = androidx.compose.foundation.shape.CircleShape,
+        ) {
+            Icon(Icons.Default.Search, contentDescription = "Tìm kiếm", modifier = Modifier.size(24.dp))
+        }
+
         // ── Toast ─────────────────────────────────────────────────────────────
         toast?.let { msg ->
             LaunchedEffect(msg) { kotlinx.coroutines.delay(3000); toast = null }
@@ -132,13 +147,23 @@ fun HomeScreen(
         }
     }
 
-    if (showTransfer) TransferSheet(client, onDone = { scope.launch { refresh() } })  { showTransfer = false }
+    if (showTransfer) TransferSheet(
+        client      = client,
+        initialToId = transferToId,
+        onDone      = { scope.launch { refresh() } },
+        onDismiss   = { showTransfer = false; transferToId = "" }
+    )
     if (showHistory)  HistorySheet(client)                                              { showHistory  = false }
     if (showQRRecv)   QRReceiveSheet(accountId)                                         { showQRRecv   = false }
     if (showQRScan)   QRScanSheet(client, prefs, onDone = { scope.launch { refresh() } }) { showQRScan   = false }
     if (showGuardian) GuardianSheet(client)                                             { showGuardian = false }
     if (showMerchant) MerchantSheet(accountId, merchantsClient, prefs)                 { showMerchant = false }
     if (showTOTP)     TOTPPaySheet(accountId, prefs)                                   { showTOTP     = false }
+    if (showSearch)   SearchSheet(
+        client     = client,
+        onTransfer = { id -> transferToId = id; showSearch = false; showTransfer = true },
+        onDismiss  = { showSearch = false }
+    )
 }
 
 @Composable

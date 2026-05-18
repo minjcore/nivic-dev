@@ -16,8 +16,8 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TransferSheet(client: SavingClient, onDone: () -> Unit, onDismiss: () -> Unit) {
-    var toId    by remember { mutableStateOf("") }
+fun TransferSheet(client: SavingClient, initialToId: String = "", onDone: () -> Unit, onDismiss: () -> Unit) {
+    var toId    by remember { mutableStateOf(initialToId) }
     var amount  by remember { mutableStateOf("") }
     var error   by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
