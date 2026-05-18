@@ -35,19 +35,41 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 
 // ─── QR payload types ────────────────────────────────────────────────────────
-// saving://pay?mid=12345&amount=50000&ref=ORDER_REF   → merchant payment
+// saving://pay?mid=12345&amount=50000&ref=ORDER_REF   → simple merchant payment
+// saving://pay?pr=BASE64URL(PaymentRequest JSON)      → signed merchant payment
 // saving://totp-enroll?uid=X&secret=BASE32            → enroll user TOTP
 // saving://totp-pay?uid=X&token=32CHARTOKEN           → TOTP payment token
 
 data class MerchantPayload(val mid: Long, val amount: Long?, val ref: String?) {
     companion object {
         fun parse(raw: String): MerchantPayload? {
-            val uri   = android.net.Uri.parse(raw)
+            val uri = android.net.Uri.parse(raw)
             if (uri.scheme != "saving" || uri.host != "pay") return null
-            val mid   = uri.getQueryParameter("mid")?.toLongOrNull() ?: return null
-            val amount = uri.getQueryParameter("amount")?.toLongOrNull()
-            val ref   = uri.getQueryParameter("ref")
-            return MerchantPayload(mid, amount, ref)
+
+            // Signed PR format: saving://pay?pr=BASE64URL(JSON)
+            uri.getQueryParameter("pr")?.let { pr ->
+                return try {
+                    val json = org.json.JSONObject(
+                        String(android.util.Base64.decode(
+                            pr.replace('-', '+').replace('_', '/'),
+                            android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING
+                        ))
+                    )
+                    MerchantPayload(
+                        mid    = json.getLong("mid"),
+                        amount = json.optLong("amount").takeIf { it > 0 },
+                        ref    = json.optString("order_id").ifEmpty { null }
+                    )
+                } catch (_: Exception) { null }
+            }
+
+            // Simple format: saving://pay?mid=...&amount=...&ref=...
+            val mid = uri.getQueryParameter("mid")?.toLongOrNull() ?: return null
+            return MerchantPayload(
+                mid    = mid,
+                amount = uri.getQueryParameter("amount")?.toLongOrNull(),
+                ref    = uri.getQueryParameter("ref")
+            )
         }
     }
 }
