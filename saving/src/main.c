@@ -6,8 +6,9 @@
 void server_run(DB *db);
 
 int main(int argc, char *argv[]) {
-    const char *conninfo = argc > 1 ? argv[1]
-                                    : "dbname=saving host=localhost";
+    const char *conninfo = argc > 1            ? argv[1]
+                         : getenv("SAVING_DB") ? getenv("SAVING_DB")
+                         :                       "dbname=saving host=localhost";
 
     DB db;
     if (db_open(&db, conninfo) != 0) {

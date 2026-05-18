@@ -2,7 +2,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
-#include <CommonCrypto/CommonHMAC.h>
+#include "crypto_compat.h"
 
 static const char WIRE_SECRET[] = "saving_wire_secret_changeme";
 

@@ -5,7 +5,7 @@
 #include <time.h>
 #include <limits.h>
 #include <pthread.h>
-#include <CommonCrypto/CommonHMAC.h>
+#include "crypto_compat.h"
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>

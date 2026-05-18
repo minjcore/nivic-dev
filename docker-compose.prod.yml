@@ -1,0 +1,42 @@
+services:
+
+  wire:
+    build:
+      context: .
+      dockerfile: saving/Dockerfile
+    environment:
+      SAVING_DB: ${SAVING_DB}
+    restart: unless-stopped
+    networks: [app]
+
+  authservice:
+    build:
+      context: .
+      dockerfile: authservice/Dockerfile
+    environment:
+      WIRE_ADDR: wire:7474
+      JWT_SECRET: ${JWT_SECRET}
+    restart: unless-stopped
+    networks: [app]
+    depends_on: [wire]
+
+  tomcats:
+    build:
+      context: .
+      dockerfile: Tomcats/Dockerfile
+    environment:
+      AUTH_URL:     http://authservice:8091
+      WIRE_ADDR:    wire:7474
+      AMQP_URL:     ${AMQP_URL}
+      JWT_SECRET:   ${JWT_SECRET}
+      TOMCATS_ADDR: :80
+      STATIC_DIR:   /app/static
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    networks: [app]
+    depends_on: [wire, authservice]
+
+networks:
+  app:
+    driver: bridge
