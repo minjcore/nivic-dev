@@ -13,7 +13,8 @@ import (
 type handler struct {
 	store     *Store
 	wireToken string
-	pub       *Publisher // nil when AMQP unavailable
+	pub       *Publisher    // nil when AMQP unavailable
+	iso       *ISO8583Client
 }
 
 func (h *handler) routes() http.Handler {
@@ -63,7 +64,8 @@ func (h *handler) handleList(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /users/{uid}/cards
-// Body: { "last4":"1234", "bank":"VCB", "expiry":"12/27", "label":"Thẻ chính" }
+// Body: { "pan":"4111111111111111", "bank":"VCB", "expiry":"12/27", "label":"Thẻ chính", "holder_name":"NGUYEN VAN A" }
+// pan is optional for display-only cards; when provided it is stored in bank_cards for ISO 8583 processing.
 
 func (h *handler) handleAdd(w http.ResponseWriter, r *http.Request) {
 	if !h.authUID(r) {
@@ -76,17 +78,28 @@ func (h *handler) handleAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Last4  string `json:"last4"`
-		Bank   string `json:"bank"`
-		Expiry string `json:"expiry"`
-		Label  string `json:"label"`
+		PAN        string `json:"pan"`
+		Last4      string `json:"last4"`
+		Bank       string `json:"bank"`
+		Expiry     string `json:"expiry"`
+		Label      string `json:"label"`
+		HolderName string `json:"holder_name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, 400, "bad json")
 		return
 	}
+
+	// Derive last4 and network from PAN when provided
+	if req.PAN != "" {
+		if len(req.PAN) < 13 || len(req.PAN) > 19 {
+			jsonErr(w, 400, "pan must be 13-19 digits")
+			return
+		}
+		req.Last4 = req.PAN[len(req.PAN)-4:]
+	}
 	if len(req.Last4) != 4 || req.Bank == "" || req.Expiry == "" {
-		jsonErr(w, 400, "last4 (4 digits), bank, expiry required")
+		jsonErr(w, 400, "pan or last4 (4 digits), bank, expiry required")
 		return
 	}
 	if !validExpiry(req.Expiry) {
@@ -99,6 +112,16 @@ func (h *handler) handleAdd(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 500, err.Error())
 		return
 	}
+
+	if req.PAN != "" {
+		mm, yy := parseExpiryInts(req.Expiry)
+		network := cardNetwork(req.PAN)
+		if err := h.store.StoreBankCard(id, req.PAN, mm, yy, req.HolderName, network); err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+	}
+
 	jsonOK(w, map[string]any{"card_id": id})
 }
 
@@ -157,6 +180,26 @@ func (h *handler) handleTopUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ── ISO 8583 authorization when card has a stored PAN ─────────────────
+	bc, err := h.store.GetBankCard(card.ID)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if bc != nil && h.iso != nil {
+		isoRes, err := h.iso.Purchase(bc.PAN, bc.ExpiryMM, bc.ExpiryYY, req.Amount, uid)
+		if err != nil {
+			slog.Error("iso8583 purchase failed", "err", err)
+			jsonErr(w, 502, "bank gateway unavailable")
+			return
+		}
+		if isoRes.RC != "00" {
+			jsonErr(w, 402, rcMessage(isoRes.RC))
+			return
+		}
+		slog.Info("iso8583 approved", "auth", isoRes.AuthCode, "uid", uid, "amount", req.Amount)
+	}
+
 	tid := fmt.Sprintf("TU-%d-%d", uid, time.Now().UnixMilli())
 	if err := h.store.CreateTopUp(tid, card.ID, uid, req.Amount); err != nil {
 		jsonErr(w, 500, err.Error())
@@ -167,7 +210,6 @@ func (h *handler) handleTopUp(w http.ResponseWriter, r *http.Request) {
 	if h.pub != nil {
 		evt := TopUpEvent{TopUpID: tid, UID: uid, CardID: card.ID, Amount: req.Amount}
 		if err := h.pub.PublishTopUp(evt); err != nil {
-			// Non-fatal: topup is persisted, can be retried
 			slog.Warn("publish topup event failed", "topup_id", tid, "err", err)
 		}
 	}
@@ -268,4 +310,47 @@ func jsonErr(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+func cardNetwork(pan string) string {
+	if len(pan) == 0 {
+		return ""
+	}
+	switch pan[0] {
+	case '4':
+		return "VISA"
+	case '5':
+		return "MASTERCARD"
+	case '6':
+		return "JCB"
+	}
+	if len(pan) >= 2 && (pan[:2] == "34" || pan[:2] == "37") {
+		return "AMEX"
+	}
+	return "OTHER"
+}
+
+func parseExpiryInts(expiry string) (mm, yy int) {
+	parts := strings.Split(expiry, "/")
+	if len(parts) != 2 {
+		return 0, 0
+	}
+	mm, _ = strconv.Atoi(parts[0])
+	yy, _ = strconv.Atoi(parts[1])
+	return
+}
+
+func rcMessage(rc string) string {
+	switch rc {
+	case "05":
+		return "Giao dịch bị từ chối"
+	case "14":
+		return "Số thẻ không hợp lệ"
+	case "51":
+		return "Số dư không đủ"
+	case "54":
+		return "Thẻ đã hết hạn"
+	default:
+		return fmt.Sprintf("Ngân hàng từ chối (RC=%s)", rc)
+	}
 }

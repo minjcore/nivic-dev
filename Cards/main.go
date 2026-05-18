@@ -21,10 +21,11 @@ func main() {
 	fmt.Println("Card-linking service • :8091")
 	fmt.Println("──────────────────────────────────────────")
 
-	dbPath    := envOr("CARDS_DB",    "cards.db")
-	addr      := envOr("CARDS_ADDR",  ":8091")
-	wireToken := envOr("WIRE_TOKEN",  "change-me-in-production")
-	amqpURL   := envOr("AMQP_URL",   "amqp://guest:guest@localhost:5672/")
+	dbPath      := envOr("CARDS_DB",       "cards.db")
+	addr        := envOr("CARDS_ADDR",    ":8091")
+	wireToken   := envOr("WIRE_TOKEN",    "change-me-in-production")
+	amqpURL     := envOr("AMQP_URL",      "amqp://guest:guest@localhost:5672/")
+	bankGWAddr  := envOr("BANK_GW_ADDR", "127.0.0.1:8095")
 
 	store, err := OpenStore(dbPath)
 	if err != nil {
@@ -57,7 +58,10 @@ func main() {
 		}
 	}
 
-	h := &handler{store: store, wireToken: wireToken, pub: pub}
+	iso := &ISO8583Client{Addr: bankGWAddr}
+	slog.Info("bank-gateway configured", "addr", bankGWAddr)
+
+	h := &handler{store: store, wireToken: wireToken, pub: pub, iso: iso}
 
 	slog.Info("cards-service ready", "addr", addr, "db", dbPath)
 	if err := http.ListenAndServe(addr, h.routes()); err != nil {

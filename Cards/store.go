@@ -28,6 +28,19 @@ type TopUp struct {
 	CreatedAt int64  `json:"created_at"`
 }
 
+// BankCard holds full card credentials for ISO 8583 processing.
+// In production these would be tokenized via an HSM / PCI-DSS vault.
+type BankCard struct {
+	ID         string `json:"id"`          // same as cards.id
+	Network    string `json:"network"`     // VISA | MASTERCARD | JCB | AMEX
+	HolderName string `json:"holder_name"`
+	CreatedAt  int64  `json:"created_at"`
+	// PAN and expiry never returned in API responses
+	PAN      string `json:"-"`
+	ExpiryMM int    `json:"-"`
+	ExpiryYY int    `json:"-"`
+}
+
 type Store struct{ db *sql.DB }
 
 func OpenStore(path string) (*Store, error) {
@@ -55,6 +68,16 @@ func OpenStore(path string) (*Store, error) {
 			amount     INTEGER NOT NULL,
 			status     TEXT    NOT NULL DEFAULT 'pending',
 			created_at INTEGER NOT NULL
+		);
+
+		CREATE TABLE IF NOT EXISTS bank_cards (
+			id          TEXT    PRIMARY KEY REFERENCES cards(id),
+			pan_token   TEXT    NOT NULL,
+			expiry_mm   INTEGER NOT NULL,
+			expiry_yy   INTEGER NOT NULL,
+			holder_name TEXT    NOT NULL DEFAULT '',
+			network     TEXT    NOT NULL DEFAULT '',
+			created_at  INTEGER NOT NULL
 		);
 
 		CREATE TABLE IF NOT EXISTS device_tokens (
@@ -187,4 +210,36 @@ func (s *Store) GetTopUp(id string) (*TopUp, error) {
 		return nil, err
 	}
 	return &t, nil
+}
+
+// ─── Bank cards ───────────────────────────────────────────────────────────────
+
+func (s *Store) StoreBankCard(id, pan string, mm, yy int, holderName, network string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO bank_cards (id, pan_token, expiry_mm, expiry_yy, holder_name, network, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(id) DO UPDATE SET
+		   pan_token   = excluded.pan_token,
+		   expiry_mm   = excluded.expiry_mm,
+		   expiry_yy   = excluded.expiry_yy,
+		   holder_name = excluded.holder_name,
+		   network     = excluded.network`,
+		id, pan, mm, yy, holderName, network, time.Now().Unix(),
+	)
+	return err
+}
+
+func (s *Store) GetBankCard(id string) (*BankCard, error) {
+	row := s.db.QueryRow(
+		`SELECT id, pan_token, expiry_mm, expiry_yy, holder_name, network, created_at
+		 FROM bank_cards WHERE id = ?`, id)
+	var bc BankCard
+	if err := row.Scan(&bc.ID, &bc.PAN, &bc.ExpiryMM, &bc.ExpiryYY,
+		&bc.HolderName, &bc.Network, &bc.CreatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &bc, nil
 }

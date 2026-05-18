@@ -46,7 +46,15 @@ public struct SavingApp: View {
             if granted {
                 await MainActor.run { UIApplication.shared.registerForRemoteNotifications() }
             }
-            try? await client.connect()
+        }
+        .task {
+            // Reconnect loop: retry every 3 s on failure/disconnect
+            while !Task.isCancelled {
+                if !client.isConnected {
+                    try? await client.connect()
+                }
+                try? await Task.sleep(for: .seconds(3))
+            }
         }
     }
 
@@ -69,7 +77,7 @@ struct GateView: View {
     @State private var error: String?
     @State private var loading  = false
 
-    private var canSubmit: Bool { !idText.isEmpty && !password.isEmpty && !loading }
+    private var canSubmit: Bool { !idText.isEmpty && !password.isEmpty && !loading && client.isConnected }
 
     var body: some View {
         ZStack {
@@ -79,6 +87,15 @@ struct GateView: View {
                 Text("SAVING")
                     .font(.system(size: 42, weight: .black, design: .monospaced))
                     .foregroundStyle(.white)
+
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(client.isConnected ? Color.green : Color.orange)
+                        .frame(width: 8, height: 8)
+                    Text(client.isConnected ? "Đã kết nối" : "Đang kết nối...")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 WireField("ID tài khoản", text: $idText)
                     .keyboardType(.numberPad)
