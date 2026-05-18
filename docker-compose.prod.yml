@@ -29,10 +29,10 @@ services:
       WIRE_ADDR:    wire:7474
       AMQP_URL:     ${AMQP_URL}
       JWT_SECRET:   ${JWT_SECRET}
-      TOMCATS_ADDR: :80
+      TOMCATS_ADDR: :8093
       STATIC_DIR:   /app/static
     ports:
-      - "80:80"
+      - "127.0.0.1:8093:8093"
     restart: unless-stopped
     networks: [app]
     depends_on: [wire, authservice]
