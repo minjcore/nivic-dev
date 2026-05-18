@@ -112,7 +112,8 @@ public struct MerchantsClient {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONEncoder().encode(["uid": uid, "name": name])
+        struct OnboardReq: Encodable { let uid: UInt32; let name: String }
+        req.httpBody = try JSONEncoder().encode(OnboardReq(uid: uid, name: name))
         req.timeoutInterval = 10
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse else { throw VerifyError.network("no response") }

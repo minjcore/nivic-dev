@@ -31,13 +31,16 @@ actor WireConnection {
         self.conn = conn
 
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            conn.stateUpdateHandler = { state in
+            conn.stateUpdateHandler = { [weak conn] state in
                 switch state {
                 case .ready:
+                    conn?.stateUpdateHandler = nil
                     cont.resume()
                 case .failed(let err):
+                    conn?.stateUpdateHandler = nil
                     cont.resume(throwing: err)
                 case .cancelled:
+                    conn?.stateUpdateHandler = nil
                     cont.resume(throwing: WireError.disconnected)
                 default:
                     break

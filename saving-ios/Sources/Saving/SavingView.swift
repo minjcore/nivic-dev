@@ -34,7 +34,8 @@ public struct SavingApp: View {
                 HomeView(client: client, accountID: id,
                          onLogout: { session = .gate },
                          merchantsClient: merchantsClient,
-                         cardsClient: cardsClient)
+                         cardsClient: cardsClient,
+                         tomcatsClient: tomcatsClient)
             }
         }
         .preferredColorScheme(.dark)
@@ -65,14 +66,15 @@ struct GateView: View {
 
     @State private var idText   = ""
     @State private var password = ""
-    @State private var isNew    = false
     @State private var error: String?
     @State private var loading  = false
+
+    private var canSubmit: Bool { !idText.isEmpty && !password.isEmpty && !loading }
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            VStack(spacing: 32) {
+            VStack(spacing: 24) {
                 Spacer()
                 Text("SAVING")
                     .font(.system(size: 42, weight: .black, design: .monospaced))
@@ -86,15 +88,14 @@ struct GateView: View {
                     Text(error).font(.caption).foregroundStyle(.red)
                 }
 
-                WirePrimaryButton(title: isNew ? "TẠO VÍ" : "VÀO VÍ", loading: loading,
-                                  disabled: idText.isEmpty || password.isEmpty) {
-                    Task { await submit() }
+                HStack(spacing: 12) {
+                    WirePrimaryButton(title: "VÀO VÍ", loading: loading, disabled: !canSubmit) {
+                        Task { await submit(isNew: false) }
+                    }
+                    WirePrimaryButton(title: "TẠO VÍ", loading: loading, disabled: !canSubmit) {
+                        Task { await submit(isNew: true) }
+                    }
                 }
-
-                Button(isNew ? "Đã có ID? Đăng nhập" : "Tạo ID mới") {
-                    isNew.toggle(); error = nil
-                }
-                .foregroundStyle(.gray).font(.caption)
 
                 Spacer()
             }
@@ -102,7 +103,7 @@ struct GateView: View {
         }
     }
 
-    private func submit() async {
+    private func submit(isNew: Bool) async {
         guard let id = UInt32(idText), AccountID.isValid(id) else {
             error = "ID phải từ 16.777.216 đến 4.294.967.295"; return
         }
@@ -135,6 +136,7 @@ struct HomeView: View {
     let onLogout:        () -> Void
     let merchantsClient: MerchantsClient
     let cardsClient:     CardsClient
+    let tomcatsClient:   TomcatsClient
 
     @State private var balance: UInt64 = 0
     @State private var showTransfer = false
