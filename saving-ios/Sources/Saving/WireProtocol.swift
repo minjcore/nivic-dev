@@ -15,6 +15,9 @@ enum WireType: UInt8 {
     case recoveryReq     = 0x14
     case recoveryApprove = 0x15
     case getHistory      = 0x16
+    case createIntent    = 0x20
+    case payIntent       = 0x21
+    case enrollTotp      = 0x22
 
     // Server → Client (responses)
     case pong            = 0x80
@@ -40,8 +43,10 @@ enum WireCode: UInt8 {
     case errLowBalance   = 0x08
     case errGuardianFull = 0x09
     case errNotGuardian  = 0x0A
-    case errNeedGuardians = 0x0B
-    case errInternal     = 0xFF
+    case errNeedGuardians  = 0x0B
+    case errTotpInvalid    = 0x0C
+    case errIntentSettled  = 0x0D
+    case errInternal       = 0xFF
 }
 
 // ─── Account ID constraints ────────────────────────────────────────────────
@@ -173,6 +178,38 @@ extension WireFrame {
 
     static func logout(token: Data, seq: UInt32) -> WireFrame {
         WireFrame(type: .logout, seq: seq, body: token)
+    }
+
+    /* CREATE_INTENT  body: [token 32B][request_id 8B][order_id 8B][amount 8B] */
+    static func createIntent(token: Data, requestID: UInt64, orderID: UInt64,
+                              amount: UInt64, seq: UInt32) -> WireFrame {
+        var body = Data()
+        body.append(token)
+        body.appendBigEndian(requestID)
+        body.appendBigEndian(orderID)
+        body.appendBigEndian(amount)
+        return WireFrame(type: .createIntent, seq: seq, body: body)
+    }
+
+    /* PAY_INTENT  body: [token 32B][merchant_id 4B][request_id 8B][totp_code 4B] */
+    static func payIntent(token: Data, merchantID: UInt32, requestID: UInt64,
+                          totpCode: UInt32, seq: UInt32) -> WireFrame {
+        var body = Data()
+        body.append(token)
+        body.appendBigEndian(merchantID)
+        body.appendBigEndian(requestID)
+        body.appendBigEndian(totpCode)
+        return WireFrame(type: .payIntent, seq: seq, body: body)
+    }
+
+    /* ENROLL_TOTP  body: [token 32B][customer_id 4B][secret 20B] */
+    static func enrollTotp(token: Data, customerID: UInt32, secret: Data,
+                            seq: UInt32) -> WireFrame {
+        var body = Data()
+        body.append(token)
+        body.appendBigEndian(customerID)
+        body.append(secret.prefix(20))
+        return WireFrame(type: .enrollTotp, seq: seq, body: body)
     }
 }
 

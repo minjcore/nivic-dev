@@ -142,6 +142,47 @@ public final class SavingClient: ObservableObject {
         return txs
     }
 
+    // ─── Payment Intents ─────────────────────────────────────────────────────
+
+    public struct IntentResult {
+        public let mid: UInt32
+        public let requestID: UInt64
+        public let amount: UInt64
+    }
+
+    /// Merchant creates a payment intent. requestID and orderID must be unique per merchant.
+    public func createIntent(requestID: UInt64, orderID: UInt64, amount: UInt64) async throws -> IntentResult {
+        let token = try requireToken()
+        let frame = WireFrame.createIntent(token: token, requestID: requestID,
+                                           orderID: orderID, amount: amount, seq: nextSeq())
+        let ack = try await conn.send(frame).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+        /* extra: [status 1B][mid 4B][request_id 8B][amount 8B] = 21 bytes */
+        guard ack.data.count >= 21 else { throw WireError.badFrame("short intent reply") }
+        let mid       = ack.data.readBigEndianUInt32(at: 1)
+        let rid       = ack.data.readBigEndianUInt64(at: 5)
+        let amt       = ack.data.readBigEndianUInt64(at: 13)
+        return IntentResult(mid: mid, requestID: rid, amount: amt)
+    }
+
+    /// Customer pays a payment intent with their TOTP code.
+    public func payIntent(merchantID: UInt32, requestID: UInt64, totpCode: UInt32) async throws {
+        let token = try requireToken()
+        let frame = WireFrame.payIntent(token: token, merchantID: merchantID,
+                                        requestID: requestID, totpCode: totpCode, seq: nextSeq())
+        let ack = try await conn.send(frame).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+    }
+
+    /// Merchant enrolls a TOTP secret for a customer.
+    public func enrollTotp(customerID: UInt32, secret: Data) async throws {
+        let token = try requireToken()
+        let frame = WireFrame.enrollTotp(token: token, customerID: customerID,
+                                          secret: secret, seq: nextSeq())
+        let ack = try await conn.send(frame).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+    }
+
     // ─── Guardians ───────────────────────────────────────────────────────────
 
     public func addGuardian(id: UInt32) async throws {

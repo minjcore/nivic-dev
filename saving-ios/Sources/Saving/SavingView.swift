@@ -255,7 +255,7 @@ struct HomeView: View {
             CardManagementSheet(cardsClient: cardsClient, uid: accountID) { await refreshBalance() }
         }
         .sheet(isPresented: $showMerchant) {
-            MerchantSheet(merchantsClient: merchantsClient, uid: accountID)
+            MerchantSheet(merchantsClient: merchantsClient, savingClient: client, uid: accountID)
         }
         .sheet(isPresented: $showLoyalty) {
             MyLoyaltySheet(merchantsClient: merchantsClient, uid: accountID)
@@ -1636,6 +1636,7 @@ private struct AddCardSheet: View {
 
 struct MerchantSheet: View {
     let merchantsClient: MerchantsClient
+    let savingClient: SavingClient
     let uid: UInt32
 
     @AppStorage("merchant_token")  private var savedToken = ""
@@ -1649,7 +1650,7 @@ struct MerchantSheet: View {
                 savedToken = token
             })
         } else {
-            MerchantDashboardView(merchantsClient: merchantsClient,
+            MerchantDashboardView(merchantsClient: merchantsClient, savingClient: savingClient,
                                   uid: uid, name: savedName, token: savedToken)
         }
     }
@@ -1870,6 +1871,7 @@ struct MerchantOnboardingView: View {
 
 struct MerchantDashboardView: View {
     let merchantsClient: MerchantsClient
+    let savingClient: SavingClient
     let uid: UInt32
     let name: String
     let token: String
@@ -1956,7 +1958,8 @@ struct MerchantDashboardView: View {
             .navigationTitle(name)
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showCreateOrder, onDismiss: { Task { await load() } }) {
-                CreateOrderSheet(merchantsClient: merchantsClient, mid: uid, token: token)
+                CreateOrderSheet(merchantsClient: merchantsClient, savingClient: savingClient,
+                                 mid: uid, token: token)
             }
             .sheet(isPresented: $showLoyalty) {
                 LoyaltyMembersSheet(members: members)
@@ -2047,6 +2050,7 @@ struct OrderRow: View {
 
 struct CreateOrderSheet: View {
     let merchantsClient: MerchantsClient
+    let savingClient: SavingClient
     let mid: UInt32
     let token: String
 
@@ -2163,22 +2167,22 @@ struct CreateOrderSheet: View {
 
     private func create() async {
         guard let amount = UInt64(amountText) else { return }
-        let pts = Int64(discountPoints) ?? 0
         loading = true; error = nil
         defer { loading = false }
         do {
-            let resp = try await merchantsClient.createOrder(
-                mid: mid, token: token, amount: amount, note: note, discountPoints: pts)
-            qrPayload = resp.pr
-        } catch let e as VerifyError {
-            error = e.localizedDescription
+            let requestID = UInt64(Date().timeIntervalSince1970 * 1000)
+            let orderID   = requestID  /* use same value as simple unique key */
+            let intent = try await savingClient.createIntent(
+                requestID: requestID, orderID: orderID, amount: amount)
+            /* QR encodes saving://intent?mid=X&rid=Y so customer can PAY_INTENT */
+            qrPayload = "saving://intent?mid=\(intent.mid)&rid=\(intent.requestID)&amount=\(intent.amount)"
         } catch {
             self.error = error.localizedDescription
         }
     }
 
     private func generateQR(_ payload: String) -> UIImage? {
-        let data = "saving://pay?pr=\(payload)".data(using: .utf8)
+        let data = payload.data(using: .utf8)   /* payload is already a full saving:// URL */
         guard let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
         filter.setValue(data, forKey: "inputMessage")
         filter.setValue("M", forKey: "inputCorrectionLevel")
