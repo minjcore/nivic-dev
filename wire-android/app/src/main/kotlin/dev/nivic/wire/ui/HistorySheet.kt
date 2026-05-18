@@ -18,30 +18,40 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.nivic.wire.data.SavingClient
 import dev.nivic.wire.data.Transaction
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistorySheet(client: SavingClient, onDismiss: () -> Unit) {
     var txs     by remember { mutableStateOf<List<Transaction>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
+    val scope   = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
+    suspend fun load() {
+        loading = true
         txs     = runCatching { client.history() }.getOrDefault(emptyList())
         loading = false
     }
+
+    LaunchedEffect(Unit) { load() }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor   = Color(0xFF111111)
     ) {
         Column(Modifier.fillMaxWidth().height(500.dp)) {
-            Text(
-                "Lịch sử",
-                modifier   = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-                color      = Color.White,
-                fontWeight = FontWeight.SemiBold,
-                fontSize   = 16.sp
-            )
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Text("Lịch sử", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                if (!loading) {
+                    TextButton(onClick = { scope.launch { load() } }) {
+                        Text("Làm mới", color = Color.Gray, fontSize = 13.sp)
+                    }
+                }
+            }
             when {
                 loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Color.White, modifier = Modifier.size(32.dp))
