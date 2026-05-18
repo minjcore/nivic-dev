@@ -19,6 +19,7 @@ func main() {
 	wireAddr     := env("WIRE_ADDR",     "127.0.0.1:7474")
 	staticDir    := env("STATIC_DIR",   "static")
 	merchantsURL := env("MERCHANTS_URL", "http://127.0.0.1:8090")
+	floatPwd     := env("FLOAT_PWD",     "float123")
 
 	store, err := OpenStore(dbPath)
 	if err != nil {
@@ -49,7 +50,7 @@ func main() {
 	go ConsumeEvents(conn, store, apns, fcm)
 
 	slog.Info("tomcats http", "addr", addr)
-	if err := http.ListenAndServe(addr, routes(store, authURL, wireAddr, staticDir, merchantsURL)); err != nil {
+	if err := http.ListenAndServe(addr, routes(store, authURL, wireAddr, staticDir, merchantsURL, floatPwd)); err != nil {
 		slog.Error("http", "err", err)
 	}
 }

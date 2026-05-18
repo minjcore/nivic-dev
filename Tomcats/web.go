@@ -11,7 +11,7 @@ import (
 	"net/url"
 )
 
-func addWebRoutes(mux *http.ServeMux, authURL, wireAddr, staticDir string) {
+func addWebRoutes(mux *http.ServeMux, authURL, wireAddr, staticDir, floatPwd string) {
 	mux.Handle("GET /", http.FileServer(http.Dir(staticDir)))
 
 	// ── Register ───────────────────────────────────────────────────────────────
@@ -105,6 +105,32 @@ func addWebRoutes(mux *http.ServeMux, authURL, wireAddr, staticDir string) {
 			return
 		}
 		writeJSON(w, txs)
+	})
+
+	// ── Topup (float account → user) ──────────────────────────────────────────
+	mux.HandleFunc("POST /api/topup", func(w http.ResponseWriter, r *http.Request) {
+		c, ok := requireJWT(w, r)
+		if !ok {
+			return
+		}
+		var req struct {
+			Amount uint64 `json:"amount"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Amount == 0 {
+			http.Error(w, "amount required", http.StatusBadRequest)
+			return
+		}
+		floatHash := sha256.Sum256([]byte(floatPwd))
+		floatToken, err := wireLogin(wireAddr, 1, floatHash[:])
+		if err != nil {
+			http.Error(w, "float login failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if err := wireCashIn(wireAddr, floatToken, c.UID, req.Amount); err != nil {
+			writeWireErr(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 
 	mux.HandleFunc("POST /api/transfer", func(w http.ResponseWriter, r *http.Request) {

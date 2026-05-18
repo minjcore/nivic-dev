@@ -19,6 +19,7 @@ const (
 	msgGetBalance    byte = 0x12
 	msgGetHistory    byte = 0x16
 	msgTransfer      byte = 0x11
+	msgCashIn        byte = 0x24
 
 	codeOK byte = 0x00
 )
@@ -197,6 +198,28 @@ func wireTransfer(addr string, token []byte, toID uint32, amount uint64) error {
 	binary.BigEndian.PutUint64(body[36:44], amount)
 
 	resp, err := w.rpc(msgTransfer, body)
+	if err != nil {
+		return err
+	}
+	if len(resp) < 1 || resp[0] != codeOK {
+		return wireCodeErr(resp)
+	}
+	return nil
+}
+
+func wireCashIn(addr string, floatToken []byte, toUID uint32, amount uint64) error {
+	w, err := dialWire(addr)
+	if err != nil {
+		return err
+	}
+	defer w.close()
+
+	body := make([]byte, 44)
+	copy(body[0:32], floatToken)
+	binary.BigEndian.PutUint32(body[32:36], toUID)
+	binary.BigEndian.PutUint64(body[36:44], amount)
+
+	resp, err := w.rpc(msgCashIn, body)
 	if err != nil {
 		return err
 	}

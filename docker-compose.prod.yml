@@ -45,6 +45,7 @@ services:
       TOMCATS_ADDR:    :8093
       STATIC_DIR:      /app/static
       MERCHANTS_URL:   http://merchants:8090
+      FLOAT_PWD:       ${FLOAT_PWD:-float123}
     ports:
       - "127.0.0.1:8093:8093"
     restart: unless-stopped
