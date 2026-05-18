@@ -230,7 +230,7 @@ int64_t db_account_balance(DB *db, uint32_t id) {
      * The transfers table is the single source of truth; accounts.balance is
      * no longer written after the seed migration in db_open. */
     static const char SQL[] =
-        "SELECT COALESCE(SUM(CASE WHEN to_id = $1 THEN amount ELSE -amount END), 0)"
+        "SELECT CAST(COALESCE(SUM(CASE WHEN to_id = $1 THEN amount ELSE -amount END), 0) AS BIGINT)"
         " FROM transfers"
         " WHERE from_id = $1 OR to_id = $1";
 
@@ -257,9 +257,9 @@ int64_t db_account_balance(DB *db, uint32_t id) {
 int db_account_balance_detail(DB *db, uint32_t id, BalanceDetail *out) {
     static const char SQL[] =
         "SELECT"
-        "  COALESCE(SUM(CASE WHEN to_id = $1 THEN amount ELSE -amount END), 0),"
-        "  COALESCE((SELECT SUM(amount) FROM payment_intents"
-        "            WHERE mid = $1 AND status = 0), 0),"
+        "  CAST(COALESCE(SUM(CASE WHEN to_id = $1 THEN amount ELSE -amount END), 0) AS BIGINT),"
+        "  CAST(COALESCE((SELECT SUM(amount) FROM payment_intents"
+        "            WHERE mid = $1 AND status = 0), 0) AS BIGINT),"
         "  COUNT(*)"
         " FROM transfers"
         " WHERE from_id = $1 OR to_id = $1";
@@ -309,7 +309,7 @@ int db_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount, int t
     static const char SQL[] =
         "WITH"
         "  bal AS ("
-        "    SELECT COALESCE(SUM(CASE WHEN to_id = $2 THEN amount ELSE -amount END), 0) AS v"
+        "    SELECT CAST(COALESCE(SUM(CASE WHEN to_id = $2 THEN amount ELSE -amount END), 0) AS BIGINT) AS v"
         "    FROM transfers WHERE from_id = $2 OR to_id = $2"
         "  ),"
         "  ins AS ("
