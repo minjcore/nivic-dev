@@ -1978,6 +1978,7 @@ struct MerchantDashboardView: View {
     private func load() async {
         loading = true
         defer { loading = false }
+        try? await savingClient.registerMerchant(name: name)
         async let s = try? merchantsClient.stats(mid: uid, token: token)
         async let o = (try? merchantsClient.listOrders(mid: uid, token: token)) ?? []
         async let m = (try? merchantsClient.loyaltyMembers(mid: uid, token: token)) ?? []
