@@ -23,7 +23,7 @@ data class MerchantOrder(
 
 data class CreateOrderResult(val orderID: String, val pr: String, val qrURL: String)
 
-class MerchantsClient(private val baseURL: String = "http://10.0.2.2:8090") {
+class MerchantsClient(private val baseURL: String = "http://127.0.0.1:8090") {
 
     suspend fun onboard(uid: Long, name: String): String = withContext(Dispatchers.IO) {
         val body = JSONObject().apply { put("uid", uid); put("name", name) }.toString()

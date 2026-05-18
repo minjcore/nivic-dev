@@ -22,7 +22,7 @@ sealed class SavingEvent {
 }
 
 class SavingClient(
-    host: String = "10.0.2.2",   // 10.0.2.2 = host machine from Android emulator
+    host: String = "127.0.0.1",
     port: Int    = 7474
 ) {
     private val conn  = WireConnection(host, port, SECRET.toByteArray())

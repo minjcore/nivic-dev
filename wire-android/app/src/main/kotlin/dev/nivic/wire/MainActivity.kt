@@ -32,7 +32,9 @@ private fun WireRoot() {
     var session          by remember { mutableStateOf<Long?>(null) }
 
     LaunchedEffect(Unit) {
-        runCatching { client.connect() }
+        runCatching { client.connect() }.onFailure {
+            android.util.Log.e("WireConnect", "connect failed: ${it.javaClass.name}: ${it.message}", it)
+        }
     }
 
     if (session == null) {
