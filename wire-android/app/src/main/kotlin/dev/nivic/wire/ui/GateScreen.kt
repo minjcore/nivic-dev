@@ -72,6 +72,7 @@ fun GateScreen(client: SavingClient, onLogin: (Long) -> Unit) {
                     }
                     loading = true; error = null
                     try {
+                        if (!client.isConnected.value) client.connect()
                         if (isNew) client.createAccount(id, password)
                         client.login(id, password)
                         onLogin(id)
