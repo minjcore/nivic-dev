@@ -5,9 +5,10 @@ import (
 	"net/http"
 )
 
-func routes(store *Store, authURL, wireAddr, staticDir string) http.Handler {
+func routes(store *Store, authURL, wireAddr, staticDir, merchantsURL string) http.Handler {
 	mux := http.NewServeMux()
 	addWebRoutes(mux, authURL, wireAddr, staticDir)
+	addMerchantsProxy(mux, merchantsURL)
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})

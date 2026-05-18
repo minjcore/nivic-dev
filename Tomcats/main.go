@@ -15,9 +15,10 @@ func main() {
 	amqpURL   := env("AMQP_URL",     "amqp://admin:admin@localhost:5672/")
 	addr      := env("TOMCATS_ADDR", ":8093")
 	dbPath    := env("TOMCATS_DB",   "tomcats.db")
-	authURL   := env("AUTH_URL",     "http://127.0.0.1:8091")
-	wireAddr  := env("WIRE_ADDR",    "127.0.0.1:7474")
-	staticDir := env("STATIC_DIR",   "static")
+	authURL      := env("AUTH_URL",      "http://127.0.0.1:8091")
+	wireAddr     := env("WIRE_ADDR",     "127.0.0.1:7474")
+	staticDir    := env("STATIC_DIR",   "static")
+	merchantsURL := env("MERCHANTS_URL", "http://127.0.0.1:8090")
 
 	store, err := OpenStore(dbPath)
 	if err != nil {
@@ -48,7 +49,7 @@ func main() {
 	go ConsumeEvents(conn, store, apns, fcm)
 
 	slog.Info("tomcats http", "addr", addr)
-	if err := http.ListenAndServe(addr, routes(store, authURL, wireAddr, staticDir)); err != nil {
+	if err := http.ListenAndServe(addr, routes(store, authURL, wireAddr, staticDir, merchantsURL)); err != nil {
 		slog.Error("http", "err", err)
 	}
 }

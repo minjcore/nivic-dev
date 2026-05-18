@@ -7,6 +7,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 )
 
 func addWebRoutes(mux *http.ServeMux, authURL, wireAddr, staticDir string) {
@@ -125,6 +127,18 @@ func addWebRoutes(mux *http.ServeMux, authURL, wireAddr, staticDir string) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
+}
+
+func addMerchantsProxy(mux *http.ServeMux, merchantsURL string) {
+	target, err := url.Parse(merchantsURL)
+	if err != nil {
+		slog.Error("invalid MERCHANTS_URL", "err", err)
+		return
+	}
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	for _, prefix := range []string{"/merchants/", "/orders/", "/loyalty/", "/payment_request/"} {
+		mux.Handle(prefix, proxy)
+	}
 }
 
 func requireJWT(w http.ResponseWriter, r *http.Request) (*Claims, bool) {

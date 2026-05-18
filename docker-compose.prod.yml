@@ -22,6 +22,17 @@ services:
     networks: [app]
     depends_on: [wire]
 
+  merchants:
+    build:
+      context: .
+      dockerfile: Merchants/Dockerfile
+    environment:
+      MERCHANTS_DB: /data/merchants.db
+    volumes:
+      - merchants_data:/data
+    restart: unless-stopped
+    networks: [app]
+
   tomcats:
     build:
       context: .
@@ -31,14 +42,18 @@ services:
       WIRE_ADDR:    wire:7474
       AMQP_URL:     ${AMQP_URL}
       JWT_SECRET:   ${JWT_SECRET}
-      TOMCATS_ADDR: :8093
-      STATIC_DIR:   /app/static
+      TOMCATS_ADDR:    :8093
+      STATIC_DIR:      /app/static
+      MERCHANTS_URL:   http://merchants:8090
     ports:
       - "127.0.0.1:8093:8093"
     restart: unless-stopped
     networks: [app]
-    depends_on: [wire, authservice]
+    depends_on: [wire, authservice, merchants]
 
 networks:
   app:
     driver: bridge
+
+volumes:
+  merchants_data:
