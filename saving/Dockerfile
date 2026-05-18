@@ -1,6 +1,6 @@
 FROM debian:bookworm-slim AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc make libpq-dev libssl-dev && rm -rf /var/lib/apt/lists/*
+    build-essential libpq-dev libssl-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 COPY saving/ .
 RUN make
