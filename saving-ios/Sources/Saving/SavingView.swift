@@ -1350,7 +1350,7 @@ struct IntentPaySheet: View {
                 Text("#\(mid)").font(.title2.bold().monospaced()).foregroundStyle(.white)
             }
 
-            Text(formatVND(amount))
+            Text(amount.vndFormatted)
                 .font(.system(size: 36, weight: .black)).foregroundStyle(.white)
 
             if let err = error {
