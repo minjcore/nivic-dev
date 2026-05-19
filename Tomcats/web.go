@@ -55,6 +55,11 @@ func addWebRoutes(mux *http.ServeMux, authURL, wireAddr, staticDir, floatPwd str
 			http.Error(w, "invalid auth response", http.StatusInternalServerError)
 			return
 		}
+		if claims, err := verifyClaims(data.Token); err == nil {
+			if wt, err := claims.wireToken(); err == nil {
+				store.SaveWireToken(data.UID, wt)
+			}
+		}
 		http.SetCookie(w, &http.Cookie{
 			Name:     "token",
 			Value:    data.Token,
@@ -173,27 +178,21 @@ func addWebRoutes(mux *http.ServeMux, authURL, wireAddr, staticDir, floatPwd str
 			http.Error(w, "mã OTP không hợp lệ hoặc đã hết hạn", http.StatusUnauthorized)
 			return
 		}
-		// Forward to auth service to get wire token + JWT
-		body, _ := json.Marshal(map[string]any{"uid": *uid, "email_login": true})
-		resp, err := http.Post(authURL+"/email-login", "application/json", bytes.NewReader(body))
-		if err != nil || resp.StatusCode != http.StatusOK {
-			http.Error(w, "auth service unavailable", http.StatusServiceUnavailable)
+		wt, ok := store.GetWireToken(*uid)
+		if !ok {
+			http.Error(w, "no session found, please login with password first", http.StatusUnauthorized)
 			return
 		}
-		defer resp.Body.Close()
-		var data struct {
-			Token string `json:"token"`
-			UID   uint32 `json:"uid"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&data); err != nil || data.Token == "" {
-			http.Error(w, "invalid auth response", http.StatusInternalServerError)
+		token, err := issueJWT(*uid, wt)
+		if err != nil {
+			http.Error(w, "jwt error", http.StatusInternalServerError)
 			return
 		}
 		http.SetCookie(w, &http.Cookie{
-			Name: "token", Value: data.Token, Path: "/",
+			Name: "token", Value: token, Path: "/",
 			HttpOnly: true, SameSite: http.SameSiteLaxMode,
 		})
-		writeJSON(w, map[string]any{"uid": data.UID})
+		writeJSON(w, map[string]any{"uid": *uid})
 	})
 
 	mux.HandleFunc("POST /api/logout", func(w http.ResponseWriter, r *http.Request) {
