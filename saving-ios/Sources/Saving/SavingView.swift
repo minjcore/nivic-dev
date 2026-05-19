@@ -1123,6 +1123,7 @@ struct QRScanSheet: View {
         case ready(MerchantPayload)
         case totpEnroll(uid: UInt32, secretB32: String)
         case totpPay(uid: UInt32, token: String, isValid: Bool)
+        case intentPay(mid: UInt32, requestID: UInt64, amount: UInt64)
         case failed(String)
     }
 
@@ -1145,6 +1146,11 @@ struct QRScanSheet: View {
                     totpEnrollSuccessView(uid: uid)
                 case .totpPay(let uid, let token, let isValid):
                     totpPayResultView(uid: uid, token: token, isValid: isValid)
+                case .intentPay(let mid, let requestID, let amount):
+                    IntentPaySheet(client: client, mid: mid, requestID: requestID, amount: amount) {
+                        Task { await onDone() }
+                        dismiss()
+                    }
                 case .failed(let msg):
                     failedView(msg)
                 }
@@ -1190,6 +1196,13 @@ struct QRScanSheet: View {
                     let secret  = TOTPEnrollmentStore.secret(for: uid)
                     let isValid = secret.map { TOTP.verify(secret: $0, token: token) } ?? false
                     state = .totpPay(uid: uid, token: token, isValid: isValid)
+                } else if let comps = URLComponents(string: raw),
+                          comps.scheme == "saving", comps.host == "intent",
+                          let midStr = comps.queryItems?.first(where: { $0.name == "mid" })?.value,
+                          let ridStr = comps.queryItems?.first(where: { $0.name == "rid" })?.value,
+                          let amtStr = comps.queryItems?.first(where: { $0.name == "amount" })?.value,
+                          let mid = UInt32(midStr), let rid = UInt64(ridStr), let amt = UInt64(amtStr) {
+                    state = .intentPay(mid: mid, requestID: rid, amount: amt)
                 } else if let payload = MerchantPayload.parse(raw) {
                     if payload.paymentReq != nil {
                         state = .verifying(payload)
@@ -1241,6 +1254,7 @@ struct QRScanSheet: View {
         case .ready:       return "Xác nhận thanh toán"
         case .totpEnroll:  return "Đăng ký TOTP"
         case .totpPay(_, _, let ok): return ok ? "Xác thực thành công" : "Xác thực thất bại"
+        case .intentPay:   return "Xác nhận đơn hàng"
         case .failed:      return "Lỗi"
         }
     }
@@ -1312,6 +1326,82 @@ struct QRScanSheet: View {
 // ══════════════════════════════════════════════════════════════════════════════
 //  MARK: - Merchant pay confirmation
 // ══════════════════════════════════════════════════════════════════════════════
+
+// MARK: - Wire Intent Pay
+
+struct IntentPaySheet: View {
+    let client:    SavingClient
+    let mid:       UInt32
+    let requestID: UInt64
+    let amount:    UInt64
+    let onDone:    () -> Void
+
+    @State private var error:   String?
+    @State private var loading  = false
+    @State private var success  = false
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "storefront")
+                .font(.system(size: 56)).foregroundStyle(.white.opacity(0.85))
+
+            VStack(spacing: 4) {
+                Text("Người bán").font(.caption).foregroundStyle(.gray)
+                Text("#\(mid)").font(.title2.bold().monospaced()).foregroundStyle(.white)
+            }
+
+            Text(formatVND(amount))
+                .font(.system(size: 36, weight: .black)).foregroundStyle(.white)
+
+            if let err = error {
+                Text(err).foregroundStyle(.red).font(.callout)
+            }
+
+            if success {
+                Label("Thanh toán thành công!", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green).font(.headline)
+            } else {
+                Button {
+                    Task {
+                        let secret = TOTPManager.shared.secret
+                        loading = true; error = nil
+                        do {
+                            let code = TOTP.generateCode(secret: secret)
+                            try await client.payIntent(merchantID: mid, requestID: requestID, totpCode: code)
+                            success = true
+                            try? await Task.sleep(nanoseconds: 1_500_000_000)
+                            onDone()
+                        } catch WireError.serverError(let c) {
+                            switch c {
+                            case .errLowBalance:    error = "Không đủ số dư"
+                            case .errTotpInvalid:   error = "Mã TOTP không hợp lệ — cần đăng ký TOTP trước"
+                            case .errIntentSettled: error = "Đơn đã thanh toán rồi"
+                            case .errNotFound:      error = "Chưa đăng ký TOTP với shop này"
+                            default:                error = "Lỗi: \(c)"
+                            }
+                        } catch { self.error = error.localizedDescription }
+                        loading = false
+                    }
+                } label: {
+                    if loading {
+                        ProgressView().tint(.black)
+                    } else {
+                        Text("XÁC NHẬN THANH TOÁN").fontWeight(.semibold)
+                    }
+                }
+                .frame(maxWidth: .infinity).frame(height: 52)
+                .background(.white).foregroundStyle(.black)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .disabled(loading)
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black)
+    }
+}
+
+// MARK: - Merchant Pay
 
 struct MerchantPaySheet: View {
     let client:          SavingClient

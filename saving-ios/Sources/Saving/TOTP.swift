@@ -70,6 +70,22 @@ enum TOTP {
         return false
     }
 
+    /* RFC 6238 dynamic truncation → 6-digit UInt32, matches C server totp_verify */
+    static func generateCode(secret: Data, at date: Date = Date()) -> UInt32 {
+        let counter = Int64(date.timeIntervalSince1970) / step
+        var bigEndian = counter.bigEndian
+        let msg = Data(bytes: &bigEndian, count: 8)
+        let key = SymmetricKey(data: secret)
+        let mac = HMAC<SHA256>.authenticationCode(for: msg, using: key)
+        let hash = Array(mac)
+        let offset = Int(hash[hash.count - 1] & 0x0f)
+        let code = (UInt32(hash[offset]     & 0x7f) << 24) |
+                   (UInt32(hash[offset + 1])         << 16) |
+                   (UInt32(hash[offset + 2])         <<  8) |
+                    UInt32(hash[offset + 3])
+        return code % 1_000_000
+    }
+
     static func secondsRemaining(at date: Date = Date()) -> Int {
         let elapsed = Int(date.timeIntervalSince1970) % Int(step)
         return Int(step) - elapsed
