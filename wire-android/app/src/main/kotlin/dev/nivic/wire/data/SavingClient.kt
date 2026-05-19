@@ -136,8 +136,8 @@ class SavingClient(
         if (data.isEmpty()) return emptyList()
         val count = data[0].toInt() and 0xFF
         return (0 until count).mapNotNull { i ->
-            val base = 1 + i * 13
-            if (base + 13 > data.size) return@mapNotNull null
+            val base = 1 + i * 21  // 1B direction + 4B counterpart + 8B amount + 8B after_balance
+            if (base + 21 > data.size) return@mapNotNull null
             Transaction(
                 direction     = when (data[base].toInt() and 0xFF) {
                     0 -> Transaction.Direction.SENT
