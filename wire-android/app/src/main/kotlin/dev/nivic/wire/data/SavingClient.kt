@@ -89,6 +89,14 @@ class SavingClient(
 
     // ─── Payment Intent ───────────────────────────────────────────────────────
 
+    suspend fun enrollTotp(customerId: Long, secretB32: String) {
+        val secret = dev.nivic.wire.ui.base32Decode(secretB32)
+        val ack = conn.send(
+            WireFrame.enrollTotp(requireToken(), customerId, secret, conn.nextSeq())
+        ).parseAck()
+        if (ack.code != WireCode.OK) throw WireError(ack.code)
+    }
+
     suspend fun registerMerchant(name: String) {
         val ack = conn.send(
             WireFrame.registerMerchant(requireToken(), name, conn.nextSeq())

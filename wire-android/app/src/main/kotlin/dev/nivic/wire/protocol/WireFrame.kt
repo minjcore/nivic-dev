@@ -133,6 +133,10 @@ fun WireFrame.Companion.logout(token: ByteArray, seq: Int) =
 fun WireFrame.Companion.ping(seq: Int) =
     WireFrame(WireCmd.PING, seq)
 
+/* ENROLL_TOTP  body: [merchant_token 32B][customer_id 4B][secret 20B] */
+fun WireFrame.Companion.enrollTotp(token: ByteArray, customerId: Long, secret: ByteArray, seq: Int) =
+    WireFrame(WireCmd.ENROLL_TOTP, seq, token + customerId.toUInt32Bytes() + secret)
+
 /* REGISTER_MERCHANT  body: [token 32B][name N bytes] */
 fun WireFrame.Companion.registerMerchant(token: ByteArray, name: String, seq: Int) =
     WireFrame(WireCmd.REGISTER_MERCHANT, seq, token + name.toByteArray(Charsets.UTF_8))

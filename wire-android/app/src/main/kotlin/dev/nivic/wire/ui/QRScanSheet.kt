@@ -176,9 +176,10 @@ fun QRScanSheet(
                 }
                 enrollPayload != null -> {
                     TOTPEnrollContent(
-                        p      = enrollPayload!!,
-                        prefs  = prefs,
-                        onDone = { enrollPayload = null; onDismiss() }
+                        p          = enrollPayload!!,
+                        prefs      = prefs,
+                        wireClient = client,
+                        onDone     = { enrollPayload = null; onDismiss() }
                     )
                 }
                 totpPayload != null -> {
@@ -235,12 +236,16 @@ fun QRScanSheet(
 
 @Composable
 private fun TOTPEnrollContent(
-    p:      TOTPEnrollPayload,
-    prefs:  android.content.SharedPreferences,
-    onDone: () -> Unit,
+    p:          TOTPEnrollPayload,
+    prefs:      android.content.SharedPreferences,
+    wireClient: SavingClient,
+    onDone:     () -> Unit,
 ) {
+    var enrollError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         TOTPStore.save(prefs, p.uid, p.secretB32)
+        runCatching { wireClient.enrollTotp(p.uid.toLong(), p.secretB32) }
+            .onFailure { enrollError = it.message }
     }
     Column(
         Modifier.fillMaxWidth().padding(24.dp),
@@ -254,6 +259,9 @@ private fun TOTPEnrollContent(
         Text("UID #${p.uid} đã được lưu.\nLần sau chỉ cần quét mã thanh toán.",
             color = Color.Gray, fontSize = 14.sp,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        enrollError?.let {
+            Text("Wire enroll lỗi: $it", color = Color.Red, fontSize = 12.sp)
+        }
         Button(
             onClick = onDone,
             colors  = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
