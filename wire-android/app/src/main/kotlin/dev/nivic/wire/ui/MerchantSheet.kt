@@ -211,7 +211,10 @@ private fun MerchantDashboardView(
         runCatching { members = client.loyaltyMembers(uid, token) }
     }
 
-    LaunchedEffect(Unit) { load() }
+    LaunchedEffect(Unit) {
+        runCatching { wireClient.registerMerchant(name) }
+        load()
+    }
 
     Column(Modifier.fillMaxSize().background(Color.Black)) {
         // ── Top bar ──────────────────────────────────────────────────────────

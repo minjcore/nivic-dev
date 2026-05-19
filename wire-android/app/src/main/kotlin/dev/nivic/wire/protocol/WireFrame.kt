@@ -17,9 +17,10 @@ object WireCmd {
     const val RECOVERY_REQ:      Byte = 0x14.toByte()
     const val RECOVERY_APPROVE:  Byte = 0x15.toByte()
     const val GET_HISTORY:       Byte = 0x16.toByte()
-    const val CREATE_INTENT:     Byte = 0x20.toByte()
-    const val PAY_INTENT:        Byte = 0x21.toByte()
-    const val ENROLL_TOTP:       Byte = 0x22.toByte()
+    const val CREATE_INTENT:       Byte = 0x20.toByte()
+    const val PAY_INTENT:          Byte = 0x21.toByte()
+    const val ENROLL_TOTP:         Byte = 0x22.toByte()
+    const val REGISTER_MERCHANT:   Byte = 0x23.toByte()
 
     const val PONG:              Byte = 0x80.toByte()
     const val LOGIN_ACK:         Byte = 0x81.toByte()
@@ -131,6 +132,10 @@ fun WireFrame.Companion.logout(token: ByteArray, seq: Int) =
 
 fun WireFrame.Companion.ping(seq: Int) =
     WireFrame(WireCmd.PING, seq)
+
+/* REGISTER_MERCHANT  body: [token 32B][name N bytes] */
+fun WireFrame.Companion.registerMerchant(token: ByteArray, name: String, seq: Int) =
+    WireFrame(WireCmd.REGISTER_MERCHANT, seq, token + name.toByteArray(Charsets.UTF_8))
 
 /* CREATE_INTENT  body: [merchant_token 32B][request_id 8B][order_id 8B][amount 8B] */
 fun WireFrame.Companion.createIntent(token: ByteArray, requestId: Long, orderId: Long,

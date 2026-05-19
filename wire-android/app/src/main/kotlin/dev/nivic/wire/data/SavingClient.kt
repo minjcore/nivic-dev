@@ -89,6 +89,13 @@ class SavingClient(
 
     // ─── Payment Intent ───────────────────────────────────────────────────────
 
+    suspend fun registerMerchant(name: String) {
+        val ack = conn.send(
+            WireFrame.registerMerchant(requireToken(), name, conn.nextSeq())
+        ).parseAck()
+        if (ack.code != WireCode.OK) throw WireError(ack.code)
+    }
+
     data class IntentResult(val mid: Long, val requestId: Long, val amount: Long)
 
     suspend fun createIntent(amount: Long, orderId: Long = System.currentTimeMillis()): IntentResult {
