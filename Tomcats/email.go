@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/tls"
 	"fmt"
 	"math/big"
 	"net/smtp"
@@ -21,7 +22,6 @@ func NewMailer(host, port, user, pass, from string) *Mailer {
 }
 
 func (m *Mailer) Send(to, subject, body string) error {
-	auth := smtp.PlainAuth("", m.user, m.pass, m.host)
 	msg := strings.Join([]string{
 		"From: " + m.from,
 		"To: " + to,
@@ -31,7 +31,44 @@ func (m *Mailer) Send(to, subject, body string) error {
 		"",
 		body,
 	}, "\r\n")
-	return smtp.SendMail(m.host+":"+m.port, auth, m.from, []string{to}, []byte(msg))
+
+	addr := m.host + ":" + m.port
+	auth := smtp.PlainAuth("", m.user, m.pass, m.host)
+
+	if m.port == "465" {
+		// SMTPS: implicit TLS
+		tlsCfg := &tls.Config{ServerName: m.host}
+		conn, err := tls.Dial("tcp", addr, tlsCfg)
+		if err != nil {
+			return err
+		}
+		c, err := smtp.NewClient(conn, m.host)
+		if err != nil {
+			return err
+		}
+		defer c.Close()
+		if err = c.Auth(auth); err != nil {
+			return err
+		}
+		if err = c.Mail(m.from); err != nil {
+			return err
+		}
+		if err = c.Rcpt(to); err != nil {
+			return err
+		}
+		wc, err := c.Data()
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprint(wc, msg)
+		if err != nil {
+			return err
+		}
+		return wc.Close()
+	}
+
+	// STARTTLS (port 587)
+	return smtp.SendMail(addr, auth, m.from, []string{to}, []byte(msg))
 }
 
 func (m *Mailer) SendOTP(to, code string) error {
