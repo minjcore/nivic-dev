@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/rand"
 	"crypto/tls"
-	"encoding/base64"
 	"fmt"
 	"math/big"
 	"net/smtp"
@@ -90,10 +89,10 @@ func (a *loginAuthData) Next(fromServer []byte, more bool) ([]byte, error) {
 	}
 	prompt := strings.ToUpper(string(fromServer))
 	if strings.Contains(prompt, "USERNAME") || strings.Contains(prompt, "USER") {
-		return []byte(base64.StdEncoding.EncodeToString([]byte(a.user))), nil
+		return []byte(a.user), nil
 	}
 	if strings.Contains(prompt, "PASSWORD") || strings.Contains(prompt, "PASS") {
-		return []byte(base64.StdEncoding.EncodeToString([]byte(a.pass))), nil
+		return []byte(a.pass), nil
 	}
 	return nil, fmt.Errorf("unexpected prompt: %s", fromServer)
 }
