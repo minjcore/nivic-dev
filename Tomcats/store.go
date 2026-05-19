@@ -36,6 +36,11 @@ func OpenStore(path string) (*Store, error) {
 			used       INTEGER NOT NULL DEFAULT 0,
 			PRIMARY KEY (email, code)
 		);
+		CREATE TABLE IF NOT EXISTS wire_sessions (
+			uid        INTEGER NOT NULL PRIMARY KEY,
+			wire_token TEXT    NOT NULL,
+			updated_at INTEGER NOT NULL
+		);
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
@@ -92,6 +97,26 @@ func (s *Store) LookupEmail(email string) (uid uint32, ok bool) {
 func (s *Store) GetEmail(uid uint32) (email string, ok bool) {
 	err := s.db.QueryRow(`SELECT email FROM email_bindings WHERE uid = ?`, uid).Scan(&email)
 	return email, err == nil
+}
+
+func (s *Store) SaveWireToken(uid uint32, token []byte) error {
+	_, err := s.db.Exec(
+		`INSERT OR REPLACE INTO wire_sessions (uid, wire_token, updated_at) VALUES (?, ?, ?)`,
+		uid, fmt.Sprintf("%x", token), time.Now().Unix())
+	return err
+}
+
+func (s *Store) GetWireToken(uid uint32) ([]byte, bool) {
+	var hex string
+	err := s.db.QueryRow(`SELECT wire_token FROM wire_sessions WHERE uid = ?`, uid).Scan(&hex)
+	if err != nil {
+		return nil, false
+	}
+	b := make([]byte, len(hex)/2)
+	for i := range b {
+		fmt.Sscanf(hex[2*i:2*i+2], "%02x", &b[i])
+	}
+	return b, true
 }
 
 func (s *Store) Register(uid uint32, platform, token string) error {

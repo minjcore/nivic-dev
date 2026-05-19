@@ -28,6 +28,21 @@ func (c *Claims) wireToken() ([]byte, error) {
 	return base64.RawURLEncoding.DecodeString(c.WT)
 }
 
+func issueJWT(uid uint32, wireToken []byte) (string, error) {
+	hdr, _ := json.Marshal(map[string]string{"alg": "HS256", "typ": "JWT"})
+	pay, _ := json.Marshal(Claims{
+		UID: uid,
+		WT:  base64.RawURLEncoding.EncodeToString(wireToken),
+		Exp: time.Now().Add(15 * time.Minute).Unix(),
+	})
+	h := base64.RawURLEncoding.EncodeToString(hdr)
+	p := base64.RawURLEncoding.EncodeToString(pay)
+	mac := hmac.New(sha256.New, jwtKey)
+	mac.Write([]byte(h + "." + p))
+	sig := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	return h + "." + p + "." + sig, nil
+}
+
 // verifyClaims verifies the JWT signature and expiry. Mirror of authservice/jwt.go.
 func verifyClaims(token string) (*Claims, error) {
 	parts := strings.SplitN(token, ".", 3)
