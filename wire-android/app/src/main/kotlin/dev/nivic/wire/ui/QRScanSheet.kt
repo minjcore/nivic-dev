@@ -87,14 +87,15 @@ data class TOTPEnrollPayload(val uid: Long, val secretB32: String) {
     }
 }
 
-data class TOTPPayPayload(val uid: Long, val token: String) {
+data class TOTPPayPayload(val uid: Long, val token: String, val amount: Long = 0) {
     companion object {
         fun parse(raw: String): TOTPPayPayload? {
             val uri = android.net.Uri.parse(raw)
             if (uri.scheme != "saving" || uri.host != "totp-pay") return null
             val uid = uri.getQueryParameter("uid")?.toLongOrNull() ?: return null
             val token = uri.getQueryParameter("token") ?: return null
-            return TOTPPayPayload(uid, token)
+            val amount = uri.getQueryParameter("amount")?.toLongOrNull() ?: 0L
+            return TOTPPayPayload(uid, token, amount)
         }
     }
 }
@@ -184,9 +185,10 @@ fun QRScanSheet(
                 }
                 totpPayload != null -> {
                     TOTPPayContent(
-                        p      = totpPayload!!,
-                        prefs  = prefs,
-                        onDone = { totpPayload = null; onDismiss() }
+                        p          = totpPayload!!,
+                        prefs      = prefs,
+                        wireClient = client,
+                        onDone     = { totpPayload = null; onDismiss() }
                     )
                 }
                 payload != null -> {
@@ -276,30 +278,24 @@ private fun TOTPEnrollContent(
 
 @Composable
 private fun TOTPPayContent(
-    p:      TOTPPayPayload,
-    prefs:  android.content.SharedPreferences,
-    onDone: () -> Unit,
+    p:          TOTPPayPayload,
+    prefs:      android.content.SharedPreferences,
+    wireClient: SavingClient,
+    onDone:     () -> Unit,
 ) {
     val secret  = TOTPStore.getSecret(prefs, p.uid)
     val isValid = secret != null && TOTP.verify(secret, p.token)
+    var loading by remember { mutableStateOf(false) }
+    var error   by remember { mutableStateOf<String?>(null) }
+    var success by remember { mutableStateOf(false) }
+    val scope   = rememberCoroutineScope()
 
     Column(
         Modifier.fillMaxWidth().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        if (isValid) {
-            Icon(Icons.Default.CheckCircleOutline, null,
-                tint = Color(0xFF4CAF50), modifier = Modifier.size(64.dp))
-            Text("Xác thực thành công", color = Color.White,
-                fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Text("UID #${p.uid} đã được xác nhận.\nTiến hành tạo đơn trong dashboard.",
-                color = Color.Gray, fontSize = 14.sp,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            Text(p.token.chunked(8).joinToString(" "),
-                color = Color(0xFF4CAF50), fontSize = 13.sp,
-                fontFamily = FontFamily.Monospace)
-        } else {
+        if (!isValid) {
             Icon(Icons.Default.Error, null,
                 tint = Color(0xFFFF5252), modifier = Modifier.size(64.dp))
             Text("Xác thực thất bại", color = Color(0xFFFF5252),
@@ -312,11 +308,61 @@ private fun TOTPPayContent(
                 Text("Mã đã hết hạn hoặc không đúng.\nYêu cầu người dùng làm mới mã.",
                     color = Color.Gray, fontSize = 14.sp,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Button(onClick = onDone,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
+            ) { Text("Đóng") }
+            return@Column
         }
-        Button(
-            onClick = onDone,
-            colors  = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
-        ) { Text("Đóng") }
+
+        if (success) {
+            Icon(Icons.Default.CheckCircleOutline, null,
+                tint = Color(0xFF4CAF50), modifier = Modifier.size(64.dp))
+            Text("Thanh toán thành công!", color = Color.White,
+                fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Button(onClick = onDone,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
+            ) { Text("Xong") }
+            return@Column
+        }
+
+        Icon(Icons.Default.CheckCircleOutline, null,
+            tint = Color(0xFF4CAF50), modifier = Modifier.size(64.dp))
+        Text("Xác thực thành công", color = Color.White,
+            fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text("UID #${p.uid}", color = Color.Gray, fontSize = 14.sp)
+
+        if (p.amount > 0) {
+            Text("%,d ₫".format(p.amount),
+                color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
+            error?.let { Text(it, color = Color.Red, fontSize = 13.sp) }
+            Button(
+                onClick = {
+                    scope.launch {
+                        loading = true; error = null
+                        runCatching {
+                            val code = TOTP.generateCode(secret!!)
+                            wireClient.totpCharge(p.uid, code.toInt(), p.amount)
+                        }.onSuccess { success = true }
+                         .onFailure { error = it.message }
+                        loading = false
+                    }
+                },
+                enabled = !loading,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                if (loading) CircularProgressIndicator(Modifier.size(18.dp), color = Color.Black, strokeWidth = 2.dp)
+                else Text("Thu tiền", fontWeight = FontWeight.SemiBold)
+            }
+        } else {
+            Text("UID #${p.uid} đã được xác nhận.\nTiến hành tạo đơn trong dashboard.",
+                color = Color.Gray, fontSize = 14.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Button(onClick = onDone,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
+            ) { Text("Đóng") }
+        }
     }
 }
 

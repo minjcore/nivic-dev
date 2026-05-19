@@ -89,6 +89,13 @@ class SavingClient(
 
     // ─── Payment Intent ───────────────────────────────────────────────────────
 
+    suspend fun totpCharge(customerId: Long, totpCode: Int, amount: Long) {
+        val ack = conn.send(
+            WireFrame.totpCharge(requireToken(), customerId, totpCode, amount, conn.nextSeq())
+        ).parseAck()
+        if (ack.code != WireCode.OK) throw WireError(ack.code)
+    }
+
     suspend fun enrollTotp(customerId: Long, secretB32: String) {
         val secret = dev.nivic.wire.ui.base32Decode(secretB32)
         val ack = conn.send(

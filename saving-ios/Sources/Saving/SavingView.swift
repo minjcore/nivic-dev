@@ -903,7 +903,10 @@ struct PaymentTokenSheet: View {
 
     @ObservedObject private var totp: TOTPManager = .shared
     @State private var showEnroll = false
+    @State private var amountText = ""
     @Environment(\.dismiss) private var dismiss
+
+    private var amount: UInt64 { UInt64(amountText) ?? 0 }
 
     private var formattedCode: String {
         // 32 chars → 8 groups of 4 separated by spaces
@@ -962,8 +965,14 @@ struct PaymentTokenSheet: View {
                     .padding(.horizontal, 24)
                     .padding(.bottom, 32)
 
+                // Amount input
+                WireField("Số tiền (VND, để trống nếu không cố định)", text: $amountText)
+                    .keyboardType(.numberPad)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 8)
+
                 // QR of payment token
-                if let qrImg = generateQR(totp.paymentURL(uid: uid)) {
+                if let qrImg = generateQR(totp.paymentURL(uid: uid, amount: amount)) {
                     Image(uiImage: qrImg)
                         .interpolation(.none)
                         .resizable()

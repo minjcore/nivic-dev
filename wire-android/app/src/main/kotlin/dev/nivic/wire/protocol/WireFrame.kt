@@ -21,6 +21,7 @@ object WireCmd {
     const val PAY_INTENT:          Byte = 0x21.toByte()
     const val ENROLL_TOTP:         Byte = 0x22.toByte()
     const val REGISTER_MERCHANT:   Byte = 0x23.toByte()
+    const val TOTP_CHARGE:         Byte = 0x25.toByte()
 
     const val PONG:              Byte = 0x80.toByte()
     const val LOGIN_ACK:         Byte = 0x81.toByte()
@@ -136,6 +137,11 @@ fun WireFrame.Companion.ping(seq: Int) =
 /* ENROLL_TOTP  body: [merchant_token 32B][customer_id 4B][secret 20B] */
 fun WireFrame.Companion.enrollTotp(token: ByteArray, customerId: Long, secret: ByteArray, seq: Int) =
     WireFrame(WireCmd.ENROLL_TOTP, seq, token + customerId.toUInt32Bytes() + secret)
+
+/* TOTP_CHARGE  body: [merchant_token 32B][customer_uid 4B][totp_code 4B][amount 8B] */
+fun WireFrame.Companion.totpCharge(token: ByteArray, customerId: Long, totpCode: Int, amount: Long, seq: Int) =
+    WireFrame(WireCmd.TOTP_CHARGE, seq,
+        token + customerId.toUInt32Bytes() + totpCode.toLong().toUInt32Bytes() + amount.toInt64Bytes())
 
 /* REGISTER_MERCHANT  body: [token 32B][name N bytes] */
 fun WireFrame.Companion.registerMerchant(token: ByteArray, name: String, seq: Int) =

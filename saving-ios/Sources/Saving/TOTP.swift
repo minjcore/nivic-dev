@@ -144,8 +144,10 @@ class TOTPManager: ObservableObject {
         "saving://totp-enroll?uid=\(uid)&secret=\(base32Encode(secret))"
     }
 
-    func paymentURL(uid: UInt32) -> String {
-        "saving://totp-pay?uid=\(uid)&token=\(code)"
+    func paymentURL(uid: UInt32, amount: UInt64 = 0) -> String {
+        var url = "saving://totp-pay?uid=\(uid)&token=\(code)"
+        if amount > 0 { url += "&amount=\(amount)" }
+        return url
     }
 }
 #endif
