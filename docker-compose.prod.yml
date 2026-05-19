@@ -5,9 +5,7 @@ services:
       context: .
       dockerfile: saving/Dockerfile
     environment:
-      SAVING_DB: /data/saving.db
-    volumes:
-      - wire_data:/data
+      SAVING_DB: ${SAVING_DB}
     ports:
       - "7474:7474"
     restart: unless-stopped
@@ -67,6 +65,5 @@ networks:
     driver: bridge
 
 volumes:
-  wire_data:
   merchants_data:
   tomcats_data:
