@@ -9,9 +9,10 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"time"
 )
 
-func addWebRoutes(mux *http.ServeMux, authURL, wireAddr, staticDir, floatPwd string) {
+func addWebRoutes(mux *http.ServeMux, authURL, wireAddr, staticDir, floatPwd string, store *Store, mailer *Mailer) {
 	mux.Handle("GET /", http.FileServer(http.Dir(staticDir)))
 
 	// ── Register ───────────────────────────────────────────────────────────────
@@ -60,6 +61,137 @@ func addWebRoutes(mux *http.ServeMux, authURL, wireAddr, staticDir, floatPwd str
 			Path:     "/",
 			HttpOnly: true,
 			SameSite: http.SameSiteLaxMode,
+		})
+		writeJSON(w, map[string]any{"uid": data.UID})
+	})
+
+	// ── OTP rate limiter: 5 requests per minute per IP ────────────────────────
+	otpRL := newRateLimiter(time.Minute, 5)
+	otpHandle := func(pattern string, h http.HandlerFunc) {
+		mux.Handle(pattern, otpRL.Middleware(h))
+	}
+
+	// ── Email bind: send OTP ──────────────────────────────────────────────────
+	otpHandle("POST /api/email/bind", func(w http.ResponseWriter, r *http.Request) {
+		c, ok := requireJWT(w, r)
+		if !ok {
+			return
+		}
+		var req struct {
+			Email string `json:"email"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" {
+			http.Error(w, "email required", http.StatusBadRequest)
+			return
+		}
+		code, err := generateOTP()
+		if err != nil {
+			http.Error(w, "otp error", http.StatusInternalServerError)
+			return
+		}
+		if err := store.SaveOTP(req.Email, code, &c.UID, 10*60*1e9); err != nil {
+			http.Error(w, "store error", http.StatusInternalServerError)
+			return
+		}
+		if mailer != nil {
+			if err := mailer.SendOTP(req.Email, code); err != nil {
+				http.Error(w, "email send failed: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// ── Email bind: verify OTP ────────────────────────────────────────────────
+	otpHandle("POST /api/email/confirm", func(w http.ResponseWriter, r *http.Request) {
+		c, ok := requireJWT(w, r)
+		if !ok {
+			return
+		}
+		var req struct {
+			Email string `json:"email"`
+			Code  string `json:"code"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" || req.Code == "" {
+			http.Error(w, "email and code required", http.StatusBadRequest)
+			return
+		}
+		uid, verified := store.VerifyOTP(req.Email, req.Code)
+		if !verified || uid == nil || *uid != c.UID {
+			http.Error(w, "mã OTP không hợp lệ hoặc đã hết hạn", http.StatusUnauthorized)
+			return
+		}
+		if err := store.BindEmail(c.UID, req.Email); err != nil {
+			http.Error(w, "bind error", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// ── Email login: send OTP (no auth) ───────────────────────────────────────
+	otpHandle("POST /api/email/otp", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Email string `json:"email"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" {
+			http.Error(w, "email required", http.StatusBadRequest)
+			return
+		}
+		uid, ok := store.LookupEmail(req.Email)
+		if !ok {
+			// Return 204 even if not found to avoid email enumeration
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		code, err := generateOTP()
+		if err != nil {
+			http.Error(w, "otp error", http.StatusInternalServerError)
+			return
+		}
+		if err := store.SaveOTP(req.Email, code, &uid, 10*60*1e9); err != nil {
+			http.Error(w, "store error", http.StatusInternalServerError)
+			return
+		}
+		if mailer != nil {
+			mailer.SendOTP(req.Email, code)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// ── Email login: verify OTP → issue JWT ───────────────────────────────────
+	otpHandle("POST /api/email/login", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Email string `json:"email"`
+			Code  string `json:"code"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" || req.Code == "" {
+			http.Error(w, "email and code required", http.StatusBadRequest)
+			return
+		}
+		uid, ok := store.VerifyOTP(req.Email, req.Code)
+		if !ok || uid == nil {
+			http.Error(w, "mã OTP không hợp lệ hoặc đã hết hạn", http.StatusUnauthorized)
+			return
+		}
+		// Forward to auth service to get wire token + JWT
+		body, _ := json.Marshal(map[string]any{"uid": *uid, "email_login": true})
+		resp, err := http.Post(authURL+"/email-login", "application/json", bytes.NewReader(body))
+		if err != nil || resp.StatusCode != http.StatusOK {
+			http.Error(w, "auth service unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		defer resp.Body.Close()
+		var data struct {
+			Token string `json:"token"`
+			UID   uint32 `json:"uid"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&data); err != nil || data.Token == "" {
+			http.Error(w, "invalid auth response", http.StatusInternalServerError)
+			return
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name: "token", Value: data.Token, Path: "/",
+			HttpOnly: true, SameSite: http.SameSiteLaxMode,
 		})
 		writeJSON(w, map[string]any{"uid": data.UID})
 	})

@@ -20,6 +20,11 @@ func main() {
 	staticDir    := env("STATIC_DIR",   "static")
 	merchantsURL := env("MERCHANTS_URL", "http://127.0.0.1:8090")
 	floatPwd     := env("FLOAT_PWD",     "float123")
+	smtpHost     := env("SMTP_HOST",     "")
+	smtpPort     := env("SMTP_PORT",     "587")
+	smtpUser     := env("SMTP_USER",     "")
+	smtpPass     := env("SMTP_PASS",     "")
+	smtpFrom     := env("SMTP_FROM",     smtpUser)
 
 	store, err := OpenStore(dbPath)
 	if err != nil {
@@ -50,7 +55,15 @@ func main() {
 	go ConsumeEvents(conn, store, apns, fcm)
 
 	slog.Info("tomcats http", "addr", addr)
-	if err := http.ListenAndServe(addr, routes(store, authURL, wireAddr, staticDir, merchantsURL, floatPwd)); err != nil {
+	var mailer *Mailer
+	if smtpHost != "" && smtpUser != "" {
+		mailer = NewMailer(smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom)
+		slog.Info("mailer ready", "host", smtpHost, "from", smtpFrom)
+	} else {
+		slog.Warn("mailer disabled", "reason", "SMTP_HOST/SMTP_USER not set")
+	}
+
+	if err := http.ListenAndServe(addr, routes(store, mailer, authURL, wireAddr, staticDir, merchantsURL, floatPwd)); err != nil {
 		slog.Error("http", "err", err)
 	}
 }
