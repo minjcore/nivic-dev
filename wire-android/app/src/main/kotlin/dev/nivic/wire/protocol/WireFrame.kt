@@ -132,6 +132,12 @@ fun WireFrame.Companion.logout(token: ByteArray, seq: Int) =
 fun WireFrame.Companion.ping(seq: Int) =
     WireFrame(WireCmd.PING, seq)
 
+/* CREATE_INTENT  body: [merchant_token 32B][request_id 8B][order_id 8B][amount 8B] */
+fun WireFrame.Companion.createIntent(token: ByteArray, requestId: Long, orderId: Long,
+                                      amount: Long, seq: Int) =
+    WireFrame(WireCmd.CREATE_INTENT, seq,
+        token + requestId.toInt64Bytes() + orderId.toInt64Bytes() + amount.toInt64Bytes())
+
 /* PAY_INTENT  body: [token 32B][merchant_id 4B][request_id 8B][totp_code 4B] */
 fun WireFrame.Companion.payIntent(token: ByteArray, merchantId: Long, requestId: Long,
                                    totpCode: Int, seq: Int) =

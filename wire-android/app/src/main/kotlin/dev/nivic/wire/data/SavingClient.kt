@@ -89,6 +89,22 @@ class SavingClient(
 
     // ─── Payment Intent ───────────────────────────────────────────────────────
 
+    data class IntentResult(val mid: Long, val requestId: Long, val amount: Long)
+
+    suspend fun createIntent(amount: Long, orderId: Long = System.currentTimeMillis()): IntentResult {
+        val requestId = System.currentTimeMillis()
+        val ack = conn.send(
+            WireFrame.createIntent(requireToken(), requestId, orderId, amount, conn.nextSeq())
+        ).parseAck()
+        if (ack.code != WireCode.OK) throw WireError(ack.code)
+        // ACK extra: [status 1B][mid 4B][request_id 8B][amount 8B] = 21 bytes
+        val d = ack.data
+        val mid = d.getInt(1).toLong() and 0xFFFFFFFFL
+        val rid = d.getLong(5)
+        val amt = d.getLong(13)
+        return IntentResult(mid, rid, amt)
+    }
+
     suspend fun payIntent(merchantId: Long, requestId: Long, totpCode: Int) {
         val ack = conn.send(
             WireFrame.payIntent(requireToken(), merchantId, requestId, totpCode, conn.nextSeq())

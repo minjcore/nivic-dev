@@ -35,6 +35,7 @@ import dev.nivic.wire.data.LoyaltyMember
 import dev.nivic.wire.data.MerchantOrder
 import dev.nivic.wire.data.MerchantStats
 import dev.nivic.wire.data.MerchantsClient
+import dev.nivic.wire.data.SavingClient
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -43,10 +44,11 @@ import java.util.*
 
 @Composable
 fun MerchantSheet(
-    uid:     Long,
-    client:  MerchantsClient,
-    prefs:   android.content.SharedPreferences,
-    onClose: () -> Unit,
+    uid:        Long,
+    client:     MerchantsClient,
+    wireClient: SavingClient,
+    prefs:      android.content.SharedPreferences,
+    onClose:    () -> Unit,
 ) {
     val savedToken = prefs.getString("merchant_token", "") ?: ""
     val savedName  = prefs.getString("merchant_name",  "") ?: ""
@@ -56,7 +58,7 @@ fun MerchantSheet(
             prefs.edit().putString("merchant_token", token).putString("merchant_name", name).apply()
         }
     } else {
-        MerchantDashboardView(uid, savedName, savedToken, client, onClose)
+        MerchantDashboardView(uid, savedName, savedToken, client, wireClient, onClose)
     }
 }
 
@@ -189,11 +191,12 @@ private fun MerchantOnboardingView(
 
 @Composable
 private fun MerchantDashboardView(
-    uid:     Long,
-    name:    String,
-    token:   String,
-    client:  MerchantsClient,
-    onClose: () -> Unit,
+    uid:        Long,
+    name:       String,
+    token:      String,
+    client:     MerchantsClient,
+    wireClient: SavingClient,
+    onClose:    () -> Unit,
 ) {
     var stats           by remember { mutableStateOf<MerchantStats?>(null) }
     var orders          by remember { mutableStateOf<List<MerchantOrder>>(emptyList()) }
@@ -283,7 +286,7 @@ private fun MerchantDashboardView(
     }
 
     if (showCreateOrder) {
-        CreateOrderDialog(uid, token, client,
+        CreateOrderDialog(uid, token, client, wireClient,
             onDismiss = { showCreateOrder = false },
             onDone    = { showCreateOrder = false; scope.launch { load() } })
     }
@@ -378,11 +381,12 @@ private fun LoyaltyMembersDialog(
 
 @Composable
 private fun CreateOrderDialog(
-    mid:       Long,
-    token:     String,
-    client:    MerchantsClient,
-    onDismiss: () -> Unit,
-    onDone:    () -> Unit,
+    mid:        Long,
+    token:      String,
+    client:     MerchantsClient,
+    wireClient: SavingClient,
+    onDismiss:  () -> Unit,
+    onDone:     () -> Unit,
 ) {
     var amountText    by remember { mutableStateOf("") }
     var note          by remember { mutableStateOf("") }
@@ -390,6 +394,7 @@ private fun CreateOrderDialog(
     var loading       by remember { mutableStateOf(false) }
     var error         by remember { mutableStateOf<String?>(null) }
     var qrBitmap      by remember { mutableStateOf<Bitmap?>(null) }
+    var wireMode      by remember { mutableStateOf(false) }
     val scope         = rememberCoroutineScope()
 
     val amount        = amountText.toLongOrNull() ?: 0L
@@ -407,6 +412,31 @@ private fun CreateOrderDialog(
         text = {
             if (qrBitmap == null) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // ── Mode toggle ────────────────────────────────────────────
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(10.dp))
+                            .padding(4.dp)
+                    ) {
+                        listOf(false to "REST", true to "Wire Intent").forEach { (isWire, label) ->
+                            Box(
+                                Modifier
+                                    .weight(1f)
+                                    .background(
+                                        if (wireMode == isWire) Color.White.copy(alpha = 0.15f)
+                                        else Color.Transparent,
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable { wireMode = isWire; error = null }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(label, color = if (wireMode == isWire) Color.White else Color.Gray,
+                                    fontSize = 13.sp, fontWeight = if (wireMode == isWire) FontWeight.SemiBold else FontWeight.Normal)
+                            }
+                        }
+                    }
+
                     OutlinedTextField(
                         value         = amountText,
                         onValueChange = { amountText = it.filter { c -> c.isDigit() } },
@@ -423,57 +453,64 @@ private fun CreateOrderDialog(
                             unfocusedLabelColor  = Color.Gray,
                         )
                     )
-                    OutlinedTextField(
-                        value         = note,
-                        onValueChange = { note = it },
-                        label         = { Text("Ghi chú") },
-                        placeholder   = { Text("Cà phê x2") },
-                        modifier      = Modifier.fillMaxWidth(),
-                        colors        = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor     = Color.White,
-                            unfocusedTextColor   = Color.White,
-                            focusedBorderColor   = Color.White,
-                            unfocusedBorderColor = Color.Gray,
-                            focusedLabelColor    = Color.White,
-                            unfocusedLabelColor  = Color.Gray,
+
+                    if (!wireMode) {
+                        OutlinedTextField(
+                            value         = note,
+                            onValueChange = { note = it },
+                            label         = { Text("Ghi chú") },
+                            placeholder   = { Text("Cà phê x2") },
+                            modifier      = Modifier.fillMaxWidth(),
+                            colors        = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor     = Color.White,
+                                unfocusedTextColor   = Color.White,
+                                focusedBorderColor   = Color.White,
+                                unfocusedBorderColor = Color.Gray,
+                                focusedLabelColor    = Color.White,
+                                unfocusedLabelColor  = Color.Gray,
+                            )
                         )
-                    )
-                    OutlinedTextField(
-                        value         = discountText,
-                        onValueChange = { discountText = it.filter { c -> c.isDigit() } },
-                        label         = { Text("Dùng điểm tích lũy") },
-                        placeholder   = { Text("0") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier      = Modifier.fillMaxWidth(),
-                        colors        = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor     = Color(0xFFFFC107),
-                            unfocusedTextColor   = Color(0xFFFFC107),
-                            focusedBorderColor   = Color(0xFFFFC107),
-                            unfocusedBorderColor = Color.Gray,
-                            focusedLabelColor    = Color(0xFFFFC107),
-                            unfocusedLabelColor  = Color.Gray,
-                        ),
-                        trailingIcon  = {
-                            if (discountPts > 0) {
-                                Text("- ${vndFmt(discountVnd)} ₫",
-                                    color = Color(0xFF4CAF50), fontSize = 12.sp,
-                                    modifier = Modifier.padding(end = 8.dp))
+                        OutlinedTextField(
+                            value         = discountText,
+                            onValueChange = { discountText = it.filter { c -> c.isDigit() } },
+                            label         = { Text("Dùng điểm tích lũy") },
+                            placeholder   = { Text("0") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier      = Modifier.fillMaxWidth(),
+                            colors        = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor     = Color(0xFFFFC107),
+                                unfocusedTextColor   = Color(0xFFFFC107),
+                                focusedBorderColor   = Color(0xFFFFC107),
+                                unfocusedBorderColor = Color.Gray,
+                                focusedLabelColor    = Color(0xFFFFC107),
+                                unfocusedLabelColor  = Color.Gray,
+                            ),
+                            trailingIcon  = {
+                                if (discountPts > 0) {
+                                    Text("- ${vndFmt(discountVnd)} ₫",
+                                        color = Color(0xFF4CAF50), fontSize = 12.sp,
+                                        modifier = Modifier.padding(end = 8.dp))
+                                }
+                            }
+                        )
+                        if (discountPts > 0 && amount > 0) {
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .background(Color(0xFF1E2A1A), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Thực thu:", color = Color.Gray, fontSize = 13.sp)
+                                Text("${vndFmt(finalAmount)} ₫",
+                                    color = Color(0xFF4CAF50), fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold)
                             }
                         }
-                    )
-                    if (discountPts > 0 && amount > 0) {
-                        Row(
-                            Modifier.fillMaxWidth()
-                                .background(Color(0xFF1E2A1A), RoundedCornerShape(8.dp))
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Thực thu:", color = Color.Gray, fontSize = 13.sp)
-                            Text("${vndFmt(finalAmount)} ₫",
-                                color = Color(0xFF4CAF50), fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold)
-                        }
+                    } else {
+                        Text("Đơn được tạo trực tiếp trên Wire — thanh toán tức thì, thông báo qua TCP.",
+                            color = Color.Gray, fontSize = 12.sp)
                     }
+
                     error?.let { Text(it, color = Color.Red, fontSize = 13.sp) }
                 }
             } else {
@@ -490,7 +527,7 @@ private fun CreateOrderDialog(
                     }
                     Text(note.ifEmpty { "Đang chờ thanh toán..." },
                         color = Color.Gray, fontSize = 13.sp)
-                    if (discountPts > 0) {
+                    if (!wireMode && discountPts > 0) {
                         Spacer(Modifier.height(4.dp))
                         Text("Giảm ${vndFmt(discountVnd)} ₫ (${discountPts} điểm)",
                             color = Color(0xFF4CAF50), fontSize = 12.sp)
@@ -505,11 +542,20 @@ private fun CreateOrderDialog(
                         val amt = amountText.toLongOrNull() ?: return@Button
                         scope.launch {
                             loading = true; error = null
-                            runCatching { client.createOrder(mid, token, amt, note, discountPts) }
-                                .onSuccess { result ->
-                                    qrBitmap = generateQR("saving://pay?pr=${result.pr}")
-                                }
-                                .onFailure { error = it.message }
+                            if (wireMode) {
+                                runCatching { wireClient.createIntent(amt) }
+                                    .onSuccess { result ->
+                                        val qrUrl = "saving://intent?mid=${result.mid}&rid=${result.requestId}&amount=${result.amount}"
+                                        qrBitmap = generateQR(qrUrl)
+                                    }
+                                    .onFailure { error = it.message }
+                            } else {
+                                runCatching { client.createOrder(mid, token, amt, note, discountPts) }
+                                    .onSuccess { result ->
+                                        qrBitmap = generateQR("saving://pay?pr=${result.pr}")
+                                    }
+                                    .onFailure { error = it.message }
+                            }
                             loading = false
                         }
                     },
