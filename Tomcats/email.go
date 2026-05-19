@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"crypto/tls"
+	"encoding/base64"
 	"fmt"
 	"math/big"
 	"net/smtp"
@@ -36,7 +37,7 @@ func (m *Mailer) Send(to, subject, body string) error {
 	auth := smtp.PlainAuth("", m.user, m.pass, m.host)
 
 	if m.port == "465" {
-		// SMTPS: implicit TLS
+		// SMTPS: implicit TLS + AUTH LOGIN (Alibaba Direct Mail)
 		tlsCfg := &tls.Config{ServerName: m.host}
 		conn, err := tls.Dial("tcp", addr, tlsCfg)
 		if err != nil {
@@ -47,7 +48,7 @@ func (m *Mailer) Send(to, subject, body string) error {
 			return err
 		}
 		defer c.Close()
-		if err = c.Auth(auth); err != nil {
+		if err = c.Auth(loginAuth(m.user, m.pass)); err != nil {
 			return err
 		}
 		if err = c.Mail(m.from); err != nil {
@@ -60,8 +61,7 @@ func (m *Mailer) Send(to, subject, body string) error {
 		if err != nil {
 			return err
 		}
-		_, err = fmt.Fprint(wc, msg)
-		if err != nil {
+		if _, err = fmt.Fprint(wc, msg); err != nil {
 			return err
 		}
 		return wc.Close()
@@ -74,6 +74,28 @@ func (m *Mailer) Send(to, subject, body string) error {
 func (m *Mailer) SendOTP(to, code string) error {
 	return m.Send(to, "Mã xác thực Wire – "+code,
 		fmt.Sprintf("Mã OTP của bạn là: %s\n\nMã có hiệu lực trong 10 phút.\nKhông chia sẻ mã này với ai.", code))
+}
+
+// loginAuth implements AUTH LOGIN for servers that don't support AUTH PLAIN.
+type loginAuthData struct{ user, pass string }
+
+func loginAuth(user, pass string) smtp.Auth { return &loginAuthData{user, pass} }
+
+func (a *loginAuthData) Start(_ *smtp.ServerInfo) (string, []byte, error) {
+	return "LOGIN", nil, nil
+}
+func (a *loginAuthData) Next(fromServer []byte, more bool) ([]byte, error) {
+	if !more {
+		return nil, nil
+	}
+	prompt := strings.ToUpper(string(fromServer))
+	if strings.Contains(prompt, "USERNAME") || strings.Contains(prompt, "USER") {
+		return []byte(base64.StdEncoding.EncodeToString([]byte(a.user))), nil
+	}
+	if strings.Contains(prompt, "PASSWORD") || strings.Contains(prompt, "PASS") {
+		return []byte(base64.StdEncoding.EncodeToString([]byte(a.pass))), nil
+	}
+	return nil, fmt.Errorf("unexpected prompt: %s", fromServer)
 }
 
 func generateOTP() (string, error) {
