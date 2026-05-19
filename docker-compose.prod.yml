@@ -51,6 +51,9 @@ services:
       SMTP_USER:       ${SMTP_USER:-}
       SMTP_PASS:       ${SMTP_PASS:-}
       SMTP_FROM:       ${SMTP_FROM:-}
+      TOMCATS_DB:      /data/tomcats.db
+    volumes:
+      - tomcats_data:/data
     ports:
       - "127.0.0.1:8093:8093"
     restart: unless-stopped
@@ -63,3 +66,4 @@ networks:
 
 volumes:
   merchants_data:
+  tomcats_data:
