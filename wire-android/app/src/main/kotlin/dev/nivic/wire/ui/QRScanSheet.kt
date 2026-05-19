@@ -236,16 +236,19 @@ fun QRScanSheet(
 
 @Composable
 private fun TOTPEnrollContent(
-    p:          TOTPEnrollPayload,
-    prefs:      android.content.SharedPreferences,
-    wireClient: SavingClient,
-    onDone:     () -> Unit,
+    p:            TOTPEnrollPayload,
+    prefs:        android.content.SharedPreferences,
+    wireClient:   SavingClient,
+    onDone:       () -> Unit,
 ) {
     var enrollError by remember { mutableStateOf<String?>(null) }
+    val merchantName = prefs.getString("merchant_name", "") ?: ""
     LaunchedEffect(Unit) {
         TOTPStore.save(prefs, p.uid, p.secretB32)
-        runCatching { wireClient.enrollTotp(p.uid.toLong(), p.secretB32) }
-            .onFailure { enrollError = it.message }
+        runCatching {
+            if (merchantName.isNotBlank()) wireClient.registerMerchant(merchantName)
+            wireClient.enrollTotp(p.uid.toLong(), p.secretB32)
+        }.onFailure { enrollError = it.message }
     }
     Column(
         Modifier.fillMaxWidth().padding(24.dp),
