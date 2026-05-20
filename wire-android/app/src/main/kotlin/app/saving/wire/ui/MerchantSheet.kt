@@ -1,4 +1,4 @@
-package dev.nivic.wire.ui
+package app.saving.wire.ui
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -31,11 +31,11 @@ import androidx.compose.ui.unit.sp
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
-import dev.nivic.wire.data.LoyaltyMember
-import dev.nivic.wire.data.MerchantOrder
-import dev.nivic.wire.data.MerchantStats
-import dev.nivic.wire.data.MerchantsClient
-import dev.nivic.wire.data.SavingClient
+import app.saving.wire.data.LoyaltyMember
+import app.saving.wire.data.MerchantOrder
+import app.saving.wire.data.MerchantStats
+import app.saving.wire.data.MerchantsClient
+import app.saving.wire.data.SavingClient
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*

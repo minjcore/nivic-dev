@@ -1,4 +1,4 @@
-package dev.nivic.wire.ui.theme
+package app.saving.wire.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme

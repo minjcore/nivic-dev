@@ -1,4 +1,4 @@
-package dev.nivic.wire.ui
+package app.saving.wire.ui
 
 import android.content.SharedPreferences
 import org.json.JSONObject

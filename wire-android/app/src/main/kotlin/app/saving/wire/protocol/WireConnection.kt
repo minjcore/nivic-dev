@@ -1,4 +1,4 @@
-package dev.nivic.wire.protocol
+package app.saving.wire.protocol
 
 import kotlinx.coroutines.*
 import java.io.DataInputStream

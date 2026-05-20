@@ -1,4 +1,4 @@
-package dev.nivic.wire.ui
+package app.saving.wire.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,8 +15,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.nivic.wire.data.MerchantsClient
-import dev.nivic.wire.data.UserLoyaltyEntry
+import app.saving.wire.data.MerchantsClient
+import app.saving.wire.data.UserLoyaltyEntry
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

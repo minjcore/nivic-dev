@@ -1,4 +1,4 @@
-package dev.nivic.wire
+package app.saving.wire
 
 import android.app.Application
 

@@ -1,4 +1,4 @@
-package dev.nivic.wire.protocol
+package app.saving.wire.protocol
 
 import java.security.MessageDigest
 import javax.crypto.Mac

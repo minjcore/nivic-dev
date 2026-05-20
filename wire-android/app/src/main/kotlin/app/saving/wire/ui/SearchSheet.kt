@@ -1,4 +1,4 @@
-package dev.nivic.wire.ui
+package app.saving.wire.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -23,9 +23,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.nivic.wire.data.SavingClient
-import dev.nivic.wire.data.Transaction
-import dev.nivic.wire.protocol.AccountID
+import app.saving.wire.data.SavingClient
+import app.saving.wire.data.Transaction
+import app.saving.wire.protocol.AccountID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

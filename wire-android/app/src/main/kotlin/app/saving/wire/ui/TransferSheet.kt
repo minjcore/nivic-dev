@@ -1,4 +1,4 @@
-package dev.nivic.wire.ui
+package app.saving.wire.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -9,9 +9,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.nivic.wire.data.SavingClient
-import dev.nivic.wire.protocol.WireCode
-import dev.nivic.wire.protocol.WireError
+import app.saving.wire.data.SavingClient
+import app.saving.wire.protocol.WireCode
+import app.saving.wire.protocol.WireError
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)

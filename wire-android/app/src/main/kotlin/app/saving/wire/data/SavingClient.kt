@@ -1,6 +1,6 @@
-package dev.nivic.wire.data
+package app.saving.wire.data
 
-import dev.nivic.wire.protocol.*
+import app.saving.wire.protocol.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -97,7 +97,7 @@ class SavingClient(
     }
 
     suspend fun enrollTotp(customerId: Long, secretB32: String) {
-        val secret = dev.nivic.wire.ui.base32Decode(secretB32)
+        val secret = app.saving.wire.ui.base32Decode(secretB32)
         val ack = conn.send(
             WireFrame.enrollTotp(requireToken(), customerId, secret, conn.nextSeq())
         ).parseAck()
