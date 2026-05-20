@@ -63,7 +63,7 @@ actor WireConnection {
 
     // ─── Send a frame and wait for its response ──────────────────────────────
 
-    func send(_ frame: WireFrame) async throws -> WireFrame {
+    func send(_ frame: WireFrame, timeout: TimeInterval = 10) async throws -> WireFrame {
         guard let conn else { throw WireError.disconnected }
 
         let raw = frame.encode(secret: secret)
@@ -76,7 +76,17 @@ actor WireConnection {
 
         return try await withCheckedThrowingContinuation { cont in
             pending[frame.seq] = cont
+            let seq = frame.seq
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                await self?.expire(seq: seq)
+            }
         }
+    }
+
+    private func expire(seq: UInt32) {
+        guard let cont = pending.removeValue(forKey: seq) else { return }
+        cont.resume(throwing: WireError.timeout)
     }
 
     // ─── Receive loop ────────────────────────────────────────────────────────
