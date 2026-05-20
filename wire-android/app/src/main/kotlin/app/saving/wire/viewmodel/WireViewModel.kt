@@ -10,8 +10,11 @@ import app.saving.wire.data.MerchantsClient
 import app.saving.wire.data.SavingClient
 import app.saving.wire.data.SavingEvent
 import app.saving.wire.util.vndFormatted
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -35,8 +38,11 @@ class WireViewModel(app: Application) : AndroidViewModel(app) {
     private val _session = MutableStateFlow<Session>(Session.Gate)
     val session: StateFlow<Session> = _session.asStateFlow()
 
-    private val _homeState = MutableStateFlow(HomeState())
+    private val _homeState   = MutableStateFlow(HomeState())
     val homeState: StateFlow<HomeState> = _homeState.asStateFlow()
+
+    private val _intentPaid = MutableSharedFlow<SavingEvent.IntentPaid>()
+    val intentPaid: SharedFlow<SavingEvent.IntentPaid> = _intentPaid.asSharedFlow()
 
     init {
         viewModelScope.launch {
@@ -45,13 +51,15 @@ class WireViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         client.onEvent = { event ->
-            if (event is SavingEvent.TransferIn) {
-                _homeState.update {
+            when (event) {
+                is SavingEvent.TransferIn -> _homeState.update {
                     it.copy(
                         balance = event.transfer.balance,
-                        toast = "+${event.transfer.amount.vndFormatted()} từ #${event.transfer.fromId}"
+                        toast   = "+${event.transfer.amount.vndFormatted()} từ #${event.transfer.fromId}"
                     )
                 }
+                is SavingEvent.IntentPaid -> viewModelScope.launch { _intentPaid.emit(event) }
+                else -> {}
             }
         }
     }

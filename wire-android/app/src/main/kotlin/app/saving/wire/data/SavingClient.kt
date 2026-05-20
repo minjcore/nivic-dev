@@ -21,10 +21,11 @@ data class Transaction(
 data class TransferEvent(val fromId: Long, val amount: Long, val balance: Long)
 
 sealed class SavingEvent {
-    data class TransferIn(val transfer: TransferEvent)  : SavingEvent()
-    data class RecoveryRequested(val accountId: Long)   : SavingEvent()
-    data class RecoveryGranted(val accountId: Long)     : SavingEvent()
-    data class GuardianAdded(val accountId: Long)       : SavingEvent()
+    data class TransferIn(val transfer: TransferEvent)                              : SavingEvent()
+    data class RecoveryRequested(val accountId: Long)                              : SavingEvent()
+    data class RecoveryGranted(val accountId: Long)                                : SavingEvent()
+    data class GuardianAdded(val accountId: Long)                                  : SavingEvent()
+    data class IntentPaid(val requestId: Long, val customerId: Long, val amount: Long) : SavingEvent()
 }
 
 class SavingClient(
@@ -194,6 +195,12 @@ class SavingClient(
                 if (frame.body.size >= 4) SavingEvent.RecoveryGranted(frame.body.getInt(0).toLong() and 0xFFFFFFFFL) else return
             WireCmd.EVT_GUARDIAN_ADD ->
                 if (frame.body.size >= 4) SavingEvent.GuardianAdded(frame.body.getInt(0).toLong() and 0xFFFFFFFFL) else return
+            WireCmd.EVT_INTENT_PAID ->
+                if (frame.body.size >= 20) SavingEvent.IntentPaid(
+                    requestId  = frame.body.getLong(0),
+                    customerId = frame.body.getInt(8).toLong() and 0xFFFFFFFFL,
+                    amount     = frame.body.getLong(12)
+                ) else return
             else -> return
         }
         onEvent?.invoke(event)

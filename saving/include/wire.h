@@ -59,6 +59,7 @@
  *    0xC1  EVT_RECOVERY_REQ body: [ account_id 4B ]        (guardian must act)
  *    0xC2  EVT_RECOVERY_OK  body: [ account_id 4B ]        (your recovery granted)
  *    0xC3  EVT_GUARDIAN_ADD body: [ account_id 4B ]        (someone added you)
+ *    0xC4  EVT_INTENT_PAID  body: [ request_id 8B ][ customer_id 4B ][ amount 8B ]
  *
  * ──────────────────────────────────────────────────────────────────────────
  *  RESPONSE CODES  (1 byte inside LOGIN_ACK / ACK body)
@@ -124,6 +125,8 @@
 #define WIRE_EVT_RECOVERY_REQ 0xC1
 #define WIRE_EVT_RECOVERY_OK  0xC2
 #define WIRE_EVT_GUARDIAN_ADD 0xC3
+/* 0xC4  EVT_INTENT_PAID  body: [request_id 8B][customer_id 4B][amount 8B] */
+#define WIRE_EVT_INTENT_PAID  0xC4
 
 /* ─── Response codes ─────────────────────────────────────────────────────── */
 #define WIRE_OK                0x00

@@ -140,7 +140,7 @@ fun HomeScreen(vm: WireViewModel, accountId: Long) {
     if (showQRRecv)   QRReceiveSheet(accountId)                                                                      { showQRRecv   = false }
     if (showQRScan)   QRScanSheet(vm.client, vm.prefs, vm.merchantsClient, accountId, onDone = { vm.refreshBalance() }) { showQRScan = false }
     if (showGuardian) GuardianSheet(vm.client)                                                                       { showGuardian = false }
-    if (showMerchant) MerchantSheet(accountId, vm.merchantsClient, vm.client, vm.prefs)                             { showMerchant = false }
+    if (showMerchant) MerchantSheet(accountId, vm.merchantsClient, vm.client, vm.prefs, vm.intentPaid)              { showMerchant = false }
     if (showLoyalty)  MyLoyaltySheet(vm.merchantsClient, accountId)                                                  { showLoyalty  = false }
     if (showTOTP)     TOTPPaySheet(accountId, vm.prefs)                                                              { showTOTP     = false }
     if (showSearch)   SearchSheet(

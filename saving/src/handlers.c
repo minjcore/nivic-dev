@@ -492,6 +492,17 @@ static void handle_pay_intent(DB *db, SessionTable *st, int fd, const WireFrame 
         if (n > 0) registry_push(merchant_id, evt, n);
     }
 
+    /* Push EVT_INTENT_PAID: [request_id 8B][customer_id 4B][amount 8B] */
+    {
+        uint8_t ip_body[20], ip_evt[WIRE_MAX_FRAME];
+        wr64(ip_body,      request_id);
+        wr32(ip_body + 8,  customer_id);
+        wr64(ip_body + 12, intent.amount);
+        size_t ip_n = wire_frame_encode(WIRE_EVT_INTENT_PAID, 0, ip_body, 20,
+                                        ip_evt, sizeof(ip_evt));
+        if (ip_n > 0) registry_push(merchant_id, ip_evt, ip_n);
+    }
+
     send_ack(fd, f->seq, WIRE_OK, NULL, 0);
 }
 

@@ -31,6 +31,7 @@ object WireCmd {
     const val EVT_RECOVERY_REQ:  Byte = 0xC1.toByte()
     const val EVT_RECOVERY_OK:   Byte = 0xC2.toByte()
     const val EVT_GUARDIAN_ADD:  Byte = 0xC3.toByte()
+    const val EVT_INTENT_PAID:   Byte = 0xC4.toByte()
 }
 
 object WireCode {

@@ -36,6 +36,9 @@ import app.saving.wire.data.MerchantOrder
 import app.saving.wire.data.MerchantStats
 import app.saving.wire.data.MerchantsClient
 import app.saving.wire.data.SavingClient
+import app.saving.wire.data.SavingEvent
+import app.saving.wire.util.vndFormatted
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -44,11 +47,12 @@ import java.util.*
 
 @Composable
 fun MerchantSheet(
-    uid:        Long,
-    client:     MerchantsClient,
-    wireClient: SavingClient,
-    prefs:      android.content.SharedPreferences,
-    onClose:    () -> Unit,
+    uid:          Long,
+    client:       MerchantsClient,
+    wireClient:   SavingClient,
+    prefs:        android.content.SharedPreferences,
+    intentPaid:   SharedFlow<SavingEvent.IntentPaid>,
+    onClose:      () -> Unit,
 ) {
     val savedToken = prefs.getString("merchant_token", "") ?: ""
     val savedName  = prefs.getString("merchant_name",  "") ?: ""
@@ -58,7 +62,7 @@ fun MerchantSheet(
             prefs.edit().putString("merchant_token", token).putString("merchant_name", name).apply()
         }
     } else {
-        MerchantDashboardView(uid, savedName, savedToken, client, wireClient, onClose)
+        MerchantDashboardView(uid, savedName, savedToken, client, wireClient, intentPaid, onClose)
     }
 }
 
@@ -191,18 +195,20 @@ private fun MerchantOnboardingView(
 
 @Composable
 private fun MerchantDashboardView(
-    uid:        Long,
-    name:       String,
-    token:      String,
-    client:     MerchantsClient,
-    wireClient: SavingClient,
-    onClose:    () -> Unit,
+    uid:         Long,
+    name:        String,
+    token:       String,
+    client:      MerchantsClient,
+    wireClient:  SavingClient,
+    intentPaid:  SharedFlow<SavingEvent.IntentPaid>,
+    onClose:     () -> Unit,
 ) {
     var stats           by remember { mutableStateOf<MerchantStats?>(null) }
     var orders          by remember { mutableStateOf<List<MerchantOrder>>(emptyList()) }
     var members         by remember { mutableStateOf<List<LoyaltyMember>>(emptyList()) }
     var showCreateOrder  by remember { mutableStateOf(false) }
     var showLoyalty      by remember { mutableStateOf(false) }
+    var toast           by remember { mutableStateOf<String?>(null) }
     val scope           = rememberCoroutineScope()
 
     suspend fun load() {
@@ -216,7 +222,19 @@ private fun MerchantDashboardView(
         load()
     }
 
-    Column(Modifier.fillMaxSize().background(Color.Black)) {
+    LaunchedEffect(Unit) {
+        intentPaid.collect { event ->
+            toast = "✓ Thanh toán ${event.amount.vndFormatted()} từ #${event.customerId}"
+            load()
+        }
+    }
+
+    toast?.let { msg ->
+        LaunchedEffect(msg) { kotlinx.coroutines.delay(4000); toast = null }
+    }
+
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Column(Modifier.fillMaxSize()) {
         // ── Top bar ──────────────────────────────────────────────────────────
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
@@ -287,6 +305,25 @@ private fun MerchantDashboardView(
             }
         }
     }
+
+    // ── Intent paid toast ─────────────────────────────────────────────────────
+    toast?.let { msg ->
+        Surface(
+            modifier        = Modifier.align(Alignment.TopCenter).padding(top = 16.dp),
+            shape           = RoundedCornerShape(50),
+            color           = Color(0xFF4CAF50),
+            shadowElevation = 8.dp
+        ) {
+            Text(
+                msg,
+                modifier   = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                color      = Color.White,
+                fontWeight = FontWeight.SemiBold,
+                fontSize   = 14.sp
+            )
+        }
+    }
+    } // end Box
 
     if (showCreateOrder) {
         CreateOrderDialog(uid, token, client, wireClient,
