@@ -44,66 +44,58 @@ public struct Transaction: Identifiable {
     }
 }
 
-// ─── Main client ───────────────────────────────────────────────────────────
+// ─── Background network actor ───────────────────────────────────────────────
+// All I/O, sequence numbers, and session token live here — never on the main thread.
 
-@MainActor
-public final class SavingClient: ObservableObject {
+private actor SavingNetwork {
 
-    private let conn: WireConnection
-    private var seq: UInt32 = 0
-    private var sessionToken: Data?
-    public private(set) var uid: UInt32?
+    let conn: WireConnection
+    var seq: UInt32 = 0
+    var sessionToken: Data?
 
-    public var onEvent: ((SavingEvent) -> Void)?
-
-    @Published public var isConnected = false
-    @Published public var lastTransferIn: SavingTransfer?
-
-    public init(host: String = "127.0.0.1", port: UInt16 = 7474, secret: String) {
+    init(host: String, port: UInt16, secret: String) {
         conn = WireConnection(host: host, port: port, secret: secret)
     }
 
-    // ─── Connection ──────────────────────────────────────────────────────────
+    // ─── Connection ─────────────────────────────────────────────────────────
 
-    public func connect() async throws {
+    func connect() async throws {
         try await conn.connect()
-        isConnected = true
-        await conn.setEventHandler { [weak self] frame in
-            Task { @MainActor in self?.handlePush(frame) }
-        }
     }
 
-    public func disconnect() async {
+    func disconnect() async {
         await conn.disconnect()
         sessionToken = nil
-        isConnected  = false
     }
 
-    // ─── Account ─────────────────────────────────────────────────────────────
+    func setEventHandler(_ handler: @escaping (WireFrame) -> Void) async {
+        await conn.setEventHandler(handler)
+    }
 
-    public func createAccount(id: UInt32, password: String) async throws {
+    // ─── Account ────────────────────────────────────────────────────────────
+
+    func createAccount(id: UInt32, password: String) async throws {
         let frame = WireFrame.createAccount(id: id, passwordHash: sha256(password), seq: nextSeq())
         let ack   = try await conn.send(frame).parseAck()
         guard ack.code == .ok else { throw WireError.serverError(ack.code) }
     }
 
-    public func login(id: UInt32, password: String) async throws {
+    func login(id: UInt32, password: String) async throws {
         let frame = WireFrame.login(id: id, passwordHash: sha256(password), seq: nextSeq())
         let ack   = try await conn.send(frame).parseLoginAck()
         guard ack.code == .ok else { throw WireError.serverError(ack.code) }
         sessionToken = ack.token
-        uid = id
     }
 
-    public func logout() async throws {
+    func logout() async throws {
         let token = try requireToken()
         _ = try await conn.send(WireFrame.logout(token: token, seq: nextSeq()))
         sessionToken = nil
     }
 
-    // ─── Balance ─────────────────────────────────────────────────────────────
+    // ─── Balance ────────────────────────────────────────────────────────────
 
-    public func balance() async throws -> BalanceInfo {
+    func balance() async throws -> BalanceInfo {
         let token = try requireToken()
         let ack   = try await conn.send(WireFrame.getBalance(token: token, seq: nextSeq())).parseAck()
         guard ack.code == .ok else { throw WireError.serverError(ack.code) }
@@ -116,38 +108,31 @@ public final class SavingClient: ObservableObject {
                 version:          d.readBigEndianUInt64(at: 24)
             )
         }
-        // Legacy server: single 8-byte balance
         let bal = d.count >= 8 ? d.readBigEndianUInt64(at: 0) : 0
         return BalanceInfo(balance: bal, pending: 0, availableBalance: bal, version: 0)
     }
 
-    // ─── Transfer ────────────────────────────────────────────────────────────
+    // ─── Transfer ───────────────────────────────────────────────────────────
 
-    public func transfer(to: UInt32, amount: UInt64) async throws {
+    func transfer(to: UInt32, amount: UInt64) async throws {
         let token = try requireToken()
-        let frame = WireFrame.transfer(token: token, toID: to, amount: amount, seq: nextSeq())
-        let ack   = try await conn.send(frame).parseAck()
+        let ack   = try await conn.send(WireFrame.transfer(token: token, toID: to, amount: amount, seq: nextSeq())).parseAck()
         guard ack.code == .ok else { throw WireError.serverError(ack.code) }
     }
 
-    // ─── Merchant pay ─────────────────────────────────────────────────────────
-    // Mechanically identical to transfer; mid is in the VIP account range.
-
-    public func payMerchant(mid: UInt32, amount: UInt64) async throws {
+    func payMerchant(mid: UInt32, amount: UInt64) async throws {
         let token = try requireToken()
-        let frame = WireFrame.transfer(token: token, toID: mid, amount: amount, seq: nextSeq())
-        let ack   = try await conn.send(frame).parseAck()
+        let ack   = try await conn.send(WireFrame.transfer(token: token, toID: mid, amount: amount, seq: nextSeq())).parseAck()
         guard ack.code == .ok else { throw WireError.serverError(ack.code) }
     }
 
-    // ─── History ─────────────────────────────────────────────────────────────
+    // ─── History ────────────────────────────────────────────────────────────
 
-    public func history() async throws -> [Transaction] {
+    func history() async throws -> [Transaction] {
         let token = try requireToken()
         let ack   = try await conn.send(WireFrame.getHistory(token: token, seq: nextSeq())).parseAck()
         guard ack.code == .ok else { throw WireError.serverError(ack.code) }
 
-        /* extra layout: [count 1B][direction 1B | counterpart 4B | amount 8B | after_balance 8B] × count */
         let data  = ack.data
         guard !data.isEmpty else { return [] }
         let count = Int(data[0])
@@ -175,6 +160,152 @@ public final class SavingClient: ObservableObject {
         return txs
     }
 
+    // ─── Payment Intents ────────────────────────────────────────────────────
+
+    func createIntent(requestID: UInt64, orderID: UInt64, amount: UInt64,
+                      gatewayOrderID: String) async throws -> SavingClient.IntentResult {
+        let token = try requireToken()
+        let frame = WireFrame.createIntent(token: token, requestID: requestID,
+                                           orderID: orderID, amount: amount,
+                                           gatewayOrderID: gatewayOrderID, seq: nextSeq())
+        let ack = try await conn.send(frame).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+        guard ack.data.count >= 21 else { throw WireError.badFrame("short intent reply") }
+        let mid = ack.data.readBigEndianUInt32(at: 1)
+        let rid = ack.data.readBigEndianUInt64(at: 5)
+        let amt = ack.data.readBigEndianUInt64(at: 13)
+        return SavingClient.IntentResult(mid: mid, requestID: rid, amount: amt)
+    }
+
+    func payIntent(merchantID: UInt32, requestID: UInt64, totpCode: UInt32) async throws {
+        let token = try requireToken()
+        let ack = try await conn.send(WireFrame.payIntent(token: token, merchantID: merchantID,
+                                                          requestID: requestID, totpCode: totpCode,
+                                                          seq: nextSeq())).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+    }
+
+    func enrollTotp(customerID: UInt32, secret: Data) async throws {
+        let token = try requireToken()
+        let ack = try await conn.send(WireFrame.enrollTotp(token: token, customerID: customerID,
+                                                            secret: secret, seq: nextSeq())).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+    }
+
+    func registerMerchant(name: String) async throws {
+        let token = try requireToken()
+        let ack = try await conn.send(WireFrame.registerMerchant(token: token, name: name,
+                                                                  seq: nextSeq())).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+    }
+
+    // ─── Guardians ──────────────────────────────────────────────────────────
+
+    func addGuardian(id: UInt32) async throws {
+        let token = try requireToken()
+        let ack   = try await conn.send(WireFrame.addGuardian(token: token, guardianID: id, seq: nextSeq())).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+    }
+
+    // ─── Social Recovery ────────────────────────────────────────────────────
+
+    func requestRecovery(id: UInt32) async throws {
+        let ack = try await conn.send(WireFrame.recoveryReq(id: id, seq: nextSeq())).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+    }
+
+    func approveRecovery(targetID: UInt32) async throws {
+        let token = try requireToken()
+        let ack   = try await conn.send(WireFrame.recoveryApprove(token: token, targetID: targetID, seq: nextSeq())).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+    }
+
+    // ─── Helpers ────────────────────────────────────────────────────────────
+
+    private func nextSeq() -> UInt32 { seq &+= 1; return seq }
+
+    private func requireToken() throws -> Data {
+        guard let t = sessionToken else { throw WireError.serverError(.errBadToken) }
+        return t
+    }
+
+    private func sha256(_ input: String) -> Data {
+        Data(SHA256.hash(data: Data(input.utf8)))
+    }
+}
+
+// ─── Main client (UI layer) ─────────────────────────────────────────────────
+// @MainActor shell: owns SavingNetwork, delegates all I/O to it, updates
+// @Published properties only after network calls return to the main thread.
+
+@MainActor
+public final class SavingClient: ObservableObject {
+
+    private let net: SavingNetwork
+    public private(set) var uid: UInt32?
+
+    public var onEvent: ((SavingEvent) -> Void)?
+
+    @Published public var isConnected    = false
+    @Published public var lastTransferIn: SavingTransfer?
+
+    public init(host: String = "127.0.0.1", port: UInt16 = 7474, secret: String) {
+        net = SavingNetwork(host: host, port: port, secret: secret)
+    }
+
+    // ─── Connection ──────────────────────────────────────────────────────────
+
+    public func connect() async throws {
+        try await net.connect()
+        isConnected = true
+        await net.setEventHandler { [weak self] frame in
+            Task { @MainActor in self?.handlePush(frame) }
+        }
+    }
+
+    public func disconnect() async {
+        await net.disconnect()
+        isConnected = false
+    }
+
+    // ─── Account ─────────────────────────────────────────────────────────────
+
+    public func createAccount(id: UInt32, password: String) async throws {
+        try await net.createAccount(id: id, password: password)
+    }
+
+    public func login(id: UInt32, password: String) async throws {
+        try await net.login(id: id, password: password)
+        uid = id
+    }
+
+    public func logout() async throws {
+        try await net.logout()
+        uid = nil
+    }
+
+    // ─── Balance ─────────────────────────────────────────────────────────────
+
+    public func balance() async throws -> BalanceInfo {
+        try await net.balance()
+    }
+
+    // ─── Transfer ────────────────────────────────────────────────────────────
+
+    public func transfer(to: UInt32, amount: UInt64) async throws {
+        try await net.transfer(to: to, amount: amount)
+    }
+
+    public func payMerchant(mid: UInt32, amount: UInt64) async throws {
+        try await net.payMerchant(mid: mid, amount: amount)
+    }
+
+    // ─── History ─────────────────────────────────────────────────────────────
+
+    public func history() async throws -> [Transaction] {
+        try await net.history()
+    }
+
     // ─── Payment Intents ─────────────────────────────────────────────────────
 
     public struct IntentResult {
@@ -183,68 +314,38 @@ public final class SavingClient: ObservableObject {
         public let amount: UInt64
     }
 
-    /// Merchant creates a payment intent. requestID and orderID must be unique per merchant.
     public func createIntent(requestID: UInt64, orderID: UInt64, amount: UInt64,
                              gatewayOrderID: String = "") async throws -> IntentResult {
-        let token = try requireToken()
-        let frame = WireFrame.createIntent(token: token, requestID: requestID,
-                                           orderID: orderID, amount: amount,
-                                           gatewayOrderID: gatewayOrderID, seq: nextSeq())
-        let ack = try await conn.send(frame).parseAck()
-        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
-        /* extra: [status 1B][mid 4B][request_id 8B][amount 8B] = 21 bytes */
-        guard ack.data.count >= 21 else { throw WireError.badFrame("short intent reply") }
-        let mid       = ack.data.readBigEndianUInt32(at: 1)
-        let rid       = ack.data.readBigEndianUInt64(at: 5)
-        let amt       = ack.data.readBigEndianUInt64(at: 13)
-        return IntentResult(mid: mid, requestID: rid, amount: amt)
+        try await net.createIntent(requestID: requestID, orderID: orderID,
+                                   amount: amount, gatewayOrderID: gatewayOrderID)
     }
 
-    /// Customer pays a payment intent with their TOTP code.
     public func payIntent(merchantID: UInt32, requestID: UInt64, totpCode: UInt32) async throws {
-        let token = try requireToken()
-        let frame = WireFrame.payIntent(token: token, merchantID: merchantID,
-                                        requestID: requestID, totpCode: totpCode, seq: nextSeq())
-        let ack = try await conn.send(frame).parseAck()
-        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+        try await net.payIntent(merchantID: merchantID, requestID: requestID, totpCode: totpCode)
     }
 
-    /// Merchant enrolls a TOTP secret for a customer.
     public func enrollTotp(customerID: UInt32, secret: Data) async throws {
-        let token = try requireToken()
-        let frame = WireFrame.enrollTotp(token: token, customerID: customerID,
-                                          secret: secret, seq: nextSeq())
-        let ack = try await conn.send(frame).parseAck()
-        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+        try await net.enrollTotp(customerID: customerID, secret: secret)
     }
 
-    /// Register or update merchant name in the Wire server.
     public func registerMerchant(name: String) async throws {
-        let token = try requireToken()
-        let frame = WireFrame.registerMerchant(token: token, name: name, seq: nextSeq())
-        let ack = try await conn.send(frame).parseAck()
-        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+        try await net.registerMerchant(name: name)
     }
 
     // ─── Guardians ───────────────────────────────────────────────────────────
 
     public func addGuardian(id: UInt32) async throws {
-        let token = try requireToken()
-        let ack   = try await conn.send(WireFrame.addGuardian(token: token, guardianID: id, seq: nextSeq())).parseAck()
-        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+        try await net.addGuardian(id: id)
     }
 
     // ─── Social Recovery ─────────────────────────────────────────────────────
 
     public func requestRecovery(id: UInt32) async throws {
-        let ack = try await conn.send(WireFrame.recoveryReq(id: id, seq: nextSeq())).parseAck()
-        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+        try await net.requestRecovery(id: id)
     }
 
     public func approveRecovery(targetID: UInt32) async throws {
-        let token = try requireToken()
-        let ack   = try await conn.send(WireFrame.recoveryApprove(token: token, targetID: targetID, seq: nextSeq())).parseAck()
-        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+        try await net.approveRecovery(targetID: targetID)
     }
 
     // ─── Push events ─────────────────────────────────────────────────────────
@@ -284,17 +385,6 @@ public final class SavingClient: ObservableObject {
         UNUserNotificationCenter.current().add(
             UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         )
-    }
-
-    private func nextSeq() -> UInt32 { seq &+= 1; return seq }
-
-    private func requireToken() throws -> Data {
-        guard let t = sessionToken else { throw WireError.serverError(.errBadToken) }
-        return t
-    }
-
-    private func sha256(_ input: String) -> Data {
-        Data(SHA256.hash(data: Data(input.utf8)))
     }
 }
 
