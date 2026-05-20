@@ -38,6 +38,7 @@ fun HomeScreen(vm: WireViewModel, accountId: Long) {
     var showMerchant by remember { mutableStateOf(false) }
     var showTOTP     by remember { mutableStateOf(false) }
     var showLoyalty  by remember { mutableStateOf(false) }
+    var showChat     by remember { mutableStateOf(false) }
     var showSearch   by remember { mutableStateOf(false) }
     var transferToId by remember { mutableStateOf("") }
 
@@ -89,10 +90,10 @@ fun HomeScreen(vm: WireViewModel, accountId: Long) {
                     MiniTile(Icons.Default.Store, "Bán hàng", Modifier.weight(1f)) { showMerchant = true }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MiniTile(Icons.Default.VpnKey,  "Mã TT",     Modifier.weight(1f)) { showTOTP    = true }
-                    MiniTile(Icons.Default.Star,    "Tích điểm", Modifier.weight(1f)) { showLoyalty = true }
-                    MiniTile(Icons.Default.Refresh, "Phục hồi",  Modifier.weight(1f)) { }
-                    Spacer(Modifier.weight(1f))
+                    MiniTile(Icons.Default.VpnKey,   "Mã TT",     Modifier.weight(1f)) { showTOTP    = true }
+                    MiniTile(Icons.Default.Star,     "Tích điểm", Modifier.weight(1f)) { showLoyalty = true }
+                    MiniTile(Icons.Default.Refresh,  "Phục hồi",  Modifier.weight(1f)) { }
+                    MiniTile(Icons.Default.Terminal, "Terminal",  Modifier.weight(1f)) { showChat    = true }
                 }
             }
 
@@ -148,6 +149,7 @@ fun HomeScreen(vm: WireViewModel, accountId: Long) {
         onTransfer = { id -> transferToId = id; showSearch = false; showTransfer = true },
         onDismiss  = { showSearch = false }
     )
+    if (showChat)     ChatSheet(vm = vm)                                                                           { showChat    = false }
 }
 
 @Composable
