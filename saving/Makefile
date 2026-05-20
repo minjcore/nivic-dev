@@ -11,7 +11,8 @@ else
   LDFLAGS = -lpq -lpthread -lssl -lcrypto
 endif
 
-SRC = src/main.c src/wire_parser.c src/db.c src/handlers.c src/server.c src/registry.c
+SRC = src/main.c src/wire_parser.c src/db.c src/handlers.c src/server.c src/registry.c \
+      src/disruptor.c src/wal.c
 BIN = saving
 
 .PHONY: all clean
