@@ -226,7 +226,7 @@ struct HomeView: View {
                                 showPaymentToken = true
                             }
                             MiniAppTile(icon: "arrow.counterclockwise.circle", label: "Phục hồi") {
-                                // coming soon
+                                showToast("Tính năng đang phát triển 🛠️")
                             }
                         }
                         .padding(.horizontal, 20)
