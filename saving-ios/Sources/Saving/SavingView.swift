@@ -16,10 +16,11 @@ public struct SavingApp: View {
     private let tomcatsClient:   TomcatsClient
 
     public init(host: String = "127.0.0.1", port: UInt16 = 7474,
+                secret:       String,
                 merchantsURL: String = "http://localhost:8090",
                 cardsURL:     String = "http://localhost:8091",
                 tomcatsURL:   String = "http://localhost:8093") {
-        _client         = StateObject(wrappedValue: SavingClient(host: host, port: port))
+        _client         = StateObject(wrappedValue: SavingClient(host: host, port: port, secret: secret))
         merchantsClient = MerchantsClient(baseURL: merchantsURL)
         cardsClient     = CardsClient(baseURL: cardsURL)
         tomcatsClient   = TomcatsClient(baseURL: tomcatsURL)

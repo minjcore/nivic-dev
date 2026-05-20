@@ -49,8 +49,6 @@ public struct Transaction: Identifiable {
 @MainActor
 public final class SavingClient: ObservableObject {
 
-    private static let wireSecret = "saving_wire_secret_changeme"
-
     private let conn: WireConnection
     private var seq: UInt32 = 0
     private var sessionToken: Data?
@@ -61,8 +59,8 @@ public final class SavingClient: ObservableObject {
     @Published public var isConnected = false
     @Published public var lastTransferIn: SavingTransfer?
 
-    public init(host: String = "127.0.0.1", port: UInt16 = 7474) {
-        conn = WireConnection(host: host, port: port, secret: Self.wireSecret)
+    public init(host: String = "127.0.0.1", port: UInt16 = 7474, secret: String) {
+        conn = WireConnection(host: host, port: port, secret: secret)
     }
 
     // ─── Connection ──────────────────────────────────────────────────────────
