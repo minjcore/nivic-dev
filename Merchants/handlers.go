@@ -112,10 +112,6 @@ func (h *handler) handleHealth(w http.ResponseWriter, _ *http.Request) {
 
 func (h *handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
-	if q == "" {
-		jsonErr(w, 400, "q required")
-		return
-	}
 	results, err := h.store.SearchMerchants(q)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
@@ -365,10 +361,27 @@ func (h *handler) handleMerchantConfirmOrder(w http.ResponseWriter, r *http.Requ
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		jsonErr(w, 400, "bad json"); return
 	}
-	pts, err := h.store.MarkPaid(r.PathValue("oid"), body.PaidBy)
+	oid := r.PathValue("oid")
+	pts, err := h.store.MarkPaid(oid, body.PaidBy)
 	if err != nil {
 		jsonErr(w, 400, err.Error()); return
 	}
+
+	// Auto-message the customer when uid is known
+	if body.PaidBy != 0 {
+		go func() {
+			o, err := h.store.GetOrder(oid)
+			if err != nil || o == nil {
+				return
+			}
+			msg := fmt.Sprintf("✅ Đơn hàng %s đã được xác nhận!\nSố tiền: %s₫", o.ID[len(o.ID)-8:], formatVND(int64(o.Amount)))
+			if pts > 0 {
+				msg += fmt.Sprintf("\n🌟 Bạn được cộng %d điểm tích luỹ.", pts)
+			}
+			_, _ = h.store.SendChatMessage(mid, body.PaidBy, true, msg)
+		}()
+	}
+
 	jsonOK(w, map[string]any{"status": "paid", "points_awarded": pts})
 }
 
@@ -803,4 +816,16 @@ func jsonErr(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+func formatVND(amount int64) string {
+	s := strconv.FormatInt(amount, 10)
+	out := []byte{}
+	for i, c := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			out = append(out, '.')
+		}
+		out = append(out, byte(c))
+	}
+	return string(out)
 }
