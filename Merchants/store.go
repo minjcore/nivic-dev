@@ -116,6 +116,24 @@ func migrate(db *sql.DB) error {
 	db.Exec(`ALTER TABLE merchants ADD COLUMN token       TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE orders ADD COLUMN discount_points INTEGER NOT NULL DEFAULT 0`)
 	db.Exec(`ALTER TABLE orders ADD COLUMN points_awarded  INTEGER NOT NULL DEFAULT 0`)
+
+	// FTS5 full-text index on merchant names
+	db.Exec(`CREATE VIRTUAL TABLE IF NOT EXISTS merchants_fts USING fts5(
+		name, content='merchants', content_rowid='mid', tokenize='unicode61'
+	)`)
+	db.Exec(`CREATE TRIGGER IF NOT EXISTS merchants_ai AFTER INSERT ON merchants BEGIN
+		INSERT INTO merchants_fts(rowid, name) VALUES (new.mid, new.name);
+	END`)
+	db.Exec(`CREATE TRIGGER IF NOT EXISTS merchants_ad AFTER DELETE ON merchants BEGIN
+		INSERT INTO merchants_fts(merchants_fts, rowid, name) VALUES ('delete', old.mid, old.name);
+	END`)
+	db.Exec(`CREATE TRIGGER IF NOT EXISTS merchants_au AFTER UPDATE ON merchants BEGIN
+		INSERT INTO merchants_fts(merchants_fts, rowid, name) VALUES ('delete', old.mid, old.name);
+		INSERT INTO merchants_fts(rowid, name) VALUES (new.mid, new.name);
+	END`)
+	// populate index for pre-existing rows (no-op if already indexed)
+	db.Exec(`INSERT INTO merchants_fts(merchants_fts) VALUES('rebuild')`)
+
 	return err
 }
 
@@ -311,10 +329,21 @@ type MerchantSearchResult struct {
 }
 
 func (s *Store) SearchMerchants(query string) ([]MerchantSearchResult, error) {
-	rows, err := s.db.Query(
-		`SELECT mid, name FROM merchants WHERE name LIKE ? ORDER BY name LIMIT 20`,
-		"%"+query+"%",
-	)
+	var rows *sql.Rows
+	var err error
+	if query == "" {
+		rows, err = s.db.Query(`SELECT mid, name FROM merchants ORDER BY name LIMIT 50`)
+	} else {
+		// FTS5 prefix search — append * for partial word matching, rank by BM25
+		ftsQuery := query + "*"
+		rows, err = s.db.Query(`
+			SELECT m.mid, m.name
+			FROM merchants_fts f
+			JOIN merchants m ON m.mid = f.rowid
+			WHERE merchants_fts MATCH ?
+			ORDER BY rank
+			LIMIT 20`, ftsQuery)
+	}
 	if err != nil {
 		return nil, err
 	}
