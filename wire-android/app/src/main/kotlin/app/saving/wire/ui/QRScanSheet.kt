@@ -422,6 +422,7 @@ private fun IntentPayContent(
                         val secret = base32Decode(ownB32)
                         val code = TOTP.generateCode(secret)
                         client.payIntent(payload.mid, payload.requestId, code)
+                        payload.orderID?.let { oid -> merchantsClient.confirmPaid(oid, accountId.toInt()) }
                         success = true
                         kotlinx.coroutines.delay(1500)
                         onDone()

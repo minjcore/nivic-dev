@@ -71,7 +71,19 @@ fun HistorySheet(client: SavingClient, onDismiss: () -> Unit) {
 
 @Composable
 private fun TxRow(tx: Transaction) {
-    val received = tx.direction == Transaction.Direction.RECEIVED
+    val isCredit = tx.direction == Transaction.Direction.RECEIVED
+            || tx.direction == Transaction.Direction.PAYMENT_RECEIVED
+            || tx.direction == Transaction.Direction.CASH_IN
+
+    val (label, peer) = when (tx.direction) {
+        Transaction.Direction.SENT             -> "Chuyển đến"   to "#${tx.counterpartId}"
+        Transaction.Direction.RECEIVED         -> "Nhận từ"      to "#${tx.counterpartId}"
+        Transaction.Direction.PAYMENT_SENT     -> "Thanh toán"   to "#${tx.counterpartId}"
+        Transaction.Direction.PAYMENT_RECEIVED -> "Thu tiền"     to "#${tx.counterpartId}"
+        Transaction.Direction.CASH_IN          -> "Nạp tiền"     to ""
+        Transaction.Direction.CASH_OUT         -> "Rút tiền"     to ""
+    }
+
     Row(
         modifier          = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -79,27 +91,29 @@ private fun TxRow(tx: Transaction) {
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                imageVector        = if (received) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
+                imageVector        = if (isCredit) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
                 contentDescription = null,
-                tint               = if (received) Color(0xFF4CAF50) else Color(0xFFFF9800),
+                tint               = if (isCredit) Color(0xFF4CAF50) else Color(0xFFFF9800),
                 modifier           = Modifier.size(28.dp)
             )
             Column {
-                Text(if (received) "Nhận từ" else "Gửi đến", color = Color.Gray, fontSize = 11.sp)
-                Text("#${tx.counterpartId}", color = Color.White, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+                Text(label, color = Color.Gray, fontSize = 11.sp)
+                if (peer.isNotEmpty())
+                    Text(peer, color = Color.White, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
             }
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                (if (received) "+" else "−") + tx.amount.vndFormatted(),
-                color      = if (received) Color(0xFF4CAF50) else Color.White,
+                (if (isCredit) "+" else "−") + tx.amount.vndFormatted(),
+                color      = if (isCredit) Color(0xFF4CAF50) else Color.White,
                 fontWeight = FontWeight.SemiBold,
                 fontSize   = 14.sp
             )
-            if (!received) {
-                val pts = tx.amount / 10_000L
+            if (tx.direction == Transaction.Direction.PAYMENT_SENT) {
+                val pts = tx.amount / 1_000L
                 if (pts > 0) Text("+$pts điểm", color = Color(0xFFFFC107), fontSize = 11.sp)
             }
         }
     }
+    HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
 }

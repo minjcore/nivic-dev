@@ -79,6 +79,7 @@ type handler struct {
 func (h *handler) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health",                              h.handleHealth)
+	mux.HandleFunc("GET /merchants",                           h.handleSearch)
 	mux.HandleFunc("GET /merchants/{mid}",                     h.handleGet)
 	mux.HandleFunc("POST /merchants",                          h.handleRegister)
 	mux.HandleFunc("POST /merchants/onboard",                  h.handleOnboard)
@@ -91,7 +92,12 @@ func (h *handler) routes() http.Handler {
 	mux.HandleFunc("POST /merchants/{mid}/loyalty/{uid}/award",h.handleLoyaltyAward)
 	mux.HandleFunc("GET /loyalty/user/{uid}",                  h.handleUserLoyalty)
 	mux.HandleFunc("POST /orders/{oid}/confirm",               h.handleConfirmOrder)
+	mux.HandleFunc("POST /merchants/{mid}/orders/{oid}/confirm", h.handleMerchantConfirmOrder)
 	mux.HandleFunc("POST /payment_request/verify",             h.handleVerify)
+	mux.HandleFunc("POST /chat/{mid}",                         h.handleChatSend)
+	mux.HandleFunc("POST /chat/{mid}/reply",                   h.handleChatReply)
+	mux.HandleFunc("GET /chat/{mid}/inbox",                    h.handleChatInbox)
+	mux.HandleFunc("GET /chat/{mid}/{uid}",                    h.handleChatThread)
 	return mux
 }
 
@@ -99,6 +105,26 @@ func (h *handler) routes() http.Handler {
 
 func (h *handler) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	jsonOK(w, map[string]string{"status": "ok", "service": "merchants-host"})
+}
+
+// GET /merchants?q={query}
+// Public — search merchants by name.
+
+func (h *handler) handleSearch(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		jsonErr(w, 400, "q required")
+		return
+	}
+	results, err := h.store.SearchMerchants(q)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if results == nil {
+		results = []MerchantSearchResult{}
+	}
+	jsonOK(w, results)
 }
 
 // GET /merchants/{mid}
@@ -312,6 +338,36 @@ func (h *handler) handleConfirmOrder(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		jsonErr(w, 400, err.Error())
 		return
+	}
+	jsonOK(w, map[string]any{"status": "paid", "points_awarded": pts})
+}
+
+// POST /merchants/{mid}/orders/{oid}/confirm
+// Merchant confirms receipt of a bank transfer (VietQR).
+// Body: { "paid_by": 16777219 }  (UID of payer, optional — 0 if unknown)
+// Auth: X-Merchant-Token
+
+func (h *handler) handleMerchantConfirmOrder(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "bad mid"); return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil {
+		jsonErr(w, 404, "merchant not found"); return
+	}
+	if r.Header.Get("X-Merchant-Token") != m.Token {
+		jsonErr(w, 401, "unauthorized"); return
+	}
+	var body struct {
+		PaidBy uint32 `json:"paid_by"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonErr(w, 400, "bad json"); return
+	}
+	pts, err := h.store.MarkPaid(r.PathValue("oid"), body.PaidBy)
+	if err != nil {
+		jsonErr(w, 400, err.Error()); return
 	}
 	jsonOK(w, map[string]any{"status": "paid", "points_awarded": pts})
 }
@@ -598,6 +654,137 @@ func (h *handler) handleUserLoyalty(w http.ResponseWriter, r *http.Request) {
 		entries = []UserLoyaltyEntry{}
 	}
 	jsonOK(w, entries)
+}
+
+// GET /chat/{mid}/inbox
+// Merchant reads all customer threads, newest first.
+// Header: X-Merchant-Token
+
+func (h *handler) handleChatInbox(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid")
+		return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil || m == nil {
+		jsonErr(w, 404, "merchant not found")
+		return
+	}
+	if r.Header.Get("X-Merchant-Token") != m.Token {
+		jsonErr(w, 401, "unauthorized")
+		return
+	}
+	items, err := h.store.GetChatInbox(mid)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if items == nil {
+		items = []ChatInboxItem{}
+	}
+	jsonOK(w, items)
+}
+
+// POST /chat/{mid}
+// Customer sends a message to a merchant.
+// Body: { "uid": 16777216, "text": "xe xong chưa?" }
+
+func (h *handler) handleChatSend(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid")
+		return
+	}
+	if m, _ := h.store.Get(mid); m == nil {
+		jsonErr(w, 404, "merchant not found")
+		return
+	}
+	var req struct {
+		UID  uint32 `json:"uid"`
+		Text string `json:"text"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UID == 0 || req.Text == "" {
+		jsonErr(w, 400, "uid and text required")
+		return
+	}
+	if len(req.Text) > 500 {
+		jsonErr(w, 400, "message too long")
+		return
+	}
+	id, err := h.store.SendChatMessage(mid, req.UID, false, req.Text)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonOK(w, map[string]any{"id": id})
+}
+
+// POST /chat/{mid}/reply
+// Merchant replies to a customer thread.
+// Header: X-Merchant-Token
+// Body: { "uid": 16777216, "text": "xong rồi anh ơi" }
+
+func (h *handler) handleChatReply(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid")
+		return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil || m == nil {
+		jsonErr(w, 404, "merchant not found")
+		return
+	}
+	if r.Header.Get("X-Merchant-Token") != m.Token {
+		jsonErr(w, 401, "unauthorized")
+		return
+	}
+	var req struct {
+		UID  uint32 `json:"uid"`
+		Text string `json:"text"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UID == 0 || req.Text == "" {
+		jsonErr(w, 400, "uid and text required")
+		return
+	}
+	if len(req.Text) > 500 {
+		jsonErr(w, 400, "message too long")
+		return
+	}
+	id, err := h.store.SendChatMessage(mid, req.UID, true, req.Text)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonOK(w, map[string]any{"id": id})
+}
+
+// GET /chat/{mid}/{uid}?since={unix_millis}
+// Returns messages in thread between merchant and customer after the given timestamp.
+// Both parties can poll freely (no auth — support chat is not sensitive).
+
+func (h *handler) handleChatThread(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid")
+		return
+	}
+	uid, err := parseMID(r.PathValue("uid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid uid")
+		return
+	}
+	since, _ := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
+	msgs, err := h.store.GetChatThread(mid, uid, since)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if msgs == nil {
+		msgs = []ChatMessage{}
+	}
+	jsonOK(w, msgs)
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

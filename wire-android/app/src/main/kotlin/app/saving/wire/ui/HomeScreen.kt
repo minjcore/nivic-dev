@@ -38,9 +38,12 @@ fun HomeScreen(vm: WireViewModel, accountId: Long) {
     var showMerchant by remember { mutableStateOf(false) }
     var showTOTP     by remember { mutableStateOf(false) }
     var showLoyalty  by remember { mutableStateOf(false) }
-    var showChat     by remember { mutableStateOf(false) }
-    var showSearch   by remember { mutableStateOf(false) }
-    var transferToId by remember { mutableStateOf("") }
+    var showChat          by remember { mutableStateOf(false) }
+    var showSearch        by remember { mutableStateOf(false) }
+    var showConversation  by remember { mutableStateOf(false) }
+    var chatMid           by remember { mutableLongStateOf(0L) }
+    var chatMerchantName  by remember { mutableStateOf("") }
+    var transferToId      by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) { vm.refreshBalance() }
 
@@ -145,9 +148,18 @@ fun HomeScreen(vm: WireViewModel, accountId: Long) {
     if (showLoyalty)  MyLoyaltySheet(vm.merchantsClient, accountId)                                                  { showLoyalty  = false }
     if (showTOTP)     TOTPPaySheet(accountId, vm.prefs)                                                              { showTOTP     = false }
     if (showSearch)   SearchSheet(
-        client     = vm.client,
-        onTransfer = { id -> transferToId = id; showSearch = false; showTransfer = true },
-        onDismiss  = { showSearch = false }
+        client          = vm.client,
+        merchantsClient = vm.merchantsClient,
+        onTransfer      = { id -> transferToId = id; showSearch = false; showTransfer = true },
+        onChat          = { mid, name -> chatMid = mid; chatMerchantName = name; showSearch = false; showConversation = true },
+        onDismiss       = { showSearch = false }
+    )
+    if (showConversation) ConversationSheet(
+        merchantsClient = vm.merchantsClient,
+        mid             = chatMid,
+        uid             = accountId,
+        merchantName    = chatMerchantName,
+        onDismiss       = { showConversation = false }
     )
     if (showChat)     ChatSheet(vm = vm)                                                                           { showChat    = false }
 }

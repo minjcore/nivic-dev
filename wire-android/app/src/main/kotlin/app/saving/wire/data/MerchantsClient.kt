@@ -7,6 +7,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
+data class MerchantInfo(val mid: Long, val name: String)
 data class MerchantStats(val totalEarned: Long, val orderCount: Int)
 data class LoyaltyBalance(val uid: Long, val mid: Long, val points: Long, val valueVnd: Long)
 data class LoyaltyMember(val uid: Long, val points: Long)
@@ -23,7 +24,30 @@ data class MerchantOrder(
 
 data class CreateOrderResult(val orderID: String, val pr: String, val qrURL: String)
 
+data class ChatMessage(
+    val id: Long,
+    val fromMerchant: Boolean,
+    val body: String,
+    val createdAt: Long
+)
+
+data class ChatInboxItem(
+    val uid:         Long,
+    val lastMessage: String,
+    val lastAt:      Long,
+    val unread:      Int,
+)
+
 class MerchantsClient(private val baseURL: String = "https://saving.nivic.dev") {
+
+    suspend fun searchMerchants(query: String): List<MerchantInfo> = withContext(Dispatchers.IO) {
+        val conn = get("$baseURL/merchants?q=${java.net.URLEncoder.encode(query, "UTF-8")}")
+        val arr  = JSONArray(readResponse(conn))
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            MerchantInfo(o.getLong("mid"), o.getString("name"))
+        }
+    }
 
     suspend fun onboard(uid: Long, name: String): String = withContext(Dispatchers.IO) {
         val body = JSONObject().apply { put("uid", uid); put("name", name) }.toString()
@@ -96,13 +120,61 @@ class MerchantsClient(private val baseURL: String = "https://saving.nivic.dev") 
             CreateOrderResult(j.getString("order_id"), j.getString("pr"), j.getString("qr_url"))
         }
 
+    suspend fun getInbox(mid: Long, token: String): List<ChatInboxItem> = withContext(Dispatchers.IO) {
+        val conn = get("$baseURL/chat/$mid/inbox", token)
+        val arr  = JSONArray(readResponse(conn))
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            ChatInboxItem(
+                uid         = o.getLong("uid"),
+                lastMessage = o.getString("last_message"),
+                lastAt      = o.getLong("last_at"),
+                unread      = o.getInt("unread"),
+            )
+        }
+    }
+
+    suspend fun replyMessage(mid: Long, uid: Long, token: String, text: String) = withContext(Dispatchers.IO) {
+        val body = org.json.JSONObject().apply { put("uid", uid); put("text", text) }.toString()
+        val conn = post("$baseURL/chat/$mid/reply", body, token)
+        readResponse(conn)
+    }
+
+    suspend fun sendMessage(mid: Long, uid: Long, text: String) = withContext(Dispatchers.IO) {
+        val body = org.json.JSONObject().apply { put("uid", uid); put("text", text) }.toString()
+        val conn = post("$baseURL/chat/$mid", body)
+        readResponse(conn)
+    }
+
+    suspend fun getThread(mid: Long, uid: Long, since: Long = 0): List<ChatMessage> = withContext(Dispatchers.IO) {
+        val conn = get("$baseURL/chat/$mid/$uid?since=$since")
+        val arr  = JSONArray(readResponse(conn))
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            ChatMessage(
+                id           = o.getLong("id"),
+                fromMerchant = o.getBoolean("from_merchant"),
+                body         = o.getString("body"),
+                createdAt    = o.getLong("created_at"),
+            )
+        }
+    }
+
     suspend fun confirmPaid(orderID: String, paidBy: Int) = withContext(Dispatchers.IO) {
         runCatching {
             val body = JSONObject().apply { put("paid_by", paidBy) }.toString()
             post("$baseURL/orders/$orderID/confirm", body)
         }
-        // fire-and-forget: payment already succeeded in Wire
+        // fire-and-forget: called by Wire server after Wire payment
     }
+
+    suspend fun merchantConfirmPaid(mid: Long, token: String, orderID: String, paidBy: Int): Int =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().apply { put("paid_by", paidBy) }.toString()
+            val conn = post("$baseURL/merchants/$mid/orders/$orderID/confirm", body, token)
+            val resp = readResponse(conn)
+            JSONObject(resp).optInt("points_awarded", 0)
+        }
 
     private fun readResponse(conn: HttpURLConnection): String {
         val code = conn.responseCode

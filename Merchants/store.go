@@ -102,6 +102,15 @@ func migrate(db *sql.DB) error {
 			PRIMARY KEY (uid, mid)
 		);
 		CREATE INDEX IF NOT EXISTS idx_loyalty_uid ON loyalty_points(uid);
+		CREATE TABLE IF NOT EXISTS chat_messages (
+			id            INTEGER PRIMARY KEY AUTOINCREMENT,
+			mid           INTEGER NOT NULL,
+			uid           INTEGER NOT NULL,
+			from_merchant INTEGER NOT NULL DEFAULT 0,
+			body          TEXT    NOT NULL,
+			created_at    INTEGER NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_chat_mid_uid ON chat_messages(mid, uid, created_at);
 	`)
 	db.Exec(`ALTER TABLE merchants ADD COLUMN privkey_b64 TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE merchants ADD COLUMN token       TEXT NOT NULL DEFAULT ''`)
@@ -292,6 +301,119 @@ func (s *Store) ListLoyaltyMembers(mid uint32) ([]LoyaltyEntry, error) {
 			return nil, err
 		}
 		out = append(out, e)
+	}
+	return out, nil
+}
+
+type MerchantSearchResult struct {
+	MID  uint32 `json:"mid"`
+	Name string `json:"name"`
+}
+
+func (s *Store) SearchMerchants(query string) ([]MerchantSearchResult, error) {
+	rows, err := s.db.Query(
+		`SELECT mid, name FROM merchants WHERE name LIKE ? ORDER BY name LIMIT 20`,
+		"%"+query+"%",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MerchantSearchResult
+	for rows.Next() {
+		var r MerchantSearchResult
+		if err := rows.Scan(&r.MID, &r.Name); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+// ─── Chat ─────────────────────────────────────────────────────────────────────
+
+type ChatMessage struct {
+	ID           int64  `json:"id"`
+	MID          uint32 `json:"mid"`
+	UID          uint32 `json:"uid"`
+	FromMerchant bool   `json:"from_merchant"`
+	Body         string `json:"body"`
+	CreatedAt    int64  `json:"created_at"` // unix millis
+}
+
+func (s *Store) SendChatMessage(mid, uid uint32, fromMerchant bool, body string) (int64, error) {
+	fm := 0
+	if fromMerchant {
+		fm = 1
+	}
+	res, err := s.db.Exec(
+		`INSERT INTO chat_messages (mid, uid, from_merchant, body, created_at) VALUES (?, ?, ?, ?, ?)`,
+		mid, uid, fm, body, time.Now().UnixMilli(),
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+type ChatInboxItem struct {
+	UID         uint32 `json:"uid"`
+	LastMessage string `json:"last_message"`
+	LastAt      int64  `json:"last_at"`
+	Unread      int    `json:"unread"` // customer messages without a subsequent merchant reply
+}
+
+func (s *Store) GetChatInbox(mid uint32) ([]ChatInboxItem, error) {
+	rows, err := s.db.Query(`
+		SELECT uid,
+		       (SELECT body FROM chat_messages m2
+		        WHERE m2.mid=cm.mid AND m2.uid=cm.uid
+		        ORDER BY created_at DESC LIMIT 1) AS last_message,
+		       MAX(created_at) AS last_at,
+		       SUM(CASE WHEN from_merchant=0 AND created_at > COALESCE(
+		               (SELECT MAX(created_at) FROM chat_messages m3
+		                WHERE m3.mid=cm.mid AND m3.uid=cm.uid AND m3.from_merchant=1), 0)
+		           THEN 1 ELSE 0 END) AS unread
+		FROM chat_messages cm
+		WHERE mid=?
+		GROUP BY uid
+		ORDER BY last_at DESC
+		LIMIT 50`, mid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ChatInboxItem
+	for rows.Next() {
+		var item ChatInboxItem
+		if err := rows.Scan(&item.UID, &item.LastMessage, &item.LastAt, &item.Unread); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, nil
+}
+
+func (s *Store) GetChatThread(mid, uid uint32, since int64) ([]ChatMessage, error) {
+	rows, err := s.db.Query(
+		`SELECT id, mid, uid, from_merchant, body, created_at
+		 FROM chat_messages WHERE mid=? AND uid=? AND created_at > ?
+		 ORDER BY created_at ASC LIMIT 100`,
+		mid, uid, since,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ChatMessage
+	for rows.Next() {
+		var m ChatMessage
+		var fm int
+		if err := rows.Scan(&m.ID, &m.MID, &m.UID, &fm, &m.Body, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		m.FromMerchant = fm == 1
+		out = append(out, m)
 	}
 	return out, nil
 }
