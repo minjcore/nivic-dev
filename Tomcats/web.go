@@ -297,6 +297,11 @@ func addMerchantsProxy(mux *http.ServeMux, merchantsURL string) {
 		mux.Handle("GET "+prefix, proxy)
 		mux.Handle("POST "+prefix, proxy)
 	}
+	// exact-match routes (no trailing slash) for search + register
+	mux.Handle("GET /merchants", proxy)
+	mux.Handle("POST /merchants", proxy)
+	mux.Handle("GET /chat/", proxy)
+	mux.Handle("POST /chat/", proxy)
 }
 
 func requireJWT(w http.ResponseWriter, r *http.Request) (*Claims, bool) {
