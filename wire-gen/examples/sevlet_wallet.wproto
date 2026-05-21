@@ -1,0 +1,20 @@
+# SevletWallet wire protocol
+# Binary frame layout (big-endian):
+#
+#   pad(3) | command(8) | mid(8) | request_id(8) | order_id(8) | amount(8)
+#   | debit(4) | credit(4) | [extra_data(*)] | sig(32)
+#
+# Total fixed overhead: 3+8+8+8+8+8+4+4+32 = 83 bytes
+
+protocol SevletWallet {
+    pad          bytes(3)   [skip]
+    command      u64
+    mid          u64
+    request_id   u64
+    order_id     u64
+    amount       u64
+    debit        u32
+    credit       u32
+    extra_data   bytes(*)   [var]
+    sig          bytes(32)  [trailing]
+}
