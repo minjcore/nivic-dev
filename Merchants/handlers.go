@@ -154,8 +154,9 @@ func (h *handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		MID  uint32 `json:"mid"`
-		Name string `json:"name"`
+		MID     uint32 `json:"mid"`
+		Name    string `json:"name"`
+		Address string `json:"address"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, 400, "bad json")
@@ -184,7 +185,7 @@ func (h *handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	pubB64  := base64.StdEncoding.EncodeToString(pub)
 	privB64 := base64.StdEncoding.EncodeToString(priv)
 
-	if err := h.store.Register(req.MID, req.Name, pubB64, privB64, token); err != nil {
+	if err := h.store.Register(req.MID, req.Name, req.Address, pubB64, privB64, token); err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
@@ -450,8 +451,9 @@ func (h *handler) handleVerify(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) handleOnboard(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		UID  uint32 `json:"uid"`
-		Name string `json:"name"`
+		UID     uint32 `json:"uid"`
+		Name    string `json:"name"`
+		Address string `json:"address"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, 400, "bad json")
@@ -491,7 +493,7 @@ func (h *handler) handleOnboard(w http.ResponseWriter, r *http.Request) {
 	pubB64  := base64.StdEncoding.EncodeToString(pub)
 	privB64 := base64.StdEncoding.EncodeToString(priv)
 
-	if err := h.store.Register(req.UID, req.Name, pubB64, privB64, token); err != nil {
+	if err := h.store.Register(req.UID, req.Name, req.Address, pubB64, privB64, token); err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}

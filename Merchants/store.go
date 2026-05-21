@@ -13,6 +13,7 @@ import (
 type Merchant struct {
 	MID        uint32 `json:"mid"`
 	Name       string `json:"name"`
+	Address    string `json:"address,omitempty"`
 	PubkeyB64  string `json:"pubkey_b64"`  // base64(ed25519 pubkey, 32 bytes)
 	PrivkeyB64 string `json:"-"`           // never exposed in API responses
 	Token      string `json:"-"`           // merchant API token
@@ -114,24 +115,28 @@ func migrate(db *sql.DB) error {
 	`)
 	db.Exec(`ALTER TABLE merchants ADD COLUMN privkey_b64 TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE merchants ADD COLUMN token       TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE merchants ADD COLUMN address     TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE orders ADD COLUMN discount_points INTEGER NOT NULL DEFAULT 0`)
 	db.Exec(`ALTER TABLE orders ADD COLUMN points_awarded  INTEGER NOT NULL DEFAULT 0`)
 
-	// FTS5 full-text index on merchant names
+	// FTS5: name (weight 10) + address (weight 1), unicode61 handles Vietnamese
+	db.Exec(`DROP TABLE IF EXISTS merchants_fts`)
+	db.Exec(`DROP TRIGGER IF EXISTS merchants_ai`)
+	db.Exec(`DROP TRIGGER IF EXISTS merchants_ad`)
+	db.Exec(`DROP TRIGGER IF EXISTS merchants_au`)
 	db.Exec(`CREATE VIRTUAL TABLE IF NOT EXISTS merchants_fts USING fts5(
-		name, content='merchants', content_rowid='mid', tokenize='unicode61'
+		name, address, content='merchants', content_rowid='mid', tokenize='unicode61'
 	)`)
 	db.Exec(`CREATE TRIGGER IF NOT EXISTS merchants_ai AFTER INSERT ON merchants BEGIN
-		INSERT INTO merchants_fts(rowid, name) VALUES (new.mid, new.name);
+		INSERT INTO merchants_fts(rowid, name, address) VALUES (new.mid, new.name, new.address);
 	END`)
 	db.Exec(`CREATE TRIGGER IF NOT EXISTS merchants_ad AFTER DELETE ON merchants BEGIN
-		INSERT INTO merchants_fts(merchants_fts, rowid, name) VALUES ('delete', old.mid, old.name);
+		INSERT INTO merchants_fts(merchants_fts, rowid, name, address) VALUES ('delete', old.mid, old.name, old.address);
 	END`)
 	db.Exec(`CREATE TRIGGER IF NOT EXISTS merchants_au AFTER UPDATE ON merchants BEGIN
-		INSERT INTO merchants_fts(merchants_fts, rowid, name) VALUES ('delete', old.mid, old.name);
-		INSERT INTO merchants_fts(rowid, name) VALUES (new.mid, new.name);
+		INSERT INTO merchants_fts(merchants_fts, rowid, name, address) VALUES ('delete', old.mid, old.name, old.address);
+		INSERT INTO merchants_fts(rowid, name, address) VALUES (new.mid, new.name, new.address);
 	END`)
-	// populate index for pre-existing rows (no-op if already indexed)
 	db.Exec(`INSERT INTO merchants_fts(merchants_fts) VALUES('rebuild')`)
 
 	return err
@@ -141,20 +146,20 @@ func (s *Store) Close() { s.db.Close() }
 
 // ─── Merchants ────────────────────────────────────────────────────────────────
 
-func (s *Store) Register(mid uint32, name, pubkeyB64, privkeyB64, token string) error {
+func (s *Store) Register(mid uint32, name, address, pubkeyB64, privkeyB64, token string) error {
 	_, err := s.db.Exec(
-		`INSERT OR REPLACE INTO merchants (mid, name, pubkey_b64, privkey_b64, token, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		mid, name, pubkeyB64, privkeyB64, token, time.Now().Unix(),
+		`INSERT OR REPLACE INTO merchants (mid, name, address, pubkey_b64, privkey_b64, token, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		mid, name, address, pubkeyB64, privkeyB64, token, time.Now().Unix(),
 	)
 	return err
 }
 
 func (s *Store) Get(mid uint32) (*Merchant, error) {
 	row := s.db.QueryRow(
-		`SELECT mid, name, pubkey_b64, privkey_b64, token, created_at FROM merchants WHERE mid = ?`, mid)
+		`SELECT mid, name, address, pubkey_b64, privkey_b64, token, created_at FROM merchants WHERE mid = ?`, mid)
 	var m Merchant
-	if err := row.Scan(&m.MID, &m.Name, &m.PubkeyB64, &m.PrivkeyB64, &m.Token, &m.CreatedAt); err != nil {
+	if err := row.Scan(&m.MID, &m.Name, &m.Address, &m.PubkeyB64, &m.PrivkeyB64, &m.Token, &m.CreatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -324,24 +329,25 @@ func (s *Store) ListLoyaltyMembers(mid uint32) ([]LoyaltyEntry, error) {
 }
 
 type MerchantSearchResult struct {
-	MID  uint32 `json:"mid"`
-	Name string `json:"name"`
+	MID     uint32 `json:"mid"`
+	Name    string `json:"name"`
+	Address string `json:"address,omitempty"`
 }
 
 func (s *Store) SearchMerchants(query string) ([]MerchantSearchResult, error) {
 	var rows *sql.Rows
 	var err error
 	if query == "" {
-		rows, err = s.db.Query(`SELECT mid, name FROM merchants ORDER BY name LIMIT 50`)
+		rows, err = s.db.Query(`SELECT mid, name, address FROM merchants ORDER BY name LIMIT 50`)
 	} else {
-		// FTS5 prefix search — append * for partial word matching, rank by BM25
+		// FTS5 prefix search, name weighted 10x over address via bm25 column weights
 		ftsQuery := query + "*"
 		rows, err = s.db.Query(`
-			SELECT m.mid, m.name
+			SELECT m.mid, m.name, m.address
 			FROM merchants_fts f
 			JOIN merchants m ON m.mid = f.rowid
 			WHERE merchants_fts MATCH ?
-			ORDER BY rank
+			ORDER BY bm25(merchants_fts, 10.0, 1.0)
 			LIMIT 20`, ftsQuery)
 	}
 	if err != nil {
@@ -351,7 +357,7 @@ func (s *Store) SearchMerchants(query string) ([]MerchantSearchResult, error) {
 	var out []MerchantSearchResult
 	for rows.Next() {
 		var r MerchantSearchResult
-		if err := rows.Scan(&r.MID, &r.Name); err != nil {
+		if err := rows.Scan(&r.MID, &r.Name, &r.Address); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
