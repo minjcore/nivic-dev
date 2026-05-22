@@ -1,0 +1,24 @@
+[Unit]
+Description=Cards Service (Saving payment platform)
+After=network.target docker.service merchants.service
+Requires=docker.service
+
+[Service]
+Type=simple
+ExecStart=/root/app/cards
+Restart=on-failure
+RestartSec=5
+
+Environment=CARDS_DB=/root/app/cards.db
+Environment=CARDS_ADDR=:8091
+Environment=WIRE_ADDR=127.0.0.1:7474
+Environment=AMQP_URL=amqp://admin:admin@172.18.0.1:5672/
+Environment=WIRE_TOKEN=change-me-in-production
+Environment=WIRE_SECRET=saving_wire_secret_changeme
+
+WorkingDirectory=/root/app
+StandardOutput=append:/var/log/cards.log
+StandardError=append:/var/log/cards.log
+
+[Install]
+WantedBy=multi-user.target

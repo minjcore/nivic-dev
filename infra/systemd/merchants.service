@@ -1,0 +1,20 @@
+[Unit]
+Description=Merchants Host (Saving payment platform)
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+ExecStart=/root/app/merchants
+Restart=on-failure
+RestartSec=5
+
+Environment=MERCHANTS_DB=/var/lib/docker/volumes/app_merchants_data/_data/merchants.db
+Environment=MERCHANTS_ADDR=:8090
+
+WorkingDirectory=/root/app
+StandardOutput=append:/var/log/merchants.log
+StandardError=append:/var/log/merchants.log
+
+[Install]
+WantedBy=multi-user.target
