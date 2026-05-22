@@ -25,3 +25,4 @@ vendor/
 *.log
 wire-android/wire-release.jks
 wire-android/local.properties
+wire-android/play-service-account.json

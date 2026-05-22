@@ -1,0 +1,38 @@
+default_platform(:android)
+
+platform :android do
+
+  desc "Build release AAB and upload to Play Store (internal track)"
+  lane :deploy do
+    gradle(
+      task:              "bundle",
+      build_type:        "Release",
+      project_dir:       "./",
+      print_command:     false,
+    )
+    upload_to_play_store(
+      track:               "internal",
+      aab:                 "app/build/outputs/bundle/release/app-release.aab",
+      json_key:            "play-service-account.json",
+      package_name:        "app.saving.wire",
+      skip_upload_apk:     true,
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images:  true,
+      skip_upload_screenshots: true,
+    )
+  end
+
+  desc "Promote internal → production"
+  lane :promote do
+    upload_to_play_store(
+      track:        "internal",
+      track_promote_to: "production",
+      json_key:     "play-service-account.json",
+      package_name: "app.saving.wire",
+      skip_upload_apk: true,
+      skip_upload_aab: true,
+    )
+  end
+
+end
