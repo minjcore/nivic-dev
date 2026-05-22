@@ -103,6 +103,8 @@ func (h *handler) routes() http.Handler {
 	mux.HandleFunc("GET /merchants/{mid}/menu",                    h.handleListMenu)
 	mux.HandleFunc("POST /merchants/{mid}/menu",                   h.handleAddMenuItem)
 	mux.HandleFunc("DELETE /merchants/{mid}/menu/{id}",            h.handleDeleteMenuItem)
+	// Profile update
+	mux.HandleFunc("PATCH /merchants/{mid}",                       h.handleUpdateProfile)
 	// Slug management
 	mux.HandleFunc("PATCH /merchants/{mid}/slug",                  h.handleUpdateSlug)
 	// Custom domain management
@@ -928,6 +930,45 @@ func (h *handler) handleDeleteMenuItem(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 404, err.Error()); return
 	}
 	jsonOK(w, map[string]string{"status": "deleted"})
+}
+
+// PATCH /merchants/{mid}
+// Header: X-Merchant-Token
+// Body: { "name":"...", "address":"...", "website":"..." } — all fields optional.
+
+func (h *handler) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid"); return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil || m == nil {
+		jsonErr(w, 404, "merchant not found"); return
+	}
+	if r.Header.Get("X-Merchant-Token") != m.Token {
+		jsonErr(w, 401, "unauthorized"); return
+	}
+	var req struct {
+		Name    *string `json:"name"`
+		Address *string `json:"address"`
+		Website *string `json:"website"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "bad json"); return
+	}
+	if req.Name != nil {
+		if len(*req.Name) == 0 || len(*req.Name) > 64 {
+			jsonErr(w, 400, "name must be 1–64 chars"); return
+		}
+		m.Name = *req.Name
+	}
+	if req.Address != nil { m.Address = *req.Address }
+	if req.Website != nil { m.Website = *req.Website }
+
+	if err := h.store.UpdateProfile(mid, m.Name, m.Address, m.Website); err != nil {
+		jsonErr(w, 500, err.Error()); return
+	}
+	jsonOK(w, m)
 }
 
 // PATCH /merchants/{mid}/slug

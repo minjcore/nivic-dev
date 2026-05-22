@@ -220,6 +220,14 @@ func (s *Store) SetCustomDomain(mid uint32, domain string) error {
 	return err
 }
 
+func (s *Store) UpdateProfile(mid uint32, name, address, website string) error {
+	_, err := s.db.Exec(
+		`UPDATE merchants SET name=?, address=?, website=? WHERE mid=?`,
+		name, address, website, mid,
+	)
+	return err
+}
+
 func (s *Store) SetSlug(mid uint32, slug string) error {
 	_, err := s.db.Exec(`UPDATE merchants SET slug=? WHERE mid=?`, slug, mid)
 	return err
