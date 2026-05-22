@@ -279,7 +279,10 @@ private fun MerchantRow(m: MerchantInfo, onClick: () -> Unit, onChat: () -> Unit
             Icon(Icons.Default.Store, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
             Column {
                 Text(m.name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                Text("#${m.mid}", color = Color.Gray, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                if (m.address.isNotEmpty()) {
+                    Text(m.address, color = Color.Gray, fontSize = 11.sp)
+                }
+                Text("#${m.mid}", color = Color.Gray.copy(alpha = 0.5f), fontSize = 10.sp, fontFamily = FontFamily.Monospace)
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {

@@ -7,7 +7,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-data class MerchantInfo(val mid: Long, val name: String)
+data class MerchantInfo(val mid: Long, val name: String, val address: String = "")
 data class MerchantStats(val totalEarned: Long, val orderCount: Int)
 data class LoyaltyBalance(val uid: Long, val mid: Long, val points: Long, val valueVnd: Long)
 data class LoyaltyMember(val uid: Long, val points: Long)
@@ -45,7 +45,7 @@ class MerchantsClient(private val baseURL: String = "https://saving.nivic.dev") 
         val arr  = JSONArray(readResponse(conn))
         (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
-            MerchantInfo(o.getLong("mid"), o.getString("name"))
+            MerchantInfo(o.getLong("mid"), o.getString("name"), o.optString("address", ""))
         }
     }
 
