@@ -1,23 +1,41 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
+val localProps = Properties().also { props ->
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { props.load(it) }
+}
+
 android {
-    namespace   = "dev.nivic.wire"
+    namespace   = "app.saving.wire"
     compileSdk  = 35
 
     defaultConfig {
-        applicationId = "dev.nivic.wire"
+        applicationId = "app.saving.wire"
         minSdk        = 26
         targetSdk     = 35
         versionCode   = 1
         versionName   = "1.0"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile     = rootProject.file(localProps["STORE_FILE"] as String)
+            storePassword = localProps["STORE_PASSWORD"] as String
+            keyAlias      = localProps["KEY_ALIAS"] as String
+            keyPassword   = localProps["KEY_PASSWORD"] as String
+        }
+    }
+
     buildTypes {
-        release { isMinifyEnabled = false }
+        release {
+            isMinifyEnabled = false
+            signingConfig   = signingConfigs.getByName("release")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

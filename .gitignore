@@ -23,3 +23,5 @@ vendor/
 
 # Logs
 *.log
+wire-android/wire-release.jks
+wire-android/local.properties
