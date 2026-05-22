@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -78,27 +79,71 @@ type handler struct {
 
 func (h *handler) routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health",                              h.handleHealth)
-	mux.HandleFunc("GET /merchants",                           h.handleSearch)
-	mux.HandleFunc("GET /merchants/{mid}",                     h.handleGet)
-	mux.HandleFunc("POST /merchants",                          h.handleRegister)
-	mux.HandleFunc("POST /merchants/onboard",                  h.handleOnboard)
-	mux.HandleFunc("POST /merchants/{mid}/orders",             h.handleCreateOrder)
-	mux.HandleFunc("GET /merchants/{mid}/orders",              h.handleListOrders)
-	mux.HandleFunc("GET /merchants/{mid}/orders/{oid}",        h.handleGetOrder)
-	mux.HandleFunc("GET /merchants/{mid}/stats",               h.handleStats)
-	mux.HandleFunc("GET /merchants/{mid}/loyalty",             h.handleLoyaltyMembers)
-	mux.HandleFunc("GET /merchants/{mid}/loyalty/{uid}",       h.handleLoyaltyGet)
-	mux.HandleFunc("POST /merchants/{mid}/loyalty/{uid}/award",h.handleLoyaltyAward)
-	mux.HandleFunc("GET /loyalty/user/{uid}",                  h.handleUserLoyalty)
-	mux.HandleFunc("POST /orders/{oid}/confirm",               h.handleConfirmOrder)
-	mux.HandleFunc("POST /merchants/{mid}/orders/{oid}/confirm", h.handleMerchantConfirmOrder)
-	mux.HandleFunc("POST /payment_request/verify",             h.handleVerify)
-	mux.HandleFunc("POST /chat/{mid}",                         h.handleChatSend)
-	mux.HandleFunc("POST /chat/{mid}/reply",                   h.handleChatReply)
-	mux.HandleFunc("GET /chat/{mid}/inbox",                    h.handleChatInbox)
-	mux.HandleFunc("GET /chat/{mid}/{uid}",                    h.handleChatThread)
-	return mux
+	mux.HandleFunc("GET /health",                                  h.handleHealth)
+	mux.HandleFunc("GET /merchants",                               h.handleSearch)
+	mux.HandleFunc("GET /merchants/{mid}",                         h.handleGet)
+	mux.HandleFunc("POST /merchants",                              h.handleRegister)
+	mux.HandleFunc("POST /merchants/onboard",                      h.handleOnboard)
+	mux.HandleFunc("POST /merchants/{mid}/orders",                 h.handleCreateOrder)
+	mux.HandleFunc("GET /merchants/{mid}/orders",                  h.handleListOrders)
+	mux.HandleFunc("GET /merchants/{mid}/orders/{oid}",            h.handleGetOrder)
+	mux.HandleFunc("GET /merchants/{mid}/stats",                   h.handleStats)
+	mux.HandleFunc("GET /merchants/{mid}/loyalty",                 h.handleLoyaltyMembers)
+	mux.HandleFunc("GET /merchants/{mid}/loyalty/{uid}",           h.handleLoyaltyGet)
+	mux.HandleFunc("POST /merchants/{mid}/loyalty/{uid}/award",    h.handleLoyaltyAward)
+	mux.HandleFunc("GET /loyalty/user/{uid}",                      h.handleUserLoyalty)
+	mux.HandleFunc("POST /orders/{oid}/confirm",                   h.handleConfirmOrder)
+	mux.HandleFunc("POST /merchants/{mid}/orders/{oid}/confirm",   h.handleMerchantConfirmOrder)
+	mux.HandleFunc("POST /payment_request/verify",                 h.handleVerify)
+	mux.HandleFunc("POST /chat/{mid}",                             h.handleChatSend)
+	mux.HandleFunc("POST /chat/{mid}/reply",                       h.handleChatReply)
+	mux.HandleFunc("GET /chat/{mid}/inbox",                        h.handleChatInbox)
+	mux.HandleFunc("GET /chat/{mid}/{uid}",                        h.handleChatThread)
+	// Menu items
+	mux.HandleFunc("GET /merchants/{mid}/menu",                    h.handleListMenu)
+	mux.HandleFunc("POST /merchants/{mid}/menu",                   h.handleAddMenuItem)
+	mux.HandleFunc("DELETE /merchants/{mid}/menu/{id}",            h.handleDeleteMenuItem)
+	// Slug management
+	mux.HandleFunc("PATCH /merchants/{mid}/slug",                  h.handleUpdateSlug)
+	// Custom domain management
+	mux.HandleFunc("PATCH /merchants/{mid}/domain",                h.handleSetDomain)
+	mux.HandleFunc("DELETE /merchants/{mid}/domain",               h.handleRemoveDomain)
+	// Caddy on_demand TLS ask endpoint — returns 200 if domain is registered, 404 otherwise
+	mux.HandleFunc("GET /caddy/check-domain",                      h.handleCaddyCheckDomain)
+	// Admin: backfill slugs for merchants that don't have one
+	mux.HandleFunc("POST /admin/migrate-slugs",                    h.handleMigrateSlugs)
+	// Public pay endpoint (no merchant token needed — QR is Ed25519-signed)
+	mux.HandleFunc("POST /public/{mid}/order",                     h.handlePublicCreateOrder)
+
+	// Middleware: merchant public page for *.nivic.dev subdomains and custom domains
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		if i := strings.LastIndex(host, ":"); i != -1 {
+			host = host[:i]
+		}
+
+		if r.URL.Path == "/" || r.URL.Path == "" {
+			var m *Merchant
+
+			const suffix = ".nivic.dev"
+			if strings.HasSuffix(host, suffix) {
+				slug := strings.TrimSuffix(host, suffix)
+				if slug != "saving" && slug != "www" && slug != "api" && slug != "" {
+					m, _ = h.store.GetBySlug(slug)
+				}
+			} else if !strings.HasSuffix(host, ".nivic.dev") {
+				// Custom domain (e.g. bmapworkshop.com)
+				m, _ = h.store.GetByDomain(host)
+			}
+
+			if m != nil {
+				h.handleMerchantPage(w, r, m)
+				return
+			}
+		}
+
+		mux.ServeHTTP(w, r)
+	})
 }
 
 // GET /health
@@ -157,6 +202,7 @@ func (h *handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		MID     uint32 `json:"mid"`
 		Name    string `json:"name"`
 		Address string `json:"address"`
+		Website string `json:"website"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, 400, "bad json")
@@ -185,16 +231,19 @@ func (h *handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	pubB64  := base64.StdEncoding.EncodeToString(pub)
 	privB64 := base64.StdEncoding.EncodeToString(priv)
 
-	if err := h.store.Register(req.MID, req.Name, req.Address, pubB64, privB64, token); err != nil {
+	if err := h.store.Register(req.MID, req.Name, req.Address, req.Website, pubB64, privB64, token); err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
+	slug, _ := h.store.GenerateSlug(req.MID, req.Name)
+	_ = h.store.SetSlug(req.MID, slug)
 	// Return privkey and token once — caller must store securely
 	jsonOK(w, map[string]any{
 		"registered":  req.MID,
 		"pubkey_b64":  pubB64,
 		"privkey_b64": privB64,
 		"token":       token,
+		"slug":        slug,
 	})
 }
 
@@ -454,6 +503,7 @@ func (h *handler) handleOnboard(w http.ResponseWriter, r *http.Request) {
 		UID     uint32 `json:"uid"`
 		Name    string `json:"name"`
 		Address string `json:"address"`
+		Website string `json:"website"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, 400, "bad json")
@@ -493,14 +543,18 @@ func (h *handler) handleOnboard(w http.ResponseWriter, r *http.Request) {
 	pubB64  := base64.StdEncoding.EncodeToString(pub)
 	privB64 := base64.StdEncoding.EncodeToString(priv)
 
-	if err := h.store.Register(req.UID, req.Name, req.Address, pubB64, privB64, token); err != nil {
+	if err := h.store.Register(req.UID, req.Name, req.Address, req.Website, pubB64, privB64, token); err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
+	slug, _ := h.store.GenerateSlug(req.UID, req.Name)
+	_ = h.store.SetSlug(req.UID, slug)
 	jsonOK(w, map[string]any{
 		"mid":   req.UID,
 		"name":  req.Name,
 		"token": token,
+		"slug":  slug,
+		"url":   "https://" + slug + ".nivic.dev",
 	})
 }
 
@@ -800,6 +854,274 @@ func (h *handler) handleChatThread(w http.ResponseWriter, r *http.Request) {
 		msgs = []ChatMessage{}
 	}
 	jsonOK(w, msgs)
+}
+
+// GET /merchants/{mid}/menu — public, lists menu items.
+
+func (h *handler) handleListMenu(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid"); return
+	}
+	items, err := h.store.ListMenuItems(mid)
+	if err != nil {
+		jsonErr(w, 500, err.Error()); return
+	}
+	if items == nil {
+		items = []MenuItem{}
+	}
+	jsonOK(w, items)
+}
+
+// POST /merchants/{mid}/menu
+// Header: X-Merchant-Token
+// Body: { "name":"Cà phê sữa", "price":25000, "description":"...", "sort_order":0 }
+
+func (h *handler) handleAddMenuItem(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid"); return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil || m == nil {
+		jsonErr(w, 404, "merchant not found"); return
+	}
+	if r.Header.Get("X-Merchant-Token") != m.Token {
+		jsonErr(w, 401, "unauthorized"); return
+	}
+	var req struct {
+		Name        string `json:"name"`
+		Price       uint64 `json:"price"`
+		Description string `json:"description"`
+		SortOrder   int    `json:"sort_order"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+		jsonErr(w, 400, "name required"); return
+	}
+	id, err := h.store.AddMenuItem(mid, req.Name, req.Price, req.Description, req.SortOrder)
+	if err != nil {
+		jsonErr(w, 500, err.Error()); return
+	}
+	jsonOK(w, map[string]any{"id": id})
+}
+
+// DELETE /merchants/{mid}/menu/{id}
+// Header: X-Merchant-Token
+
+func (h *handler) handleDeleteMenuItem(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid"); return
+	}
+	itemID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonErr(w, 400, "invalid id"); return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil || m == nil {
+		jsonErr(w, 404, "merchant not found"); return
+	}
+	if r.Header.Get("X-Merchant-Token") != m.Token {
+		jsonErr(w, 401, "unauthorized"); return
+	}
+	if err := h.store.DeleteMenuItem(itemID, mid); err != nil {
+		jsonErr(w, 404, err.Error()); return
+	}
+	jsonOK(w, map[string]string{"status": "deleted"})
+}
+
+// PATCH /merchants/{mid}/slug
+// Header: X-Merchant-Token
+// Body: { "slug": "my-shop" }
+
+func (h *handler) handleUpdateSlug(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid"); return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil || m == nil {
+		jsonErr(w, 404, "merchant not found"); return
+	}
+	if r.Header.Get("X-Merchant-Token") != m.Token {
+		jsonErr(w, 401, "unauthorized"); return
+	}
+	var req struct {
+		Slug string `json:"slug"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Slug == "" {
+		jsonErr(w, 400, "slug required"); return
+	}
+	req.Slug = slugify(req.Slug)
+	if len(req.Slug) < 2 || len(req.Slug) > 40 {
+		jsonErr(w, 400, "slug must be 2–40 chars"); return
+	}
+	exists, _ := h.store.SlugExists(req.Slug)
+	if exists && req.Slug != m.Slug {
+		jsonErr(w, 409, "slug already taken"); return
+	}
+	if err := h.store.SetSlug(mid, req.Slug); err != nil {
+		jsonErr(w, 500, err.Error()); return
+	}
+	jsonOK(w, map[string]string{"slug": req.Slug, "url": "https://" + req.Slug + ".nivic.dev"})
+}
+
+// POST /public/{mid}/order — no auth needed; signed by merchant's Ed25519 key.
+// Body: { "amount": 50000, "note": "cà phê x2" }
+
+func (h *handler) handlePublicCreateOrder(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid"); return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil {
+		jsonErr(w, 500, err.Error()); return
+	}
+	if m == nil {
+		jsonErr(w, 404, "merchant not found"); return
+	}
+	var req struct {
+		Amount uint64 `json:"amount"`
+		Note   string `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "bad json"); return
+	}
+	if req.Amount == 0 {
+		jsonErr(w, 400, "amount required"); return
+	}
+	orderID := fmt.Sprintf("pub-%d-%d", mid, time.Now().UnixMilli())
+	if err := h.store.CreateOrder(orderID, mid, req.Amount, req.Note, 0); err != nil {
+		jsonErr(w, 500, err.Error()); return
+	}
+	pr, err := buildPaymentRequest(m, orderID, req.Amount)
+	if err != nil {
+		jsonErr(w, 500, err.Error()); return
+	}
+	prB64, err := prToBase64URL(pr)
+	if err != nil {
+		jsonErr(w, 500, "encode failed"); return
+	}
+	jsonOK(w, map[string]any{
+		"order_id": orderID,
+		"qr_url":   "saving://pay?pr=" + prB64,
+	})
+}
+
+// PATCH /merchants/{mid}/domain
+// Header: X-Merchant-Token
+// Body: { "domain": "bmapworkshop.com" }
+// Merchant must first add a CNAME/A record pointing to this server.
+
+func (h *handler) handleSetDomain(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid"); return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil || m == nil {
+		jsonErr(w, 404, "merchant not found"); return
+	}
+	if r.Header.Get("X-Merchant-Token") != m.Token {
+		jsonErr(w, 401, "unauthorized"); return
+	}
+	var req struct {
+		Domain string `json:"domain"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Domain == "" {
+		jsonErr(w, 400, "domain required"); return
+	}
+	// Strip scheme if accidentally included
+	req.Domain = strings.TrimPrefix(strings.TrimPrefix(req.Domain, "https://"), "http://")
+	req.Domain = strings.TrimRight(req.Domain, "/")
+	if len(req.Domain) < 4 || len(req.Domain) > 253 {
+		jsonErr(w, 400, "invalid domain"); return
+	}
+	exists, _ := h.store.DomainExists(req.Domain)
+	if exists && req.Domain != m.CustomDomain {
+		jsonErr(w, 409, "domain already registered to another merchant"); return
+	}
+	if err := h.store.SetCustomDomain(mid, req.Domain); err != nil {
+		jsonErr(w, 500, err.Error()); return
+	}
+	jsonOK(w, map[string]string{
+		"domain": req.Domain,
+		"status": "registered",
+		"note":   "Add a CNAME record: " + req.Domain + " → " + m.Slug + ".nivic.dev",
+	})
+}
+
+// DELETE /merchants/{mid}/domain
+// Header: X-Merchant-Token
+
+func (h *handler) handleRemoveDomain(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid"); return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil || m == nil {
+		jsonErr(w, 404, "merchant not found"); return
+	}
+	if r.Header.Get("X-Merchant-Token") != m.Token {
+		jsonErr(w, 401, "unauthorized"); return
+	}
+	_ = h.store.SetCustomDomain(mid, "")
+	jsonOK(w, map[string]string{"status": "removed"})
+}
+
+// POST /admin/migrate-slugs — one-time backfill for merchants without slugs.
+// Header: X-Admin-Token
+
+func (h *handler) handleMigrateSlugs(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-Admin-Token") != h.adminToken {
+		jsonErr(w, 401, "unauthorized"); return
+	}
+	updated, err := h.store.BackfillSlugs()
+	if err != nil {
+		jsonErr(w, 500, err.Error()); return
+	}
+	jsonOK(w, map[string]any{"updated": updated})
+}
+
+// GET /caddy/check-domain?domain=bmapworkshop.com
+// Called by Caddy on_demand TLS before issuing a certificate.
+// Returns 200 if domain is a known merchant subdomain or custom domain, 404 otherwise.
+
+func (h *handler) handleCaddyCheckDomain(w http.ResponseWriter, r *http.Request) {
+	domain := r.URL.Query().Get("domain")
+	if domain == "" {
+		w.WriteHeader(400); return
+	}
+	// Approve any *.nivic.dev subdomain that maps to a merchant slug
+	const suffix = ".nivic.dev"
+	if strings.HasSuffix(domain, suffix) {
+		slug := strings.TrimSuffix(domain, suffix)
+		if slug != "" && slug != "saving" && slug != "www" && slug != "api" {
+			m, _ := h.store.GetBySlug(slug)
+			if m != nil {
+				w.WriteHeader(200); return
+			}
+		}
+		w.WriteHeader(404); return
+	}
+	// Approve registered custom domains
+	exists, err := h.store.DomainExists(domain)
+	if err != nil || !exists {
+		w.WriteHeader(404); return
+	}
+	w.WriteHeader(200)
+}
+
+// ─── Merchant public page ─────────────────────────────────────────────────────
+
+func (h *handler) handleMerchantPage(w http.ResponseWriter, r *http.Request, m *Merchant) {
+	items, _ := h.store.ListMenuItems(m.MID)
+	if items == nil {
+		items = []MenuItem{}
+	}
+	renderMerchantPage(w, m, items)
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

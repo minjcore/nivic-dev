@@ -3,7 +3,9 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
+	"unicode"
 
 	_ "modernc.org/sqlite"
 )
@@ -11,13 +13,25 @@ import (
 // ─── Domain types ────────────────────────────────────────────────────────────
 
 type Merchant struct {
-	MID        uint32 `json:"mid"`
-	Name       string `json:"name"`
-	Address    string `json:"address,omitempty"`
-	PubkeyB64  string `json:"pubkey_b64"`  // base64(ed25519 pubkey, 32 bytes)
-	PrivkeyB64 string `json:"-"`           // never exposed in API responses
-	Token      string `json:"-"`           // merchant API token
-	CreatedAt  int64  `json:"created_at"`  // unix seconds
+	MID          uint32 `json:"mid"`
+	Name         string `json:"name"`
+	Address      string `json:"address,omitempty"`
+	Website      string `json:"website,omitempty"`
+	Slug         string `json:"slug,omitempty"`
+	CustomDomain string `json:"custom_domain,omitempty"`
+	PubkeyB64    string `json:"pubkey_b64"`
+	PrivkeyB64   string `json:"-"`
+	Token        string `json:"-"`
+	CreatedAt    int64  `json:"created_at"`
+}
+
+type MenuItem struct {
+	ID          int64  `json:"id"`
+	MID         uint32 `json:"mid"`
+	Name        string `json:"name"`
+	Price       uint64 `json:"price"`
+	Description string `json:"description,omitempty"`
+	SortOrder   int    `json:"sort_order"`
 }
 
 // OrderStatus values
@@ -83,6 +97,15 @@ func migrate(db *sql.DB) error {
 			token        TEXT    NOT NULL DEFAULT '',
 			created_at   INTEGER NOT NULL
 		);
+		CREATE TABLE IF NOT EXISTS menu_items (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			mid         INTEGER NOT NULL REFERENCES merchants(mid),
+			name        TEXT    NOT NULL,
+			price       INTEGER NOT NULL DEFAULT 0,
+			description TEXT    NOT NULL DEFAULT '',
+			sort_order  INTEGER NOT NULL DEFAULT 0
+		);
+		CREATE INDEX IF NOT EXISTS idx_menu_items_mid ON menu_items(mid, sort_order);
 		CREATE TABLE IF NOT EXISTS orders (
 			id              TEXT    PRIMARY KEY,
 			mid             INTEGER NOT NULL REFERENCES merchants(mid),
@@ -116,6 +139,11 @@ func migrate(db *sql.DB) error {
 	db.Exec(`ALTER TABLE merchants ADD COLUMN privkey_b64 TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE merchants ADD COLUMN token       TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE merchants ADD COLUMN address     TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE merchants ADD COLUMN slug          TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE merchants ADD COLUMN website       TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE merchants ADD COLUMN custom_domain TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_merchants_slug   ON merchants(slug)          WHERE slug != ''`)
+	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_merchants_domain ON merchants(custom_domain) WHERE custom_domain != ''`)
 	db.Exec(`ALTER TABLE orders ADD COLUMN discount_points INTEGER NOT NULL DEFAULT 0`)
 	db.Exec(`ALTER TABLE orders ADD COLUMN points_awarded  INTEGER NOT NULL DEFAULT 0`)
 
@@ -146,26 +174,61 @@ func (s *Store) Close() { s.db.Close() }
 
 // ─── Merchants ────────────────────────────────────────────────────────────────
 
-func (s *Store) Register(mid uint32, name, address, pubkeyB64, privkeyB64, token string) error {
+func (s *Store) Register(mid uint32, name, address, website, pubkeyB64, privkeyB64, token string) error {
 	_, err := s.db.Exec(
-		`INSERT OR REPLACE INTO merchants (mid, name, address, pubkey_b64, privkey_b64, token, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		mid, name, address, pubkeyB64, privkeyB64, token, time.Now().Unix(),
+		`INSERT OR REPLACE INTO merchants (mid, name, address, website, pubkey_b64, privkey_b64, token, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		mid, name, address, website, pubkeyB64, privkeyB64, token, time.Now().Unix(),
 	)
 	return err
 }
 
-func (s *Store) Get(mid uint32) (*Merchant, error) {
-	row := s.db.QueryRow(
-		`SELECT mid, name, address, pubkey_b64, privkey_b64, token, created_at FROM merchants WHERE mid = ?`, mid)
+const merchantCols = `mid, name, address, website, slug, custom_domain, pubkey_b64, privkey_b64, token, created_at`
+
+func scanMerchant(row *sql.Row) (*Merchant, error) {
 	var m Merchant
-	if err := row.Scan(&m.MID, &m.Name, &m.Address, &m.PubkeyB64, &m.PrivkeyB64, &m.Token, &m.CreatedAt); err != nil {
+	if err := row.Scan(&m.MID, &m.Name, &m.Address, &m.Website, &m.Slug, &m.CustomDomain,
+		&m.PubkeyB64, &m.PrivkeyB64, &m.Token, &m.CreatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
 	return &m, nil
+}
+
+func (s *Store) Get(mid uint32) (*Merchant, error) {
+	return scanMerchant(s.db.QueryRow(`SELECT `+merchantCols+` FROM merchants WHERE mid = ?`, mid))
+}
+
+func (s *Store) GetBySlug(slug string) (*Merchant, error) {
+	return scanMerchant(s.db.QueryRow(`SELECT `+merchantCols+` FROM merchants WHERE slug = ?`, slug))
+}
+
+func (s *Store) GetByDomain(domain string) (*Merchant, error) {
+	return scanMerchant(s.db.QueryRow(`SELECT `+merchantCols+` FROM merchants WHERE custom_domain = ?`, domain))
+}
+
+func (s *Store) DomainExists(domain string) (bool, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM merchants WHERE custom_domain=?`, domain).Scan(&n)
+	return n > 0, err
+}
+
+func (s *Store) SetCustomDomain(mid uint32, domain string) error {
+	_, err := s.db.Exec(`UPDATE merchants SET custom_domain=? WHERE mid=?`, domain, mid)
+	return err
+}
+
+func (s *Store) SetSlug(mid uint32, slug string) error {
+	_, err := s.db.Exec(`UPDATE merchants SET slug=? WHERE mid=?`, slug, mid)
+	return err
+}
+
+func (s *Store) SlugExists(slug string) (bool, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM merchants WHERE slug=?`, slug).Scan(&n)
+	return n > 0, err
 }
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
@@ -473,4 +536,144 @@ func (s *Store) UserLoyalty(uid uint32) ([]UserLoyaltyEntry, error) {
 		out = append(out, e)
 	}
 	return out, nil
+}
+
+// ─── Menu items ───────────────────────────────────────────────────────────────
+
+func (s *Store) ListMenuItems(mid uint32) ([]MenuItem, error) {
+	rows, err := s.db.Query(
+		`SELECT id, mid, name, price, description, sort_order FROM menu_items WHERE mid=? ORDER BY sort_order, id`, mid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MenuItem
+	for rows.Next() {
+		var item MenuItem
+		if err := rows.Scan(&item.ID, &item.MID, &item.Name, &item.Price, &item.Description, &item.SortOrder); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, nil
+}
+
+func (s *Store) AddMenuItem(mid uint32, name string, price uint64, desc string, sortOrder int) (int64, error) {
+	res, err := s.db.Exec(
+		`INSERT INTO menu_items (mid, name, price, description, sort_order) VALUES (?, ?, ?, ?, ?)`,
+		mid, name, price, desc, sortOrder,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (s *Store) DeleteMenuItem(id int64, mid uint32) error {
+	res, err := s.db.Exec(`DELETE FROM menu_items WHERE id=? AND mid=?`, id, mid)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("item not found")
+	}
+	return nil
+}
+
+// ─── Slug ─────────────────────────────────────────────────────────────────────
+
+var viMap = strings.NewReplacer(
+	"á", "a", "à", "a", "ả", "a", "ã", "a", "ạ", "a",
+	"ă", "a", "ắ", "a", "ằ", "a", "ẳ", "a", "ẵ", "a", "ặ", "a",
+	"â", "a", "ấ", "a", "ầ", "a", "ẩ", "a", "ẫ", "a", "ậ", "a",
+	"đ", "d",
+	"é", "e", "è", "e", "ẻ", "e", "ẽ", "e", "ẹ", "e",
+	"ê", "e", "ế", "e", "ề", "e", "ể", "e", "ễ", "e", "ệ", "e",
+	"í", "i", "ì", "i", "ỉ", "i", "ĩ", "i", "ị", "i",
+	"ó", "o", "ò", "o", "ỏ", "o", "õ", "o", "ọ", "o",
+	"ô", "o", "ố", "o", "ồ", "o", "ổ", "o", "ỗ", "o", "ộ", "o",
+	"ơ", "o", "ớ", "o", "ờ", "o", "ở", "o", "ỡ", "o", "ợ", "o",
+	"ú", "u", "ù", "u", "ủ", "u", "ũ", "u", "ụ", "u",
+	"ư", "u", "ứ", "u", "ừ", "u", "ử", "u", "ữ", "u", "ự", "u",
+	"ý", "y", "ỳ", "y", "ỷ", "y", "ỹ", "y", "ỵ", "y",
+	"Á", "a", "À", "a", "Ả", "a", "Ã", "a", "Ạ", "a",
+	"Ă", "a", "Ắ", "a", "Ằ", "a", "Ẳ", "a", "Ẵ", "a", "Ặ", "a",
+	"Â", "a", "Ấ", "a", "Ầ", "a", "Ẩ", "a", "Ẫ", "a", "Ậ", "a",
+	"Đ", "d",
+	"É", "e", "È", "e", "Ẻ", "e", "Ẽ", "e", "Ẹ", "e",
+	"Ê", "e", "Ế", "e", "Ề", "e", "Ể", "e", "Ễ", "e", "Ệ", "e",
+	"Í", "i", "Ì", "i", "Ỉ", "i", "Ĩ", "i", "Ị", "i",
+	"Ó", "o", "Ò", "o", "Ỏ", "o", "Õ", "o", "Ọ", "o",
+	"Ô", "o", "Ố", "o", "Ồ", "o", "Ổ", "o", "Ỗ", "o", "Ộ", "o",
+	"Ơ", "o", "Ớ", "o", "Ờ", "o", "Ở", "o", "Ỡ", "o", "Ợ", "o",
+	"Ú", "u", "Ù", "u", "Ủ", "u", "Ũ", "u", "Ụ", "u",
+	"Ư", "u", "Ứ", "u", "Ừ", "u", "Ử", "u", "Ữ", "u", "Ự", "u",
+	"Ý", "y", "Ỳ", "y", "Ỷ", "y", "Ỹ", "y", "Ỵ", "y",
+)
+
+func slugify(name string) string {
+	s := strings.ToLower(viMap.Replace(name))
+	var b strings.Builder
+	prevHyphen := true // start true to trim leading hyphens
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			prevHyphen = false
+		} else if !prevHyphen && !unicode.IsControl(r) {
+			b.WriteByte('-')
+			prevHyphen = true
+		}
+	}
+	result := strings.TrimRight(b.String(), "-")
+	if result == "" {
+		return "merchant"
+	}
+	return result
+}
+
+// BackfillSlugs assigns slugs to all merchants that currently have an empty slug.
+func (s *Store) BackfillSlugs() (int, error) {
+	rows, err := s.db.Query(`SELECT mid, name FROM merchants WHERE slug = '' OR slug IS NULL`)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	type row struct {
+		mid  uint32
+		name string
+	}
+	var targets []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.mid, &r.name); err != nil {
+			return 0, err
+		}
+		targets = append(targets, r)
+	}
+	count := 0
+	for _, t := range targets {
+		slug, err := s.GenerateSlug(t.mid, t.name)
+		if err != nil {
+			continue
+		}
+		if err := s.SetSlug(t.mid, slug); err == nil {
+			count++
+		}
+	}
+	return count, nil
+}
+
+// GenerateSlug creates a unique slug for the merchant, appending the MID if the base slug is taken.
+func (s *Store) GenerateSlug(mid uint32, name string) (string, error) {
+	base := slugify(name)
+	exists, err := s.SlugExists(base)
+	if err != nil {
+		return "", err
+	}
+	if !exists {
+		return base, nil
+	}
+	// Append MID to make unique
+	candidate := fmt.Sprintf("%s-%d", base, mid)
+	return candidate, nil
 }
