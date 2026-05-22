@@ -90,7 +90,7 @@ fun HomeScreen(vm: WireViewModel, accountId: Long) {
                     MiniTile(Icons.AutoMirrored.Filled.List, "Lịch sử",  Modifier.weight(1f)) { showHistory  = true }
                     MiniTile(Icons.Default.QrCode,     "QR nhận",  Modifier.weight(1f)) { showQRRecv   = true }
                     MiniTile(Icons.Default.Group,      "Bảo hộ",   Modifier.weight(1f)) { showGuardian = true }
-                    MiniTile(Icons.Default.Store, "Bán hàng", Modifier.weight(1f)) { showMerchant = true }
+                    MiniTile(Icons.Default.Store, "Merchants", Modifier.weight(1f)) { showMerchant = true }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     MiniTile(Icons.Default.VpnKey,   "Mã TT",     Modifier.weight(1f)) { showTOTP    = true }
