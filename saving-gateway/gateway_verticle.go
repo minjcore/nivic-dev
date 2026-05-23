@@ -231,7 +231,8 @@ func wireBusCall(ctx core.FluxorContext, addr string, body map[string]any) (map[
 	replyAddr := addr + "._reply"
 	consumer := ctx.EventBus().Consumer(replyAddr)
 	consumer.Handler(func(_ core.FluxorContext, msg core.Message) error {
-		if m, ok := msg.Body().(map[string]any); ok {
+		var m map[string]any
+		if err := msg.DecodeBody(&m); err == nil {
 			select {
 			case ch <- m:
 			default:

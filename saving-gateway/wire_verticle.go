@@ -145,8 +145,8 @@ func (v *WireVerticle) pushListener(c *WireClient) {
 // ── EventBus RPC handlers ─────────────────────────────────────────────────────
 
 func (v *WireVerticle) handleLogin(_ core.FluxorContext, msg core.Message) error {
-	req, ok := msg.Body().(map[string]any)
-	if !ok {
+	var req map[string]any
+	if err := msg.DecodeBody(&req); err != nil {
 		return v.reply("saving.wire.login", false, "invalid body", nil)
 	}
 	uid, _ := req["uid"].(float64)
@@ -165,8 +165,8 @@ func (v *WireVerticle) handleLogin(_ core.FluxorContext, msg core.Message) error
 }
 
 func (v *WireVerticle) handleBalance(_ core.FluxorContext, msg core.Message) error {
-	req, ok := msg.Body().(map[string]any)
-	if !ok {
+	var req map[string]any
+	if err := msg.DecodeBody(&req); err != nil {
 		return v.reply("saving.wire.balance", false, "invalid body", nil)
 	}
 	token, err := hexToken(req, "token")
@@ -186,8 +186,8 @@ func (v *WireVerticle) handleBalance(_ core.FluxorContext, msg core.Message) err
 }
 
 func (v *WireVerticle) handleTransfer(_ core.FluxorContext, msg core.Message) error {
-	req, ok := msg.Body().(map[string]any)
-	if !ok {
+	var req map[string]any
+	if err := msg.DecodeBody(&req); err != nil {
 		return v.reply("saving.wire.transfer", false, "invalid body", nil)
 	}
 	token, err := hexToken(req, "token")
