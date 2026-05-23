@@ -6,7 +6,6 @@
    /* Linux — use OpenSSL */
 #  include <openssl/hmac.h>
 #  include <openssl/evp.h>
-
 #  define CC_SHA256_DIGEST_LENGTH 32
 #  define kCCHmacAlgSHA256        0
 
