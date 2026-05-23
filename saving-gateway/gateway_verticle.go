@@ -41,18 +41,22 @@ func (v *GatewayVerticle) Start(ctx core.FluxorContext) error {
 	v.start = time.Now()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health",         v.handleHealth(ctx))
-	mux.HandleFunc("GET /metrics",        v.handleMetrics)
-	mux.HandleFunc("POST /events",        v.handlePublish(ctx))
-	mux.HandleFunc("GET /events",         v.handleSSE(ctx))
-	mux.HandleFunc("POST /wire/login",              v.handleWireLogin(ctx))
-	mux.HandleFunc("GET /wire/balance",             v.handleWireBalance(ctx))
-	mux.HandleFunc("POST /wire/transfer",           v.handleWireTransfer(ctx))
-	mux.HandleFunc("GET /wire/ping",                v.handleWirePing(ctx))
-	mux.HandleFunc("POST /wire/merchant/register",  v.handleWireMerchantRegister(ctx))
-	mux.HandleFunc("POST /wire/merchant/enroll_totp", v.handleWireEnrollTOTP(ctx))
-	mux.HandleFunc("POST /wire/intent/create",      v.handleWireCreateIntent(ctx))
-	mux.HandleFunc("POST /wire/intent/pay",         v.handleWirePayIntent(ctx))
+	mux.HandleFunc("GET /health",  v.handleHealth(ctx))
+	mux.HandleFunc("GET /metrics", v.handleMetrics)
+	mux.HandleFunc("POST /events", v.handlePublish(ctx))
+	mux.HandleFunc("GET /events",  v.handleSSE(ctx))
+
+	// Wire — POST endpoints share a single factory; each differs only by bus address.
+	mux.HandleFunc("POST /wire/login",                  v.wirePostHandler(ctx, "saving.wire.login"))
+	mux.HandleFunc("POST /wire/transfer",               v.wirePostHandler(ctx, "saving.wire.transfer"))
+	mux.HandleFunc("POST /wire/merchant/register",      v.wirePostHandler(ctx, "saving.wire.register_merchant"))
+	mux.HandleFunc("POST /wire/merchant/enroll_totp",   v.wirePostHandler(ctx, "saving.wire.enroll_totp"))
+	mux.HandleFunc("POST /wire/intent/create",          v.wirePostHandler(ctx, "saving.wire.create_intent"))
+	mux.HandleFunc("POST /wire/intent/pay",             v.wirePostHandler(ctx, "saving.wire.pay_intent"))
+
+	// Wire — GET endpoints carry query params into the bus request.
+	mux.HandleFunc("GET /wire/balance", v.wireGetHandler(ctx, "saving.wire.balance", "token"))
+	mux.HandleFunc("GET /wire/ping",    v.wireGetHandler(ctx, "saving.wire.ping"))
 
 	v.server = &http.Server{
 		Addr:              ":8080",
@@ -83,7 +87,44 @@ func (v *GatewayVerticle) Stop(ctx core.FluxorContext) error {
 	return v.BaseVerticle.Stop(ctx)
 }
 
-// ── handlers ──────────────────────────────────────────────────────────────────
+// ── handler factories ─────────────────────────────────────────────────────────
+
+// wirePostHandler decodes a JSON body and forwards it to the given bus address.
+func (v *GatewayVerticle) wirePostHandler(ctx core.FluxorContext, addr string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonResp(w, 400, map[string]any{"error": "invalid json"})
+			return
+		}
+		result, err := wireBusCall(ctx, addr, req)
+		if err != nil {
+			jsonResp(w, 502, map[string]any{"error": err.Error()})
+			return
+		}
+		jsonResp(w, 200, result)
+	}
+}
+
+// wireGetHandler copies named query params into the bus request map.
+func (v *GatewayVerticle) wireGetHandler(ctx core.FluxorContext, addr string, params ...string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		req := make(map[string]any, len(params))
+		for _, p := range params {
+			if val := r.URL.Query().Get(p); val != "" {
+				req[p] = val
+			}
+		}
+		result, err := wireBusCall(ctx, addr, req)
+		if err != nil {
+			jsonResp(w, 502, map[string]any{"error": err.Error()})
+			return
+		}
+		jsonResp(w, 200, result)
+	}
+}
+
+// ── non-wire handlers ─────────────────────────────────────────────────────────
 
 func (v *GatewayVerticle) handleHealth(ctx core.FluxorContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -158,142 +199,6 @@ func (v *GatewayVerticle) handleSSE(ctx core.FluxorContext) http.HandlerFunc {
 				flusher.Flush()
 			}
 		}
-	}
-}
-
-// ── Wire HTTP handlers ────────────────────────────────────────────────────────
-// All Wire ops go through WireVerticle via EventBus to keep TCP ownership on
-// one goroutine. Gateway publishes a request, subscribes to the _reply topic,
-// and waits up to 12 s.
-
-// POST /wire/login  {"uid":123,"password":"abc"}
-func (v *GatewayVerticle) handleWireLogin(ctx core.FluxorContext) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			jsonResp(w, 400, map[string]any{"error": "invalid json"})
-			return
-		}
-		result, err := wireBusCall(ctx, "saving.wire.login", req)
-		if err != nil {
-			jsonResp(w, 502, map[string]any{"error": err.Error()})
-			return
-		}
-		jsonResp(w, 200, result)
-	}
-}
-
-// GET /wire/balance?token=<hex64>
-func (v *GatewayVerticle) handleWireBalance(ctx core.FluxorContext) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		token := r.URL.Query().Get("token")
-		if token == "" {
-			jsonResp(w, 400, map[string]any{"error": "need ?token="})
-			return
-		}
-		result, err := wireBusCall(ctx, "saving.wire.balance", map[string]any{"token": token})
-		if err != nil {
-			jsonResp(w, 502, map[string]any{"error": err.Error()})
-			return
-		}
-		jsonResp(w, 200, result)
-	}
-}
-
-// POST /wire/transfer  {"token":"...","to":456,"amount":50000}
-func (v *GatewayVerticle) handleWireTransfer(ctx core.FluxorContext) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			jsonResp(w, 400, map[string]any{"error": "invalid json"})
-			return
-		}
-		result, err := wireBusCall(ctx, "saving.wire.transfer", req)
-		if err != nil {
-			jsonResp(w, 502, map[string]any{"error": err.Error()})
-			return
-		}
-		jsonResp(w, 200, result)
-	}
-}
-
-// GET /wire/ping
-func (v *GatewayVerticle) handleWirePing(ctx core.FluxorContext) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		result, err := wireBusCall(ctx, "saving.wire.ping", map[string]any{})
-		if err != nil {
-			jsonResp(w, 502, map[string]any{"error": err.Error()})
-			return
-		}
-		jsonResp(w, 200, result)
-	}
-}
-
-// POST /wire/merchant/register  {"token":"...","name":"..."}
-func (v *GatewayVerticle) handleWireMerchantRegister(ctx core.FluxorContext) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			jsonResp(w, 400, map[string]any{"error": "invalid json"})
-			return
-		}
-		result, err := wireBusCall(ctx, "saving.wire.register_merchant", req)
-		if err != nil {
-			jsonResp(w, 502, map[string]any{"error": err.Error()})
-			return
-		}
-		jsonResp(w, 200, result)
-	}
-}
-
-// POST /wire/merchant/enroll_totp  {"token":"...","customer_id":123,"secret":"<40hex>"}
-func (v *GatewayVerticle) handleWireEnrollTOTP(ctx core.FluxorContext) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			jsonResp(w, 400, map[string]any{"error": "invalid json"})
-			return
-		}
-		result, err := wireBusCall(ctx, "saving.wire.enroll_totp", req)
-		if err != nil {
-			jsonResp(w, 502, map[string]any{"error": err.Error()})
-			return
-		}
-		jsonResp(w, 200, result)
-	}
-}
-
-// POST /wire/intent/create  {"token":"...","request_id":1,"order_id":1,"amount":500,"gateway_order_id":"ord-1"}
-func (v *GatewayVerticle) handleWireCreateIntent(ctx core.FluxorContext) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			jsonResp(w, 400, map[string]any{"error": "invalid json"})
-			return
-		}
-		result, err := wireBusCall(ctx, "saving.wire.create_intent", req)
-		if err != nil {
-			jsonResp(w, 502, map[string]any{"error": err.Error()})
-			return
-		}
-		jsonResp(w, 200, result)
-	}
-}
-
-// POST /wire/intent/pay  {"token":"...","merchant_id":123,"request_id":1,"secret":"<40hex>"}
-func (v *GatewayVerticle) handleWirePayIntent(ctx core.FluxorContext) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			jsonResp(w, 400, map[string]any{"error": "invalid json"})
-			return
-		}
-		result, err := wireBusCall(ctx, "saving.wire.pay_intent", req)
-		if err != nil {
-			jsonResp(w, 502, map[string]any{"error": err.Error()})
-			return
-		}
-		jsonResp(w, 200, result)
 	}
 }
 
