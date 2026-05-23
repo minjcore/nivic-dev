@@ -23,8 +23,14 @@ func main() {
 		log.Fatalf("init: %v", err)
 	}
 
+	// WireVerticle first — owns the TCP connection and registers EventBus handlers
+	// before GatewayVerticle registers HTTP routes that call them.
+	if _, err = app.DeployVerticle(NewWireVerticle()); err != nil {
+		log.Fatalf("deploy wire: %v", err)
+	}
+
 	if _, err = app.DeployVerticle(NewGatewayVerticle()); err != nil {
-		log.Fatalf("deploy: %v", err)
+		log.Fatalf("deploy gateway: %v", err)
 	}
 
 	if err := app.Start(); err != nil {

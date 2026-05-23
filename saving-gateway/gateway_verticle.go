@@ -13,10 +13,14 @@ import (
 
 // GatewayVerticle is the BFF HTTP layer for saving.
 // Runs alongside the C wire server (:7474) and exposes:
-//   GET  /health   — liveness
-//   GET  /metrics  — request count, uptime
-//   POST /events   — publish to EventBus  {"address":"saving.x","data":{...}}
-//   GET  /events   — SSE stream from EventBus ?address=saving.x
+//   GET  /health          — liveness
+//   GET  /metrics         — request count, uptime
+//   POST /events          — publish to EventBus  {"address":"saving.x","data":{...}}
+//   GET  /events          — SSE stream from EventBus ?address=saving.x
+//   POST /wire/login      — Wire LOGIN  {"uid":123,"password":"..."}
+//   GET  /wire/balance    — Wire GET_BALANCE  ?token=<hex>
+//   POST /wire/transfer   — Wire TRANSFER {"token":"...","to":456,"amount":50000}
+//   GET  /wire/ping       — Wire PING liveness check
 type GatewayVerticle struct {
 	*core.BaseVerticle
 	server   *http.Server
@@ -37,10 +41,14 @@ func (v *GatewayVerticle) Start(ctx core.FluxorContext) error {
 	v.start = time.Now()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health",  v.handleHealth(ctx))
-	mux.HandleFunc("GET /metrics", v.handleMetrics)
-	mux.HandleFunc("POST /events", v.handlePublish(ctx))
-	mux.HandleFunc("GET /events",  v.handleSSE(ctx))
+	mux.HandleFunc("GET /health",         v.handleHealth(ctx))
+	mux.HandleFunc("GET /metrics",        v.handleMetrics)
+	mux.HandleFunc("POST /events",        v.handlePublish(ctx))
+	mux.HandleFunc("GET /events",         v.handleSSE(ctx))
+	mux.HandleFunc("POST /wire/login",    v.handleWireLogin(ctx))
+	mux.HandleFunc("GET /wire/balance",   v.handleWireBalance(ctx))
+	mux.HandleFunc("POST /wire/transfer", v.handleWireTransfer(ctx))
+	mux.HandleFunc("GET /wire/ping",      v.handleWirePing(ctx))
 
 	v.server = &http.Server{
 		Addr:              ":8080",
@@ -146,6 +154,102 @@ func (v *GatewayVerticle) handleSSE(ctx core.FluxorContext) http.HandlerFunc {
 				flusher.Flush()
 			}
 		}
+	}
+}
+
+// ── Wire HTTP handlers ────────────────────────────────────────────────────────
+// All Wire ops go through WireVerticle via EventBus to keep TCP ownership on
+// one goroutine. Gateway publishes a request, subscribes to the _reply topic,
+// and waits up to 12 s.
+
+// POST /wire/login  {"uid":123,"password":"abc"}
+func (v *GatewayVerticle) handleWireLogin(ctx core.FluxorContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonResp(w, 400, map[string]any{"error": "invalid json"})
+			return
+		}
+		result, err := wireBusCall(ctx, "saving.wire.login", req)
+		if err != nil {
+			jsonResp(w, 502, map[string]any{"error": err.Error()})
+			return
+		}
+		jsonResp(w, 200, result)
+	}
+}
+
+// GET /wire/balance?token=<hex64>
+func (v *GatewayVerticle) handleWireBalance(ctx core.FluxorContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := r.URL.Query().Get("token")
+		if token == "" {
+			jsonResp(w, 400, map[string]any{"error": "need ?token="})
+			return
+		}
+		result, err := wireBusCall(ctx, "saving.wire.balance", map[string]any{"token": token})
+		if err != nil {
+			jsonResp(w, 502, map[string]any{"error": err.Error()})
+			return
+		}
+		jsonResp(w, 200, result)
+	}
+}
+
+// POST /wire/transfer  {"token":"...","to":456,"amount":50000}
+func (v *GatewayVerticle) handleWireTransfer(ctx core.FluxorContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonResp(w, 400, map[string]any{"error": "invalid json"})
+			return
+		}
+		result, err := wireBusCall(ctx, "saving.wire.transfer", req)
+		if err != nil {
+			jsonResp(w, 502, map[string]any{"error": err.Error()})
+			return
+		}
+		jsonResp(w, 200, result)
+	}
+}
+
+// GET /wire/ping
+func (v *GatewayVerticle) handleWirePing(ctx core.FluxorContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		result, err := wireBusCall(ctx, "saving.wire.ping", map[string]any{})
+		if err != nil {
+			jsonResp(w, 502, map[string]any{"error": err.Error()})
+			return
+		}
+		jsonResp(w, 200, result)
+	}
+}
+
+// wireBusCall publishes to addr, waits for the _reply on a one-shot consumer.
+func wireBusCall(ctx core.FluxorContext, addr string, body map[string]any) (map[string]any, error) {
+	ch := make(chan map[string]any, 1)
+	replyAddr := addr + "._reply"
+	consumer := ctx.EventBus().Consumer(replyAddr)
+	consumer.Handler(func(_ core.FluxorContext, msg core.Message) error {
+		if m, ok := msg.Body().(map[string]any); ok {
+			select {
+			case ch <- m:
+			default:
+			}
+		}
+		return nil
+	})
+	defer consumer.Unregister()
+
+	if err := ctx.EventBus().Publish(addr, body); err != nil {
+		return nil, fmt.Errorf("publish %s: %w", addr, err)
+	}
+
+	select {
+	case result := <-ch:
+		return result, nil
+	case <-time.After(12 * time.Second):
+		return nil, fmt.Errorf("wire timeout")
 	}
 }
 
