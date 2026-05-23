@@ -23,9 +23,11 @@ import (
 //   saving.wire.transfer — {token,to,amount}→ {after_balance, error}
 type WireVerticle struct {
 	*core.BaseVerticle
-	addr   string
-	secret []byte
-	client *WireClient
+	addr        string
+	secret      []byte
+	svcUID      uint32 // service account UID — 0 = no auto-login
+	svcPassword string // service account password
+	client      *WireClient
 }
 
 func NewWireVerticle() *WireVerticle {
@@ -37,10 +39,18 @@ func NewWireVerticle() *WireVerticle {
 	if secret == "" {
 		secret = "saving_wire_secret_changeme"
 	}
+	var svcUID uint32
+	if v := os.Getenv("WIRE_SERVICE_UID"); v != "" {
+		var n uint64
+		fmt.Sscanf(v, "%d", &n)
+		svcUID = uint32(n)
+	}
 	return &WireVerticle{
 		BaseVerticle: core.NewBaseVerticle("wire"),
 		addr:         addr,
 		secret:       []byte(secret),
+		svcUID:       svcUID,
+		svcPassword:  os.Getenv("WIRE_SERVICE_PASSWORD"),
 	}
 }
 
@@ -83,6 +93,16 @@ func (v *WireVerticle) connect() error {
 	if err != nil {
 		return err
 	}
+	// Auto-login as service account so the gateway receives push events.
+	if v.svcUID != 0 && v.svcPassword != "" {
+		token, err := c.Login(v.svcUID, v.svcPassword)
+		if err != nil {
+			c.Close()
+			return fmt.Errorf("service account login uid=%d: %w", v.svcUID, err)
+		}
+		slog.Info("wire: service account logged in", "uid", v.svcUID)
+		_ = token // held by the TCP connection; push events now flow
+	}
 	v.client = c
 	go v.pushListener(c)
 	slog.Info("wire: connected", "addr", v.addr)
@@ -116,7 +136,9 @@ func (v *WireVerticle) reconnectLoop(ctx core.FluxorContext) {
 // ── push event listener ───────────────────────────────────────────────────────
 
 func (v *WireVerticle) pushListener(c *WireClient) {
+	slog.Info("wire: push listener started")
 	for f := range c.Events {
+		slog.Info("wire: push event received", "typ", fmt.Sprintf("0x%02x", f.Typ), "body_len", len(f.Body))
 		switch f.Typ {
 		case wireEvtTransferIn:
 			if len(f.Body) < 20 {
