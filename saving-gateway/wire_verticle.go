@@ -74,6 +74,10 @@ func (v *WireVerticle) Start(ctx core.FluxorContext) error {
 	v.Consumer("saving.wire.balance").Handler(v.handleBalance)
 	v.Consumer("saving.wire.transfer").Handler(v.handleTransfer)
 	v.Consumer("saving.wire.ping").Handler(v.handlePing)
+	v.Consumer("saving.wire.register_merchant").Handler(v.handleRegisterMerchant)
+	v.Consumer("saving.wire.enroll_totp").Handler(v.handleEnrollTOTP)
+	v.Consumer("saving.wire.create_intent").Handler(v.handleCreateIntent)
+	v.Consumer("saving.wire.pay_intent").Handler(v.handlePayIntent)
 
 	slog.Info("wire verticle started", "addr", v.addr)
 	return nil
@@ -239,6 +243,112 @@ func (v *WireVerticle) handlePing(_ core.FluxorContext, msg core.Message) error 
 		return v.reply("saving.wire.ping", false, err.Error(), nil)
 	}
 	return v.reply("saving.wire.ping", true, "", map[string]any{"pong": true})
+}
+
+func (v *WireVerticle) handleRegisterMerchant(_ core.FluxorContext, msg core.Message) error {
+	var req map[string]any
+	if err := msg.DecodeBody(&req); err != nil {
+		return v.reply("saving.wire.register_merchant", false, "invalid body", nil)
+	}
+	token, err := hexToken(req, "token")
+	if err != nil {
+		return v.reply("saving.wire.register_merchant", false, err.Error(), nil)
+	}
+	name, _ := req["name"].(string)
+	if v.client == nil {
+		return v.reply("saving.wire.register_merchant", false, "wire not connected", nil)
+	}
+	if err := v.client.RegisterMerchant(token, name); err != nil {
+		return v.reply("saving.wire.register_merchant", false, err.Error(), nil)
+	}
+	return v.reply("saving.wire.register_merchant", true, "", nil)
+}
+
+func (v *WireVerticle) handleEnrollTOTP(_ core.FluxorContext, msg core.Message) error {
+	var req map[string]any
+	if err := msg.DecodeBody(&req); err != nil {
+		return v.reply("saving.wire.enroll_totp", false, "invalid body", nil)
+	}
+	token, err := hexToken(req, "token")
+	if err != nil {
+		return v.reply("saving.wire.enroll_totp", false, err.Error(), nil)
+	}
+	customerID, _ := req["customer_id"].(float64)
+	secretHex, _ := req["secret"].(string)
+	if len(secretHex) != 40 {
+		return v.reply("saving.wire.enroll_totp", false, "secret must be 40 hex chars (20 bytes)", nil)
+	}
+	secret := make([]byte, 20)
+	for i := 0; i < 20; i++ {
+		var b byte
+		fmt.Sscanf(secretHex[i*2:i*2+2], "%02x", &b)
+		secret[i] = b
+	}
+	if v.client == nil {
+		return v.reply("saving.wire.enroll_totp", false, "wire not connected", nil)
+	}
+	if err := v.client.EnrollTOTP(token, uint32(customerID), secret); err != nil {
+		return v.reply("saving.wire.enroll_totp", false, err.Error(), nil)
+	}
+	return v.reply("saving.wire.enroll_totp", true, "", nil)
+}
+
+func (v *WireVerticle) handleCreateIntent(_ core.FluxorContext, msg core.Message) error {
+	var req map[string]any
+	if err := msg.DecodeBody(&req); err != nil {
+		return v.reply("saving.wire.create_intent", false, "invalid body", nil)
+	}
+	token, err := hexToken(req, "token")
+	if err != nil {
+		return v.reply("saving.wire.create_intent", false, err.Error(), nil)
+	}
+	requestID, _ := req["request_id"].(float64)
+	orderID, _ := req["order_id"].(float64)
+	amount, _ := req["amount"].(float64)
+	gwOrderID, _ := req["gateway_order_id"].(string)
+	if requestID == 0 || amount <= 0 {
+		return v.reply("saving.wire.create_intent", false, "request_id and amount required", nil)
+	}
+	if v.client == nil {
+		return v.reply("saving.wire.create_intent", false, "wire not connected", nil)
+	}
+	if err := v.client.CreateIntent(token, uint64(requestID), uint64(orderID), uint64(amount), gwOrderID); err != nil {
+		return v.reply("saving.wire.create_intent", false, err.Error(), nil)
+	}
+	return v.reply("saving.wire.create_intent", true, "", map[string]any{
+		"request_id": uint64(requestID), "amount": uint64(amount),
+	})
+}
+
+func (v *WireVerticle) handlePayIntent(_ core.FluxorContext, msg core.Message) error {
+	var req map[string]any
+	if err := msg.DecodeBody(&req); err != nil {
+		return v.reply("saving.wire.pay_intent", false, "invalid body", nil)
+	}
+	token, err := hexToken(req, "token")
+	if err != nil {
+		return v.reply("saving.wire.pay_intent", false, err.Error(), nil)
+	}
+	merchantID, _ := req["merchant_id"].(float64)
+	requestID, _ := req["request_id"].(float64)
+	secretHex, _ := req["secret"].(string)
+	if merchantID == 0 || requestID == 0 || len(secretHex) != 40 {
+		return v.reply("saving.wire.pay_intent", false, "merchant_id, request_id, secret required", nil)
+	}
+	secret := make([]byte, 20)
+	for i := 0; i < 20; i++ {
+		var b byte
+		fmt.Sscanf(secretHex[i*2:i*2+2], "%02x", &b)
+		secret[i] = b
+	}
+	totpCode := TOTPCode(secret)
+	if v.client == nil {
+		return v.reply("saving.wire.pay_intent", false, "wire not connected", nil)
+	}
+	if err := v.client.PayIntent(token, uint32(merchantID), uint64(requestID), totpCode); err != nil {
+		return v.reply("saving.wire.pay_intent", false, err.Error(), nil)
+	}
+	return v.reply("saving.wire.pay_intent", true, "", map[string]any{"totp_code": totpCode})
 }
 
 // ── reply helpers ─────────────────────────────────────────────────────────────

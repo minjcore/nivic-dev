@@ -23,12 +23,16 @@ const (
 
 // Wire message types (client → server)
 const (
-	wireCmdPing     uint8 = 0x01
-	wireCmdLogin    uint8 = 0x02
-	wireCmdLogout   uint8 = 0x03
-	wireCmdTransfer uint8 = 0x11
-	wireCmdBalance  uint8 = 0x12
-	wireCmdHistory  uint8 = 0x16
+	wireCmdPing             uint8 = 0x01
+	wireCmdLogin            uint8 = 0x02
+	wireCmdLogout           uint8 = 0x03
+	wireCmdTransfer         uint8 = 0x11
+	wireCmdBalance          uint8 = 0x12
+	wireCmdHistory          uint8 = 0x16
+	wireCmdCreateIntent     uint8 = 0x20
+	wireCmdPayIntent        uint8 = 0x21
+	wireCmdEnrollTOTP       uint8 = 0x22
+	wireCmdRegisterMerchant uint8 = 0x23
 )
 
 // Wire message types (server → client)
@@ -272,6 +276,92 @@ func (c *WireClient) recvRaw() (*WireFrame, error) {
 		Seq:  binary.BigEndian.Uint32(rest[1:5]),
 		Body: body,
 	}, nil
+}
+
+// RegisterMerchant registers the token's account as a merchant with the given name.
+func (c *WireClient) RegisterMerchant(token []byte, name string) error {
+	body := make([]byte, 32+len(name))
+	copy(body, token)
+	copy(body[32:], name)
+	resp, err := c.RPC(wireCmdRegisterMerchant, body)
+	if err != nil {
+		return fmt.Errorf("wire register_merchant: %w", err)
+	}
+	if len(resp.Body) < 1 || resp.Body[0] != wireCodeOK {
+		return fmt.Errorf("wire register_merchant: code 0x%02x — %s",
+			safeFirstByte(resp.Body), wireErrMsg(safeFirstByte(resp.Body)))
+	}
+	return nil
+}
+
+// EnrollTOTP enrolls a 20-byte TOTP secret for a merchant↔customer pair.
+func (c *WireClient) EnrollTOTP(merchantToken []byte, customerID uint32, secret []byte) error {
+	body := make([]byte, 32+4+20)
+	copy(body, merchantToken)
+	binary.BigEndian.PutUint32(body[32:], customerID)
+	copy(body[36:], secret)
+	resp, err := c.RPC(wireCmdEnrollTOTP, body)
+	if err != nil {
+		return fmt.Errorf("wire enroll_totp: %w", err)
+	}
+	if len(resp.Body) < 1 || resp.Body[0] != wireCodeOK {
+		return fmt.Errorf("wire enroll_totp: code 0x%02x — %s",
+			safeFirstByte(resp.Body), wireErrMsg(safeFirstByte(resp.Body)))
+	}
+	return nil
+}
+
+// CreateIntent creates a payment intent. Returns the server-confirmed (mid, requestID, amount).
+func (c *WireClient) CreateIntent(merchantToken []byte, requestID, orderID, amount uint64, gatewayOrderID string) error {
+	body := make([]byte, 32+8+8+8+len(gatewayOrderID))
+	copy(body, merchantToken)
+	binary.BigEndian.PutUint64(body[32:], requestID)
+	binary.BigEndian.PutUint64(body[40:], orderID)
+	binary.BigEndian.PutUint64(body[48:], amount)
+	copy(body[56:], gatewayOrderID)
+	resp, err := c.RPC(wireCmdCreateIntent, body)
+	if err != nil {
+		return fmt.Errorf("wire create_intent: %w", err)
+	}
+	if len(resp.Body) < 1 || resp.Body[0] != wireCodeOK {
+		return fmt.Errorf("wire create_intent: code 0x%02x — %s",
+			safeFirstByte(resp.Body), wireErrMsg(safeFirstByte(resp.Body)))
+	}
+	return nil
+}
+
+// PayIntent pays an intent using a customer session token + pre-computed TOTP code.
+func (c *WireClient) PayIntent(customerToken []byte, merchantID uint32, requestID uint64, totpCode uint32) error {
+	body := make([]byte, 32+4+8+4)
+	copy(body, customerToken)
+	binary.BigEndian.PutUint32(body[32:], merchantID)
+	binary.BigEndian.PutUint64(body[36:], requestID)
+	binary.BigEndian.PutUint32(body[44:], totpCode)
+	resp, err := c.RPC(wireCmdPayIntent, body)
+	if err != nil {
+		return fmt.Errorf("wire pay_intent: %w", err)
+	}
+	if len(resp.Body) < 1 || resp.Body[0] != wireCodeOK {
+		return fmt.Errorf("wire pay_intent: code 0x%02x — %s",
+			safeFirstByte(resp.Body), wireErrMsg(safeFirstByte(resp.Body)))
+	}
+	return nil
+}
+
+// TOTPCode computes the current 6-digit TOTP using HMAC-SHA256 (server's non-standard variant).
+func TOTPCode(secret []byte) uint32 {
+	T := uint64(time.Now().Unix()) / 30
+	msg := make([]byte, 8)
+	binary.BigEndian.PutUint64(msg, T)
+	mac := hmac.New(sha256.New, secret)
+	mac.Write(msg)
+	h := mac.Sum(nil)
+	offset := h[len(h)-1] & 0x0f
+	otp := (uint32(h[offset]&0x7f) << 24) |
+		(uint32(h[offset+1]) << 16) |
+		(uint32(h[offset+2]) << 8) |
+		uint32(h[offset+3])
+	return otp % 1000000
 }
 
 func safeFirstByte(b []byte) uint8 {
