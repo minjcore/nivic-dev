@@ -78,10 +78,12 @@ static const char SCHEMA[] =
     "  from_id    BIGINT NOT NULL,"
     "  to_id      BIGINT NOT NULL,"
     "  amount     BIGINT NOT NULL,"
-    "  type       SMALLINT NOT NULL DEFAULT 0,"   /* 0=transfer, 1=payment */
-    "  create_time TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+    "  type        SMALLINT    NOT NULL DEFAULT 0,"   /* 0=transfer, 1=payment */
+    "  create_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+    "  update_time TIMESTAMPTZ NOT NULL DEFAULT NOW()"
     ");"
-    "ALTER TABLE transfers ADD COLUMN IF NOT EXISTS type SMALLINT NOT NULL DEFAULT 0;"
+    "ALTER TABLE transfers ADD COLUMN IF NOT EXISTS type        SMALLINT    NOT NULL DEFAULT 0;"
+    "ALTER TABLE transfers ADD COLUMN IF NOT EXISTS update_time TIMESTAMPTZ NOT NULL DEFAULT NOW();"
     "CREATE INDEX IF NOT EXISTS transfers_from_idx ON transfers(from_id, create_time DESC);"
     "CREATE INDEX IF NOT EXISTS transfers_to_idx   ON transfers(to_id,   create_time DESC);"
 
