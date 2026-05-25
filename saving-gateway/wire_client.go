@@ -33,6 +33,11 @@ const (
 	wireCmdPayIntent        uint8 = 0x21
 	wireCmdEnrollTOTP       uint8 = 0x22
 	wireCmdRegisterMerchant uint8 = 0x23
+	wireCmdCashIn           uint8 = 0x24
+	wireCmdTotpCharge       uint8 = 0x25
+	wireCmdCashOut          uint8 = 0x26
+	wireCmdGetMerchantInfo  uint8 = 0x27
+	wireCmdListIntents      uint8 = 0x28
 )
 
 // Wire message types (server → client)
@@ -46,6 +51,7 @@ const (
 const (
 	wireEvtTransferIn uint8 = 0xC0
 	wireEvtIntentPaid uint8 = 0xC4
+	wireEvtCashOut    uint8 = 0xC5
 )
 
 // Wire response codes
@@ -364,6 +370,105 @@ func TOTPCode(secret []byte) uint32 {
 	return otp % 1000000
 }
 
+// CashIn credits toUID with amount. topupID is an idempotency key.
+func (c *WireClient) CashIn(bankToken []byte, toUID uint32, amount uint64, topupID string) error {
+	body := make([]byte, 32+4+8+len(topupID))
+	copy(body, bankToken)
+	binary.BigEndian.PutUint32(body[32:], toUID)
+	binary.BigEndian.PutUint64(body[36:], amount)
+	copy(body[44:], topupID)
+	resp, err := c.RPC(wireCmdCashIn, body)
+	if err != nil {
+		return fmt.Errorf("wire cash_in: %w", err)
+	}
+	if len(resp.Body) < 1 || resp.Body[0] != wireCodeOK {
+		return fmt.Errorf("wire cash_in: %s", wireErrMsg(safeFirstByte(resp.Body)))
+	}
+	return nil
+}
+
+// CashOut debits fromUID by amount. cashoutID is an idempotency key.
+func (c *WireClient) CashOut(bankToken []byte, fromUID uint32, amount uint64, cashoutID string) error {
+	body := make([]byte, 32+4+8+len(cashoutID))
+	copy(body, bankToken)
+	binary.BigEndian.PutUint32(body[32:], fromUID)
+	binary.BigEndian.PutUint64(body[36:], amount)
+	copy(body[44:], cashoutID)
+	resp, err := c.RPC(wireCmdCashOut, body)
+	if err != nil {
+		return fmt.Errorf("wire cash_out: %w", err)
+	}
+	if len(resp.Body) < 1 || resp.Body[0] != wireCodeOK {
+		return fmt.Errorf("wire cash_out: %s", wireErrMsg(safeFirstByte(resp.Body)))
+	}
+	return nil
+}
+
+// TotpCharge charges amount from customerUID to the merchant using a TOTP code.
+func (c *WireClient) TotpCharge(merchantToken []byte, customerUID uint32, totpCode uint32, amount uint64) error {
+	body := make([]byte, 32+4+4+8)
+	copy(body, merchantToken)
+	binary.BigEndian.PutUint32(body[32:], customerUID)
+	binary.BigEndian.PutUint32(body[36:], totpCode)
+	binary.BigEndian.PutUint64(body[40:], amount)
+	resp, err := c.RPC(wireCmdTotpCharge, body)
+	if err != nil {
+		return fmt.Errorf("wire totp_charge: %w", err)
+	}
+	if len(resp.Body) < 1 || resp.Body[0] != wireCodeOK {
+		return fmt.Errorf("wire totp_charge: %s", wireErrMsg(safeFirstByte(resp.Body)))
+	}
+	return nil
+}
+
+// GetMerchantInfo returns the merchant name for merchantID.
+func (c *WireClient) GetMerchantInfo(token []byte, merchantID uint32) (string, error) {
+	body := make([]byte, 32+4)
+	copy(body, token)
+	binary.BigEndian.PutUint32(body[32:], merchantID)
+	resp, err := c.RPC(wireCmdGetMerchantInfo, body)
+	if err != nil {
+		return "", fmt.Errorf("wire get_merchant_info: %w", err)
+	}
+	if len(resp.Body) < 1 || resp.Body[0] != wireCodeOK {
+		return "", fmt.Errorf("wire get_merchant_info: %s", wireErrMsg(safeFirstByte(resp.Body)))
+	}
+	return string(resp.Body[1:]), nil
+}
+
+// IntentSummary is one entry from LIST_INTENTS.
+type IntentSummary struct {
+	RequestID uint64
+	Amount    uint64
+}
+
+// ListIntents returns pending intents for the merchant owning merchantToken.
+func (c *WireClient) ListIntents(merchantToken []byte) ([]IntentSummary, error) {
+	resp, err := c.RPC(wireCmdListIntents, merchantToken)
+	if err != nil {
+		return nil, fmt.Errorf("wire list_intents: %w", err)
+	}
+	if len(resp.Body) < 1 || resp.Body[0] != wireCodeOK {
+		return nil, fmt.Errorf("wire list_intents: %s", wireErrMsg(safeFirstByte(resp.Body)))
+	}
+	if len(resp.Body) < 2 {
+		return nil, nil
+	}
+	count := int(resp.Body[1])
+	if len(resp.Body) < 2+count*16 {
+		return nil, fmt.Errorf("wire list_intents: short body")
+	}
+	out := make([]IntentSummary, count)
+	for i := range out {
+		off := 2 + i*16
+		out[i] = IntentSummary{
+			RequestID: binary.BigEndian.Uint64(resp.Body[off:]),
+			Amount:    binary.BigEndian.Uint64(resp.Body[off+8:]),
+		}
+	}
+	return out, nil
+}
+
 func safeFirstByte(b []byte) uint8 {
 	if len(b) > 0 {
 		return b[0]
@@ -373,10 +478,21 @@ func safeFirstByte(b []byte) uint8 {
 
 func wireErrMsg(code uint8) string {
 	msgs := map[uint8]string{
+		0x01: "bad frame",
+		0x02: "bad signature",
+		0x03: "id taken",
+		0x04: "id reserved",
 		0x05: "not found",
 		0x06: "bad password",
 		0x07: "session expired",
 		0x08: "low balance",
+		0x09: "guardian full",
+		0x0A: "not guardian",
+		0x0B: "need guardians",
+		0x0C: "totp invalid",
+		0x0D: "intent settled",
+		0x0E: "not merchant",
+		0x0F: "system offline",
 		0xFF: "internal error",
 	}
 	if s, ok := msgs[code]; ok {

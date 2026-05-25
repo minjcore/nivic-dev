@@ -79,6 +79,11 @@ func (v *WireVerticle) Start(ctx core.FluxorContext) error {
 	v.Consumer("saving.wire.enroll_totp").Handler(v.handleEnrollTOTP)
 	v.Consumer("saving.wire.create_intent").Handler(v.handleCreateIntent)
 	v.Consumer("saving.wire.pay_intent").Handler(v.handlePayIntent)
+	v.Consumer("saving.wire.cash_in").Handler(v.handleCashIn)
+	v.Consumer("saving.wire.cash_out").Handler(v.handleCashOut)
+	v.Consumer("saving.wire.totp_charge").Handler(v.handleTotpCharge)
+	v.Consumer("saving.wire.get_merchant_info").Handler(v.handleGetMerchantInfo)
+	v.Consumer("saving.wire.list_intents").Handler(v.handleListIntents)
 
 	slog.Info("wire verticle started", "addr", v.addr)
 	return nil
@@ -164,6 +169,16 @@ func (v *WireVerticle) pushListener(c *WireClient) {
 			amt := binary.BigEndian.Uint64(f.Body[12:20])
 			_ = v.Publish("saving.intent_paid", map[string]any{
 				"request_id": reqID, "customer_id": cust, "amount": amt,
+			})
+		case wireEvtCashOut:
+			if len(f.Body) < 20 {
+				continue
+			}
+			bankMID := binary.BigEndian.Uint32(f.Body[0:4])
+			amt := binary.BigEndian.Uint64(f.Body[4:12])
+			bal := binary.BigEndian.Uint64(f.Body[12:20])
+			_ = v.Publish("saving.cash_out", map[string]any{
+				"bank_mid": bankMID, "amount": amt, "balance": bal,
 			})
 		}
 	}
@@ -357,6 +372,138 @@ func (v *WireVerticle) handlePayIntent(_ core.FluxorContext, msg core.Message) e
 		return v.reply(addr, false, err.Error(), nil)
 	}
 	return v.reply(addr, true, "", map[string]any{"totp_code": totpCode})
+}
+
+func (v *WireVerticle) handleCashIn(_ core.FluxorContext, msg core.Message) error {
+	const addr = "saving.wire.cash_in"
+	var req map[string]any
+	if err := msg.DecodeBody(&req); err != nil {
+		return v.reply(addr, false, "invalid body", nil)
+	}
+	token, err := hexToken(req, "token")
+	if err != nil {
+		return v.reply(addr, false, err.Error(), nil)
+	}
+	toUID, _ := req["to_uid"].(float64)
+	amount, _ := req["amount"].(float64)
+	topupID, _ := req["topup_id"].(string)
+	if toUID == 0 || amount <= 0 || topupID == "" {
+		return v.reply(addr, false, "to_uid, amount and topup_id required", nil)
+	}
+	c, err := v.withClient(addr)
+	if err != nil {
+		return err
+	}
+	if err := c.CashIn(token, uint32(toUID), uint64(amount), topupID); err != nil {
+		return v.reply(addr, false, err.Error(), nil)
+	}
+	return v.reply(addr, true, "", nil)
+}
+
+func (v *WireVerticle) handleCashOut(_ core.FluxorContext, msg core.Message) error {
+	const addr = "saving.wire.cash_out"
+	var req map[string]any
+	if err := msg.DecodeBody(&req); err != nil {
+		return v.reply(addr, false, "invalid body", nil)
+	}
+	token, err := hexToken(req, "token")
+	if err != nil {
+		return v.reply(addr, false, err.Error(), nil)
+	}
+	fromUID, _ := req["from_uid"].(float64)
+	amount, _ := req["amount"].(float64)
+	cashoutID, _ := req["cashout_id"].(string)
+	if fromUID == 0 || amount <= 0 || cashoutID == "" {
+		return v.reply(addr, false, "from_uid, amount and cashout_id required", nil)
+	}
+	c, err := v.withClient(addr)
+	if err != nil {
+		return err
+	}
+	if err := c.CashOut(token, uint32(fromUID), uint64(amount), cashoutID); err != nil {
+		return v.reply(addr, false, err.Error(), nil)
+	}
+	return v.reply(addr, true, "", nil)
+}
+
+func (v *WireVerticle) handleTotpCharge(_ core.FluxorContext, msg core.Message) error {
+	const addr = "saving.wire.totp_charge"
+	var req map[string]any
+	if err := msg.DecodeBody(&req); err != nil {
+		return v.reply(addr, false, "invalid body", nil)
+	}
+	token, err := hexToken(req, "token")
+	if err != nil {
+		return v.reply(addr, false, err.Error(), nil)
+	}
+	customerUID, _ := req["customer_uid"].(float64)
+	amount, _ := req["amount"].(float64)
+	secret, err := decodeSecret(req["secret"])
+	if err != nil {
+		return v.reply(addr, false, err.Error(), nil)
+	}
+	if customerUID == 0 || amount <= 0 {
+		return v.reply(addr, false, "customer_uid and amount required", nil)
+	}
+	totpCode := TOTPCode(secret)
+	c, err := v.withClient(addr)
+	if err != nil {
+		return err
+	}
+	if err := c.TotpCharge(token, uint32(customerUID), totpCode, uint64(amount)); err != nil {
+		return v.reply(addr, false, err.Error(), nil)
+	}
+	return v.reply(addr, true, "", map[string]any{"totp_code": totpCode})
+}
+
+func (v *WireVerticle) handleGetMerchantInfo(_ core.FluxorContext, msg core.Message) error {
+	const addr = "saving.wire.get_merchant_info"
+	var req map[string]any
+	if err := msg.DecodeBody(&req); err != nil {
+		return v.reply(addr, false, "invalid body", nil)
+	}
+	token, err := hexToken(req, "token")
+	if err != nil {
+		return v.reply(addr, false, err.Error(), nil)
+	}
+	merchantID, _ := req["merchant_id"].(float64)
+	if merchantID == 0 {
+		return v.reply(addr, false, "merchant_id required", nil)
+	}
+	c, err := v.withClient(addr)
+	if err != nil {
+		return err
+	}
+	name, err := c.GetMerchantInfo(token, uint32(merchantID))
+	if err != nil {
+		return v.reply(addr, false, err.Error(), nil)
+	}
+	return v.reply(addr, true, "", map[string]any{"name": name})
+}
+
+func (v *WireVerticle) handleListIntents(_ core.FluxorContext, msg core.Message) error {
+	const addr = "saving.wire.list_intents"
+	var req map[string]any
+	if err := msg.DecodeBody(&req); err != nil {
+		return v.reply(addr, false, "invalid body", nil)
+	}
+	token, err := hexToken(req, "token")
+	if err != nil {
+		return v.reply(addr, false, err.Error(), nil)
+	}
+	c, err := v.withClient(addr)
+	if err != nil {
+		return err
+	}
+	intents, err := c.ListIntents(token)
+	if err != nil {
+		return v.reply(addr, false, err.Error(), nil)
+	}
+	items := make([]map[string]any, len(intents))
+	for i, it := range intents {
+		items[i] = map[string]any{"request_id": it.RequestID, "amount": it.Amount}
+	}
+	return v.reply(addr, true, "", map[string]any{"intents": items})
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
