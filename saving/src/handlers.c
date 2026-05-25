@@ -582,6 +582,64 @@ static void handle_pay_intent(DB *db, SessionTable *st, int fd, const WireFrame 
     send_ack(fd, f->seq, WIRE_OK, NULL, 0);
 }
 
+/* CONFIRM_INTENT  body: [customer_token 32B][merchant_id 4B][request_id 8B]
+ * Customer-initiated: scan merchant QR → confirm → pay. No TOTP required.
+ * QR format: saving://intent?mid=M&req=R&amount=A
+ */
+static void handle_confirm_intent(DB *db, SessionTable *st, int fd, const WireFrame *f) {
+    if (f->body_len < 44) {
+        send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
+    }
+    uint32_t customer_id = st_lookup(st, f->body);
+    if (!customer_id) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
+    uint32_t merchant_id = rd32(f->body + 32);
+    uint64_t request_id  = rd64(f->body + 36);
+
+    IntentInfo intent;
+    if (db_intent_get(db, merchant_id, request_id, &intent) != 0) {
+        send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND, NULL, 0); return;
+    }
+    if (intent.status != 0) {
+        send_ack(fd, f->seq, WIRE_ERR_INTENT_SETTLED, NULL, 0); return;
+    }
+
+    int64_t after_cust = 0;
+    int rc = db_transfer(db, customer_id, merchant_id, intent.amount, 1, &after_cust, NULL);
+    if (rc == -1) { send_ack(fd, f->seq, WIRE_ERR_LOW_BALANCE, NULL, 0); return; }
+    if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
+    if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
+    db_intent_settle(db, merchant_id, request_id);
+
+    gateway_notify_async(intent.gateway_order_id, customer_id);
+
+    /* Push EVT_TRANSFER_IN to merchant */
+    int64_t merch_bal = db_account_balance(db, merchant_id);
+    if (merch_bal >= 0) {
+        uint8_t body[20], evt[WIRE_MAX_FRAME];
+        wr32(body,      customer_id);
+        wr64(body + 4,  intent.amount);
+        wr64(body + 12, (uint64_t)merch_bal);
+        size_t n = wire_frame_encode(WIRE_EVT_TRANSFER_IN, 0, body, 20, evt, sizeof(evt));
+        if (n > 0) registry_push(merchant_id, evt, n);
+    }
+
+    /* Push EVT_INTENT_PAID: [request_id 8B][customer_id 4B][amount 8B] */
+    {
+        uint8_t ip_body[20], ip_evt[WIRE_MAX_FRAME];
+        wr64(ip_body,      request_id);
+        wr32(ip_body + 8,  customer_id);
+        wr64(ip_body + 12, intent.amount);
+        size_t ip_n = wire_frame_encode(WIRE_EVT_INTENT_PAID, 0, ip_body, 20,
+                                        ip_evt, sizeof(ip_evt));
+        if (ip_n > 0) registry_push(merchant_id, ip_evt, ip_n);
+    }
+
+    /* ACK extra: [after_balance 8B] so customer app can update display */
+    uint8_t extra[8];
+    wr64(extra, (uint64_t)after_cust);
+    send_ack(fd, f->seq, WIRE_OK, extra, 8);
+}
+
 /* TOTP_CHARGE  body: [merchant_token 32B][customer_uid 4B][totp_code 4B][amount 8B]
  * Any registered merchant may charge a customer via their TOTP code.
  * Merchant scans customer QR (saving://totp-pay?uid=X&code=6DIGITS&amount=A),
@@ -865,6 +923,7 @@ void handle_frame(DB *db, SessionTable *st, int fd, const WireFrame *f) {
         case WIRE_TRANSFER:
         case WIRE_CREATE_INTENT:
         case WIRE_PAY_INTENT:
+        case WIRE_CONFIRM_INTENT:
         case WIRE_CASH_IN:
         case WIRE_TOTP_CHARGE:
         case WIRE_CASH_OUT:
@@ -896,6 +955,7 @@ void handle_frame(DB *db, SessionTable *st, int fd, const WireFrame *f) {
         case WIRE_CASH_OUT:           handle_cash_out(db, st, fd, f);             break;
         case WIRE_GET_MERCHANT_INFO:  handle_get_merchant_info(db, st, fd, f);    break;
         case WIRE_LIST_INTENTS:       handle_list_intents(db, st, fd, f);         break;
+        case WIRE_CONFIRM_INTENT:     handle_confirm_intent(db, st, fd, f);       break;
         default:
             send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0);
     }

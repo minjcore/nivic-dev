@@ -24,6 +24,7 @@ enum WireType: UInt8 {
     case cashOut           = 0x26
     case getMerchantInfo   = 0x27
     case listIntents       = 0x28
+    case confirmIntent     = 0x29
 
     // Server → Client (responses)
     case pong            = 0x80
@@ -278,6 +279,16 @@ extension WireFrame {
     /* LIST_INTENTS  body: [merchant_token 32B] */
     static func listIntents(token: Data, seq: UInt32) -> WireFrame {
         WireFrame(type: .listIntents, seq: seq, body: token)
+    }
+
+    /* CONFIRM_INTENT  body: [customer_token 32B][merchant_id 4B][request_id 8B] */
+    static func confirmIntent(token: Data, merchantID: UInt32, requestID: UInt64,
+                               seq: UInt32) -> WireFrame {
+        var body = Data()
+        body.append(token)
+        body.appendBigEndian(merchantID)
+        body.appendBigEndian(requestID)
+        return WireFrame(type: .confirmIntent, seq: seq, body: body)
     }
 }
 

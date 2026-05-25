@@ -9,7 +9,8 @@ for f in test_ping.py test_create_account.py test_login.py \
           test_cash_in.py test_cash_out.py \
           test_intent_flow.py test_paid_order.py test_list_intents.py \
           test_merchant_info.py test_pay_intent.py test_totp_charge.py \
-          test_enroll_totp.py test_system_offline.py; do
+          test_enroll_totp.py test_system_offline.py \
+          test_confirm_intent.py; do
   result=$(python3 "$f" 2>&1)
   last=$(echo "$result" | tail -1)
   if echo "$last" | grep -qiE "PASSED|ALL PASSED"; then
