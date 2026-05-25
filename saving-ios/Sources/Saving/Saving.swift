@@ -26,6 +26,12 @@ public struct BalanceUpdate {
     public let balance: UInt64
 }
 
+public struct IntentPaid {
+    public let requestID:  UInt64
+    public let customerID: UInt32
+    public let amount:     UInt64
+}
+
 public enum SavingEvent {
     case transferIn(SavingTransfer)
     case recoveryRequested(accountID: UInt32)
@@ -34,6 +40,7 @@ public enum SavingEvent {
     case cashIn(BalanceUpdate)
     case cashOut(BalanceUpdate)
     case totpCharged(merchantID: UInt32, update: BalanceUpdate)
+    case intentPaid(IntentPaid)
 }
 
 public struct TransactionPage {
@@ -433,6 +440,16 @@ public final class SavingClient: ObservableObject {
             fmt.numberStyle = .decimal; fmt.groupingSeparator = "."
             let amtStr = (fmt.string(from: NSNumber(value: body.amount)) ?? "\(body.amount)") + " ₫"
             pushNotification(title: "Thanh toán QR", body: "-\(amtStr) tại #\(body.merchantID)")
+        case .evtIntentPaid:
+            guard let body = try? frame.parseEvtIntentPaid() else { return }
+            let paid = IntentPaid(requestID: body.requestID,
+                                  customerID: body.customerID,
+                                  amount: body.amount)
+            onEvent?(.intentPaid(paid))
+            let fmt = NumberFormatter()
+            fmt.numberStyle = .decimal; fmt.groupingSeparator = "."
+            let amtStr = (fmt.string(from: NSNumber(value: body.amount)) ?? "\(body.amount)") + " ₫"
+            pushNotification(title: "Đơn hàng được thanh toán", body: "+\(amtStr) từ #\(body.customerID)")
         default:
             break
         }
