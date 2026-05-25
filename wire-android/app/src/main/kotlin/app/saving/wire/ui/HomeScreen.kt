@@ -44,6 +44,8 @@ fun HomeScreen(vm: WireViewModel, accountId: Long) {
     var chatMid           by remember { mutableLongStateOf(0L) }
     var chatMerchantName  by remember { mutableStateOf("") }
     var transferToId      by remember { mutableStateOf("") }
+    var frontStoreMid     by remember { mutableLongStateOf(0L) }
+    var frontStoreIntent  by remember { mutableStateOf<IntentPayload?>(null) }
 
     LaunchedEffect(Unit) { vm.refreshBalance() }
 
@@ -142,7 +144,19 @@ fun HomeScreen(vm: WireViewModel, accountId: Long) {
     )
     if (showHistory)  HistorySheet(vm.client)                                                                        { showHistory  = false }
     if (showQRRecv)   QRReceiveSheet(accountId)                                                                      { showQRRecv   = false }
-    if (showQRScan)   QRScanSheet(vm.client, vm.prefs, vm.merchantsClient, accountId, onDone = { vm.refreshBalance() }) { showQRScan = false }
+    if (showQRScan)   QRScanSheet(
+        client          = vm.client,
+        prefs           = vm.prefs,
+        merchantsClient = vm.merchantsClient,
+        accountId       = accountId,
+        onDone          = { vm.refreshBalance() },
+        onFrontStore    = { mid, intent ->
+            showQRScan      = false
+            frontStoreMid   = mid
+            frontStoreIntent = intent
+        },
+        onDismiss       = { showQRScan = false }
+    )
     if (showGuardian) GuardianSheet(vm.client)                                                                       { showGuardian = false }
     if (showMerchant) MerchantSheet(accountId, vm.merchantsClient, vm.client, vm.prefs, vm.intentPaid)              { showMerchant = false }
     if (showLoyalty)  MyLoyaltySheet(vm.merchantsClient, accountId)                                                  { showLoyalty  = false }
@@ -152,7 +166,18 @@ fun HomeScreen(vm: WireViewModel, accountId: Long) {
         merchantsClient = vm.merchantsClient,
         onTransfer      = { id -> transferToId = id; showSearch = false; showTransfer = true },
         onChat          = { mid, name -> chatMid = mid; chatMerchantName = name; showSearch = false; showConversation = true },
+        onFrontStore    = { mid -> frontStoreMid = mid; frontStoreIntent = null; showSearch = false },
         onDismiss       = { showSearch = false }
+    )
+    if (frontStoreMid != 0L) FrontStoreSheet(
+        mid             = frontStoreMid,
+        intentPayload   = frontStoreIntent,
+        client          = vm.client,
+        merchantsClient = vm.merchantsClient,
+        prefs           = vm.prefs,
+        accountId       = accountId,
+        onDone          = { vm.refreshBalance(); frontStoreMid = 0L; frontStoreIntent = null },
+        onDismiss       = { frontStoreMid = 0L; frontStoreIntent = null }
     )
     if (showConversation) ConversationSheet(
         merchantsClient = vm.merchantsClient,
