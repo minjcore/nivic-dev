@@ -21,11 +21,19 @@ public struct SavingTransfer: Equatable {
     public let balance: UInt64
 }
 
+public struct BalanceUpdate {
+    public let amount:  UInt64
+    public let balance: UInt64
+}
+
 public enum SavingEvent {
     case transferIn(SavingTransfer)
     case recoveryRequested(accountID: UInt32)
     case recoveryGranted(accountID: UInt32)
     case guardianAdded(accountID: UInt32)
+    case cashIn(BalanceUpdate)
+    case cashOut(BalanceUpdate)
+    case totpCharged(merchantID: UInt32, update: BalanceUpdate)
 }
 
 public struct Transaction: Identifiable {
@@ -376,6 +384,27 @@ public final class SavingClient: ObservableObject {
         case .evtGuardianAdd:
             guard frame.body.count >= 4 else { return }
             onEvent?(.guardianAdded(accountID: frame.body.readBigEndianUInt32(at: 0)))
+        case .evtCashIn:
+            guard let body = try? frame.parseEvtCashIn() else { return }
+            let update = BalanceUpdate(amount: body.amount, balance: body.balance)
+            onEvent?(.cashIn(update))
+            let fmt = NumberFormatter()
+            fmt.numberStyle = .decimal; fmt.groupingSeparator = "."
+            let amtStr = (fmt.string(from: NSNumber(value: body.amount)) ?? "\(body.amount)") + " ₫"
+            pushNotification(title: "Nạp tiền thành công", body: "+\(amtStr) vào tài khoản")
+        case .evtCashOut:
+            guard frame.body.count >= 20 else { return }
+            let amount  = frame.body.readBigEndianUInt64(at: 4)
+            let balance = frame.body.readBigEndianUInt64(at: 12)
+            onEvent?(.cashOut(BalanceUpdate(amount: amount, balance: balance)))
+        case .evtTotpCharged:
+            guard let body = try? frame.parseEvtTotpCharged() else { return }
+            let update = BalanceUpdate(amount: body.amount, balance: body.balance)
+            onEvent?(.totpCharged(merchantID: body.merchantID, update: update))
+            let fmt = NumberFormatter()
+            fmt.numberStyle = .decimal; fmt.groupingSeparator = "."
+            let amtStr = (fmt.string(from: NSNumber(value: body.amount)) ?? "\(body.amount)") + " ₫"
+            pushNotification(title: "Thanh toán QR", body: "-\(amtStr) tại #\(body.merchantID)")
         default:
             break
         }
