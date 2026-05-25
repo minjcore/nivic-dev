@@ -121,6 +121,18 @@ typedef struct {
 /* Fill out[0..max_count-1] sorted newest-first. Returns count or -1 on error. */
 int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count);
 
+/* ─── Merchant payment history ───────────────────────────────────────────── */
+
+typedef struct {
+    uint32_t customer_id;
+    uint64_t amount;
+    int64_t  after_balance;
+} MerchantTxEntry;
+
+/* Fill out[0..max_count-1] with C2M payments received by mid, newest-first.
+ * Returns count or -1 on error. */
+int db_merchant_history(DB *db, uint32_t mid, MerchantTxEntry *out, int max_count);
+
 /* ─── TOTP Enrollments ───────────────────────────────────────────────────── */
 
 /* Upsert customer TOTP secret for a merchant. secret must be 20 bytes. */
@@ -197,6 +209,13 @@ int db_admin_user_upsert(DB *db, const char *username, const uint8_t *password_h
 
 /* Verify credentials. Returns 0 if valid, -1 if not found / wrong password. */
 int db_admin_user_verify(DB *db, const char *username, const uint8_t *password_hash);
+
+/* Fill out_json with JSON array of usernames+create_time, max buf_size bytes.
+ * Returns 0 on success, -1 on error. */
+int db_admin_user_list(DB *db, char *out_json, int buf_size);
+
+/* Delete admin user. Returns 0 on success, -1 on error. */
+int db_admin_user_delete(DB *db, const char *username);
 
 /* ─── Admin operations ───────────────────────────────────────────────────── */
 

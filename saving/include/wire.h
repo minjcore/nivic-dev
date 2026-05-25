@@ -62,6 +62,8 @@
  *                        ACK extra: [ count 1B ][ request_id 8B | amount 8B ]xN  (pending only, newest first)
  *    0x29  CONFIRM_INTENT body: [ customer_token 32B ][ merchant_id 4B ][ request_id 8B ]
  *                        Customer-initiated: scan merchant QR → confirm → pay. No TOTP required.
+ *    0x2A  GET_MERCHANT_HISTORY  body: [ merchant_token 32B ]
+ *                        ACK extra: [ count 1B ][ customer_id 4B | amount 8B | after_balance 8B ]xN  (newest first)
  *
  *  Server -> Client (RESPONSE range 0x80–0xBF, mirrors client seq)
  *
@@ -138,7 +140,8 @@
 #define WIRE_CASH_OUT             0x26
 #define WIRE_GET_MERCHANT_INFO    0x27
 #define WIRE_LIST_INTENTS         0x28
-#define WIRE_CONFIRM_INTENT       0x29
+#define WIRE_CONFIRM_INTENT           0x29
+#define WIRE_GET_MERCHANT_HISTORY     0x2A
 #define WIRE_REGISTER_MERCHANT    0x23
 #define WIRE_ENROLL_TOTP          0x22
 #define WIRE_CREATE_INTENT        0x20

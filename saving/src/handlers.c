@@ -640,6 +640,37 @@ static void handle_confirm_intent(DB *db, SessionTable *st, int fd, const WireFr
     send_ack(fd, f->seq, WIRE_OK, extra, 8);
 }
 
+/* GET_MERCHANT_HISTORY  body: [merchant_token 32B]
+ * ACK extra: [count 1B][customer_id 4B | amount 8B | after_balance 8B]xN
+ * Returns up to 20 most recent C2M payments received by the merchant. */
+static void handle_get_merchant_history(DB *db, SessionTable *st,
+                                        int fd, const WireFrame *f) {
+    if (f->body_len < 32) {
+        send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
+    }
+    uint32_t mid = st_lookup(st, f->body);
+    if (!mid) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
+
+    if (db_merchant_exists(db, mid) != 1) {
+        send_ack(fd, f->seq, WIRE_ERR_NOT_MERCHANT, NULL, 0); return;
+    }
+
+    MerchantTxEntry entries[20];
+    int n = db_merchant_history(db, mid, entries, 20);
+    if (n < 0) { send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return; }
+
+    /* Pack: [count 1B][customer_id 4B + amount 8B + after_balance 8B] × n */
+    uint8_t extra[1 + 20 * 20];
+    extra[0] = (uint8_t)n;
+    for (int i = 0; i < n; i++) {
+        uint8_t *e = extra + 1 + i * 20;
+        wr32(e,      entries[i].customer_id);
+        wr64(e + 4,  entries[i].amount);
+        wr64(e + 12, (uint64_t)entries[i].after_balance);
+    }
+    send_ack(fd, f->seq, WIRE_OK, extra, (uint16_t)(1 + n * 20));
+}
+
 /* TOTP_CHARGE  body: [merchant_token 32B][customer_uid 4B][totp_code 4B][amount 8B]
  * Any registered merchant may charge a customer via their TOTP code.
  * Merchant scans customer QR (saving://totp-pay?uid=X&code=6DIGITS&amount=A),
@@ -954,7 +985,8 @@ void handle_frame(DB *db, SessionTable *st, int fd, const WireFrame *f) {
         case WIRE_TOTP_CHARGE:        handle_totp_charge(db, st, fd, f);          break;
         case WIRE_CASH_OUT:           handle_cash_out(db, st, fd, f);             break;
         case WIRE_GET_MERCHANT_INFO:  handle_get_merchant_info(db, st, fd, f);    break;
-        case WIRE_LIST_INTENTS:       handle_list_intents(db, st, fd, f);         break;
+        case WIRE_LIST_INTENTS:           handle_list_intents(db, st, fd, f);              break;
+        case WIRE_GET_MERCHANT_HISTORY:   handle_get_merchant_history(db, st, fd, f);     break;
         case WIRE_CONFIRM_INTENT:     handle_confirm_intent(db, st, fd, f);       break;
         default:
             send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0);

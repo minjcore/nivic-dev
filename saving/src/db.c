@@ -760,6 +760,49 @@ int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count) {
     return n;
 }
 
+int db_merchant_history(DB *db, uint32_t mid, MerchantTxEntry *out, int max_count) {
+    /* Window over all merchant rows gives correct running balance.
+     * Outer WHERE keeps only C2M payments received (type=1, to_id=mid). */
+    static const char SQL[] =
+        "SELECT from_id, amount, after_balance FROM ("
+        "  SELECT from_id, to_id, amount, type, create_time,"
+        "    CAST(SUM(CASE WHEN to_id = $1 THEN amount ELSE -amount END)"
+        "         OVER (ORDER BY id ASC ROWS UNBOUNDED PRECEDING) AS BIGINT) AS after_balance"
+        "  FROM transfers"
+        "  WHERE from_id = $1 OR to_id = $1"
+        ") t WHERE type = 1 AND to_id = $1"
+        " ORDER BY create_time DESC LIMIT $2";
+
+    uint64_t id_be = pg_int8((uint64_t)mid);
+    char     limit_str[8];
+    snprintf(limit_str, sizeof(limit_str), "%d", max_count);
+
+    const char *vals[2] = { (char *)&id_be, limit_str };
+    int         lens[2] = { 8, 0 };
+    int         fmts[2] = { 1, 0 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 1);
+    DB_UNLOCK(db);
+
+    if (PQresultStatus(r) != PGRES_TUPLES_OK) {
+        fprintf(stderr, "[db] merchant_history: %s\n", PQerrorMessage(db->conn));
+        PQclear(r); return -1;
+    }
+
+    int n = PQntuples(r);
+    if (n > max_count) n = max_count;
+
+    for (int i = 0; i < n; i++) {
+        out[i].customer_id   = (uint32_t)from_be64((uint8_t *)PQgetvalue(r, i, 0));
+        out[i].amount        =           from_be64((uint8_t *)PQgetvalue(r, i, 1));
+        out[i].after_balance = (int64_t) from_be64((uint8_t *)PQgetvalue(r, i, 2));
+    }
+
+    PQclear(r);
+    return n;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
  *  TOTP Enrollments
  * ══════════════════════════════════════════════════════════════════════════ */
@@ -1135,6 +1178,41 @@ int db_admin_user_verify(DB *db, const char *username, const uint8_t *password_h
     }
     int len = PQgetlength(r, 0, 0);
     int ok  = (len == 32 && memcmp(PQgetvalue(r, 0, 0), password_hash, 32) == 0);
+    PQclear(r);
+    return ok ? 0 : -1;
+}
+
+int db_admin_user_list(DB *db, char *out_json, int buf_size) {
+    static const char SQL[] =
+        "SELECT username, TO_CHAR(create_time AT TIME ZONE 'Asia/Ho_Chi_Minh',"
+        "'YYYY-MM-DD HH24:MI:SS') FROM admins ORDER BY create_time ASC";
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 0, NULL, NULL, NULL, NULL, 0);
+    DB_UNLOCK(db);
+    if (PQresultStatus(r) != PGRES_TUPLES_OK) {
+        PQclear(r); return -1;
+    }
+    int n = PQntuples(r);
+    int off = snprintf(out_json, buf_size, "[");
+    for (int i = 0; i < n && off < buf_size - 128; i++) {
+        off += snprintf(out_json + off, buf_size - off,
+            "%s{\"username\":\"%s\",\"create_time\":\"%s\"}",
+            i ? "," : "", PQgetvalue(r, i, 0), PQgetvalue(r, i, 1));
+    }
+    snprintf(out_json + off, buf_size - off, "]");
+    PQclear(r);
+    return 0;
+}
+
+int db_admin_user_delete(DB *db, const char *username) {
+    static const char SQL[] = "DELETE FROM admins WHERE username = $1";
+    const char *vals[1] = { username };
+    int         lens[1] = { (int)strlen(username) };
+    int         fmts[1] = { 0 };
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+    int ok = PQresultStatus(r) == PGRES_COMMAND_OK;
     PQclear(r);
     return ok ? 0 : -1;
 }

@@ -25,6 +25,7 @@ enum WireType: UInt8 {
     case getMerchantInfo   = 0x27
     case listIntents       = 0x28
     case confirmIntent     = 0x29
+    case getMerchantHistory = 0x2A
 
     // Server → Client (responses)
     case pong            = 0x80
@@ -291,6 +292,10 @@ extension WireFrame {
         body.appendBigEndian(requestID)
         return WireFrame(type: .confirmIntent, seq: seq, body: body)
     }
+
+    static func getMerchantHistory(token: Data, seq: UInt32) -> WireFrame {
+        return WireFrame(type: .getMerchantHistory, seq: seq, body: token)
+    }
 }
 
 // ─── Body parsers (server → client) ───────────────────────────────────────
@@ -372,6 +377,13 @@ struct EvtTotpChargedBody {
 struct EvtCashInBody {
     let amount:  UInt64
     let balance: UInt64
+}
+
+// GET_MERCHANT_HISTORY ACK entry: [customer_id 4B][amount 8B][after_balance 8B]
+struct MerchantTxEntry {
+    let customerID:   UInt32
+    let amount:       UInt64
+    let afterBalance: Int64
 }
 
 extension WireFrame {
@@ -488,6 +500,23 @@ extension WireFrame {
             amount:  body.readBigEndianUInt64(at: 0),
             balance: body.readBigEndianUInt64(at: 8)
         )
+    }
+
+    func parseMerchantHistory() throws -> [MerchantTxEntry] {
+        guard body.count >= 2 else { throw WireError.badFrame("merchantHistory too short") }
+        guard body[0] == WireCode.ok.rawValue else {
+            throw WireError.serverError(WireCode(rawValue: body[0]) ?? .errInternal)
+        }
+        let count = Int(body[1])
+        guard body.count >= 2 + count * 20 else { throw WireError.badFrame("merchantHistory truncated") }
+        return (0..<count).map { i in
+            let off = 2 + i * 20
+            return MerchantTxEntry(
+                customerID:   body.readBigEndianUInt32(at: off),
+                amount:       body.readBigEndianUInt64(at: off + 4),
+                afterBalance: Int64(bitPattern: body.readBigEndianUInt64(at: off + 12))
+            )
+        }
     }
 }
 
