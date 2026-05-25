@@ -78,6 +78,7 @@
  *    0xC4  EVT_INTENT_PAID   body: [ request_id 8B ][ customer_id 4B ][ amount 8B ]
  *    0xC5  EVT_CASH_OUT      body: [ bank_mid 4B ][ amount 8B ][ balance 8B ]
  *    0xC6  EVT_TOTP_CHARGED  body: [ merchant_id 4B ][ amount 8B ][ balance 8B ]
+ *    0xC7  EVT_CASH_IN       body: [ amount 8B ][ balance 8B ]
  *
  * ──────────────────────────────────────────────────────────────────────────
  *  RESPONSE CODES  (1 byte inside LOGIN_ACK / ACK body)
@@ -157,6 +158,8 @@
 #define WIRE_EVT_CASH_OUT     0xC5
 /* 0xC6  EVT_TOTP_CHARGED  body: [merchant_id 4B][amount 8B][balance 8B] */
 #define WIRE_EVT_TOTP_CHARGED 0xC6
+/* 0xC7  EVT_CASH_IN       body: [amount 8B][balance 8B] */
+#define WIRE_EVT_CASH_IN      0xC7
 
 /* ─── Response codes ─────────────────────────────────────────────────────── */
 #define WIRE_OK                0x00

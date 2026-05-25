@@ -14,6 +14,8 @@
 #include "admin.h"
 #include "db.h"
 #include "handlers.h"
+#include "registry.h"
+#include "wire.h"
 #include "crypto_compat.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -259,6 +261,21 @@ static void h_cashin(int fd, const char *body) {
     if (db_admin_cash_in(g.db, uid, amount, &after) != 0) {
         json_err(fd, 500, "db error"); return;
     }
+
+    /* Push EVT_CASH_IN to customer if online */
+    uint8_t pb[16], evt[WIRE_MAX_FRAME];
+    uint64_t amt64 = amount, bal64 = (uint64_t)after;
+    pb[0]=(amt64>>56)&0xFF; pb[1]=(amt64>>48)&0xFF;
+    pb[2]=(amt64>>40)&0xFF; pb[3]=(amt64>>32)&0xFF;
+    pb[4]=(amt64>>24)&0xFF; pb[5]=(amt64>>16)&0xFF;
+    pb[6]=(amt64>> 8)&0xFF; pb[7]=(amt64    )&0xFF;
+    pb[8]=(bal64>>56)&0xFF; pb[9]=(bal64>>48)&0xFF;
+    pb[10]=(bal64>>40)&0xFF;pb[11]=(bal64>>32)&0xFF;
+    pb[12]=(bal64>>24)&0xFF;pb[13]=(bal64>>16)&0xFF;
+    pb[14]=(bal64>> 8)&0xFF;pb[15]=(bal64    )&0xFF;
+    size_t n = wire_frame_encode(WIRE_EVT_CASH_IN, 0, pb, 16, evt, sizeof(evt));
+    if (n > 0) registry_push(uid, evt, n);
+
     char b[128];
     snprintf(b, sizeof(b), "{\"ok\":true,\"after_balance\":%lld}", (long long)after);
     json_ok(fd, b);
