@@ -602,6 +602,10 @@ static void handle_cash_out(DB *db, SessionTable *st, int fd, const WireFrame *f
     uint32_t credit = bank_mid;
     uint64_t amount = rd64(f->body + 36);
 
+    if (!db_account_exists(db, debit)) {
+        send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND, NULL, 0); return;
+    }
+
     uint64_t idem_key;
     if (f->body_len > 44) {
         idem_key = fnv64(f->body + 44, f->body_len - 44);
