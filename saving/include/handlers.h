@@ -11,3 +11,16 @@ void          session_table_free(SessionTable *st);
 
 /* Handle one parsed WireFrame, writing the response back to fd. */
 void handle_frame(DB *db, SessionTable *st, int fd, const WireFrame *f);
+
+/* ─── Admin helpers (used by admin.c) ───────────────────────────────────── */
+
+typedef struct {
+    uint32_t mid;
+    int32_t  expires_in_s;
+} SessionInfo;
+
+/* Fill out[0..max-1] with active sessions. Returns count. */
+int  st_list_sessions(SessionTable *st, SessionInfo *out, int max);
+
+/* Kill all sessions for the given mid. */
+void st_kill_mid(SessionTable *st, uint32_t mid);

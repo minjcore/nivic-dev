@@ -12,7 +12,7 @@ else
 endif
 
 SRC = src/main.c src/wire_parser.c src/db.c src/handlers.c src/server.c src/registry.c \
-      src/disruptor.c src/wal.c
+      src/disruptor.c src/wal.c src/admin.c
 BIN = saving
 
 .PHONY: all clean

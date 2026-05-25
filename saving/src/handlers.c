@@ -90,6 +90,30 @@ static int st_is_online(SessionTable *st, uint32_t mid) {
     return found;
 }
 
+int st_list_sessions(SessionTable *st, SessionInfo *out, int max) {
+    time_t now = time(NULL);
+    int n = 0;
+    pthread_mutex_lock(&st->mu);
+    for (int i = 0; i < SESSION_MAX && n < max; i++) {
+        if (st->entries[i].mid != 0 && st->entries[i].expires > now) {
+            out[n].mid          = st->entries[i].mid;
+            out[n].expires_in_s = (int32_t)(st->entries[i].expires - now);
+            n++;
+        }
+    }
+    pthread_mutex_unlock(&st->mu);
+    return n;
+}
+
+void st_kill_mid(SessionTable *st, uint32_t mid) {
+    pthread_mutex_lock(&st->mu);
+    for (int i = 0; i < SESSION_MAX; i++) {
+        if (st->entries[i].mid == mid)
+            memset(&st->entries[i], 0, sizeof(Session));
+    }
+    pthread_mutex_unlock(&st->mu);
+}
+
 static void st_destroy(SessionTable *st, const uint8_t token[32]) {
     /* Resolve token → mid first, then wipe ALL sessions for that mid.
      * "Logout everywhere" — guarantees st_is_online(mid) returns 0 after. */

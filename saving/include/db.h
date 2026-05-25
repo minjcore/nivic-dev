@@ -179,6 +179,27 @@ typedef struct {
  * Returns count (0..max_count) or -1 on error. */
 int db_intent_list(DB *db, uint32_t mid, IntentSummary *out, int max_count);
 
+/* ─── Admin operations ───────────────────────────────────────────────────── */
+
+typedef struct {
+    int64_t total_txns;
+    int64_t total_volume;
+    int64_t account_count;
+} AdminStats;
+
+/* Fill *out with aggregate stats. Returns 0 on success, -1 on error. */
+int db_admin_stats(DB *db, AdminStats *out);
+
+/* Credit to_uid directly (no source balance check — admin privilege).
+ * Inserts a type-2 (cash_in) transfers row with from_id=1.
+ * Returns 0 on success, -1 if account not found / error. */
+int db_admin_cash_in(DB *db, uint32_t to_uid, uint64_t amount, int64_t *after_out);
+
+/* Debit from_uid (checks balance >= amount).
+ * Inserts a type-3 (cash_out) transfers row with to_id=1.
+ * Returns 0 ok, -1 insufficient balance / not found / error. */
+int db_admin_cash_out(DB *db, uint32_t from_uid, uint64_t amount, int64_t *after_out);
+
 /* ─── Social Recovery ────────────────────────────────────────────────────── */
 
 /* Opens (or resets) a recovery request. Returns 0 on success, -1 on error. */

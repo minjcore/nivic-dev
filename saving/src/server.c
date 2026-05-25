@@ -4,6 +4,7 @@
 #include "registry.h"
 #include "disruptor.h"
 #include "wal.h"
+#include "admin.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -171,6 +172,14 @@ void server_run(DB *db, const char *wal_path) {
     wal_open(&wal, wal_path);
 
     SessionTable *st = session_table_new();
+
+    /* Admin HTTP panel */
+    {
+        const char *pw   = getenv("ADMIN_PASSWORD") ? getenv("ADMIN_PASSWORD") : "saving_admin_dev";
+        const char *ps   = getenv("ADMIN_PORT");
+        uint16_t port    = ps ? (uint16_t)atoi(ps) : 7475;
+        admin_start(db, st, port, pw);
+    }
 
     /* Start event processor thread */
     EventProcCtx ep_ctx = { &g_frame_ring, &wal };

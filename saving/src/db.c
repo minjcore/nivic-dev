@@ -1003,6 +1003,94 @@ int db_merchant_get_name(DB *db, uint32_t mid, char *name_out, size_t name_max) 
  *  Intent listing
  * ══════════════════════════════════════════════════════════════════════════ */
 
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Admin stats & cash ops
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+int db_admin_stats(DB *db, AdminStats *out) {
+    static const char SQL[] =
+        "SELECT "
+        " (SELECT COUNT(*)::BIGINT FROM transfers),"
+        " (SELECT COALESCE(SUM(amount),0)::BIGINT FROM transfers),"
+        " (SELECT COUNT(*)::BIGINT FROM accounts)";
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 0, NULL, NULL, NULL, NULL, 1);
+    DB_UNLOCK(db);
+
+    int rc = -1;
+    if (PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) {
+        out->total_txns    = (int64_t)from_be64((uint8_t *)PQgetvalue(r, 0, 0));
+        out->total_volume  = (int64_t)from_be64((uint8_t *)PQgetvalue(r, 0, 1));
+        out->account_count = (int64_t)from_be64((uint8_t *)PQgetvalue(r, 0, 2));
+        rc = 0;
+    }
+    PQclear(r);
+    return rc;
+}
+
+int db_admin_cash_in(DB *db, uint32_t to_uid, uint64_t amount, int64_t *after_out) {
+    static const char SQL[] =
+        "WITH upd AS ("
+        "  UPDATE balances SET balance = balance + $1, version = version + 1"
+        "  WHERE account_id = $2 RETURNING balance"
+        "),"
+        "ins AS ("
+        "  INSERT INTO transfers (from_id, to_id, amount, type)"
+        "  SELECT 1, $2, $1, 2 FROM upd"
+        ")"
+        "SELECT balance FROM upd";
+
+    uint64_t a = pg_int8(amount);
+    uint64_t t = pg_int8((uint64_t)to_uid);
+    const char *v[2] = { (char *)&a, (char *)&t };
+    int         l[2] = { 8, 8 };
+    int         f[2] = { 1, 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, v, l, f, 1);
+    DB_UNLOCK(db);
+
+    int rc = -1;
+    if (PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) {
+        if (after_out) *after_out = (int64_t)from_be64((uint8_t *)PQgetvalue(r, 0, 0));
+        rc = 0;
+    } else fprintf(stderr, "[db] admin_cash_in: %s\n", PQerrorMessage(db->conn));
+    PQclear(r);
+    return rc;
+}
+
+int db_admin_cash_out(DB *db, uint32_t from_uid, uint64_t amount, int64_t *after_out) {
+    static const char SQL[] =
+        "WITH upd AS ("
+        "  UPDATE balances SET balance = balance - $1, version = version + 1"
+        "  WHERE account_id = $2 AND balance >= $1 RETURNING balance"
+        "),"
+        "ins AS ("
+        "  INSERT INTO transfers (from_id, to_id, amount, type)"
+        "  SELECT $2, 1, $1, 3 FROM upd"
+        ")"
+        "SELECT balance FROM upd";
+
+    uint64_t a  = pg_int8(amount);
+    uint64_t fr = pg_int8((uint64_t)from_uid);
+    const char *v[2] = { (char *)&a, (char *)&fr };
+    int         l[2] = { 8, 8 };
+    int         f[2] = { 1, 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, v, l, f, 1);
+    DB_UNLOCK(db);
+
+    int rc = -1;
+    if (PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) {
+        if (after_out) *after_out = (int64_t)from_be64((uint8_t *)PQgetvalue(r, 0, 0));
+        rc = 0;
+    }
+    PQclear(r);
+    return rc;
+}
+
 int db_intent_list(DB *db, uint32_t mid, IntentSummary *out, int max_count) {
     static const char SQL[] =
         "SELECT request_id, order_id, amount"
