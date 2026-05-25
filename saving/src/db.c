@@ -36,7 +36,7 @@ static const char SCHEMA[] =
     "  id            BIGINT PRIMARY KEY,"
     "  password_hash BYTEA  NOT NULL,"
     "  balance       BIGINT NOT NULL DEFAULT 0,"
-    "  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+    "  create_time    TIMESTAMPTZ NOT NULL DEFAULT NOW()"
     ");"
 
     /* Guardian links */
@@ -68,7 +68,7 @@ static const char SCHEMA[] =
     "  command      BIGINT NOT NULL,"
     "  amount_minor BIGINT NOT NULL,"
     "  extra_data   BYTEA  NOT NULL,"
-    "  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+    "  create_time   TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
     "  PRIMARY KEY (mid, request_id)"
     ");"
 
@@ -79,11 +79,11 @@ static const char SCHEMA[] =
     "  to_id      BIGINT NOT NULL,"
     "  amount     BIGINT NOT NULL,"
     "  type       SMALLINT NOT NULL DEFAULT 0,"   /* 0=transfer, 1=payment */
-    "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+    "  create_time TIMESTAMPTZ NOT NULL DEFAULT NOW()"
     ");"
     "ALTER TABLE transfers ADD COLUMN IF NOT EXISTS type SMALLINT NOT NULL DEFAULT 0;"
-    "CREATE INDEX IF NOT EXISTS transfers_from_idx ON transfers(from_id, created_at DESC);"
-    "CREATE INDEX IF NOT EXISTS transfers_to_idx   ON transfers(to_id,   created_at DESC);"
+    "CREATE INDEX IF NOT EXISTS transfers_from_idx ON transfers(from_id, create_time DESC);"
+    "CREATE INDEX IF NOT EXISTS transfers_to_idx   ON transfers(to_id,   create_time DESC);"
 
     /* TOTP secrets enrolled by merchants for customers */
     "CREATE TABLE IF NOT EXISTS totp_enrollments ("
@@ -101,7 +101,7 @@ static const char SCHEMA[] =
     "  amount           BIGINT   NOT NULL,"
     "  status           SMALLINT NOT NULL DEFAULT 0,"
     "  gateway_order_id TEXT     NOT NULL DEFAULT '',"
-    "  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+    "  create_time       TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
     "  PRIMARY KEY (mid, request_id)"
     ");"
     "ALTER TABLE payment_intents ADD COLUMN IF NOT EXISTS gateway_order_id TEXT NOT NULL DEFAULT '';"
@@ -680,13 +680,13 @@ int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count) {
      * Outer WHERE type != 99 hides seed rows from the visible history. */
     static const char SQL[] =
         "SELECT from_id, to_id, amount, type, after_balance FROM ("
-        "  SELECT from_id, to_id, amount, type, created_at,"
+        "  SELECT from_id, to_id, amount, type, create_time,"
         "    CAST(SUM(CASE WHEN to_id = $1 THEN amount ELSE -amount END)"
         "         OVER (ORDER BY id ASC ROWS UNBOUNDED PRECEDING) AS BIGINT) AS after_balance"
         "  FROM transfers"
         "  WHERE from_id = $1 OR to_id = $1"
         ") t WHERE type != 99"
-        " ORDER BY created_at DESC LIMIT $2";
+        " ORDER BY create_time DESC LIMIT $2";
 
     uint64_t id_be = pg_int8((uint64_t)account_id);
     char     limit_str[8];
@@ -866,7 +866,7 @@ int db_intent_get(DB *db, uint32_t mid, uint64_t request_id, IntentInfo *out) {
 int db_intent_find_by_order(DB *db, uint32_t mid, uint64_t order_id, IntentInfo *out) {
     static const char SQL[] =
         "SELECT amount, status, gateway_order_id FROM payment_intents "
-        "WHERE mid = $1 AND order_id = $2 ORDER BY created_at DESC LIMIT 1";
+        "WHERE mid = $1 AND order_id = $2 ORDER BY create_time DESC LIMIT 1";
 
     uint64_t m  = pg_int8((uint64_t)mid);
     uint64_t oi = pg_int8(order_id);
@@ -1019,12 +1019,12 @@ char *db_export_transfers_csv(DB *db,
         "  CASE WHEN t.to_id <= 999 THEN 'Bank'"
         "       ELSE COALESCE(mt.name, 'User') END AS to_label,"
         "  t.amount, t.type,"
-        "  TO_CHAR(t.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh','YYYY-MM-DD HH24:MI:SS') AS ts"
+        "  TO_CHAR(t.create_time AT TIME ZONE 'Asia/Ho_Chi_Minh','YYYY-MM-DD HH24:MI:SS') AS ts"
         " FROM transfers t"
         " LEFT JOIN merchants mf ON mf.mid = t.from_id"
         " LEFT JOIN merchants mt ON mt.mid = t.to_id"
-        " WHERE (t.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::DATE >= $1::DATE"
-        "   AND (t.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::DATE <= $2::DATE"
+        " WHERE (t.create_time AT TIME ZONE 'Asia/Ho_Chi_Minh')::DATE >= $1::DATE"
+        "   AND (t.create_time AT TIME ZONE 'Asia/Ho_Chi_Minh')::DATE <= $2::DATE"
         " ORDER BY t.id ASC LIMIT 100000";
 
     const char *vals[2] = { from_date, to_date };
@@ -1053,7 +1053,7 @@ char *db_export_transfers_csv(DB *db,
     if (!buf) { PQclear(r); return NULL; }
 
     int off = snprintf(buf, cap,
-        "id,from_id,from_label,to_id,to_label,amount,type,type_name,created_at_ict\n");
+        "id,from_id,from_label,to_id,to_label,amount,type,type_name,create_time_ict\n");
 
     for (int i = 0; i < n; i++) {
         if (off + 200 > cap) {
@@ -1074,7 +1074,7 @@ char *db_export_transfers_csv(DB *db,
             PQgetvalue(r, i, 5),  /* amount */
             PQgetvalue(r, i, 6),  /* type */
             tname,
-            PQgetvalue(r, i, 7)); /* created_at_ict */
+            PQgetvalue(r, i, 7)); /* create_time_ict */
     }
 
     PQclear(r);
@@ -1170,7 +1170,7 @@ int db_intent_list(DB *db, uint32_t mid, IntentSummary *out, int max_count) {
         "SELECT request_id, order_id, amount"
         " FROM payment_intents"
         " WHERE mid = $1 AND status = 0"
-        " ORDER BY created_at DESC LIMIT $2";
+        " ORDER BY create_time DESC LIMIT $2";
 
     uint64_t m = pg_int8((uint64_t)mid);
     char     limit_str[8];
