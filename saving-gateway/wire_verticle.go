@@ -243,18 +243,19 @@ func (v *WireVerticle) handleTransfer(_ core.FluxorContext, msg core.Message) er
 	}
 	to, _ := req["to"].(float64)
 	amount, _ := req["amount"].(float64)
-	if to == 0 || amount <= 0 {
-		return v.reply(addr, false, "to and amount required", nil)
+	ref, _ := req["ref"].(float64)
+	if to == 0 || amount <= 0 || ref == 0 {
+		return v.reply(addr, false, "to, amount and ref required", nil)
 	}
 	c, err := v.withClient(addr)
 	if err != nil {
 		return err
 	}
-	after, err := c.Transfer(token, uint32(to), uint64(amount))
+	txnID, after, err := c.Transfer(token, uint32(to), uint64(amount), uint64(ref))
 	if err != nil {
 		return v.reply(addr, false, err.Error(), nil)
 	}
-	return v.reply(addr, true, "", map[string]any{"after_balance": after})
+	return v.reply(addr, true, "", map[string]any{"txn_id": txnID, "after_balance": after})
 }
 
 func (v *WireVerticle) handlePing(_ core.FluxorContext, msg core.Message) error {

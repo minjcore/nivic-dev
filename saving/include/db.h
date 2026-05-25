@@ -72,7 +72,7 @@ int db_account_balance_detail(DB *db, uint32_t id, BalanceDetail *out);
  *
  * ─────────────────────────────────────────────────────────────────────────── */
 int db_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount, int type,
-                int64_t *after_out);
+                int64_t *after_out, int64_t *txn_id_out);
 
 /* ─── Idempotency  (ported from Java JdbcIdempotencyGate) ───────────────── *
  *

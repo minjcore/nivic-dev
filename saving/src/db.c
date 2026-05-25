@@ -298,7 +298,7 @@ int db_account_balance_detail(DB *db, uint32_t id, BalanceDetail *out) {
  * ══════════════════════════════════════════════════════════════════════════ */
 
 int db_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount, int type,
-                int64_t *after_out) {
+                int64_t *after_out, int64_t *txn_id_out) {
     /* Atomic transfer using CTEs — no UPDATE to accounts.balance.
      * Balance is the running SUM of the transfers log.
      * DB_LOCK serialises all calls so the SUM check is race-free.
@@ -327,12 +327,12 @@ int db_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount, int t
         "    INSERT INTO transfers (from_id, to_id, amount, type)"
         "    SELECT $2, $3, $1, $4"
         "    WHERE EXISTS (SELECT 1 FROM upd_from) AND EXISTS (SELECT 1 FROM upd_to)"
-        "    RETURNING 1"
+        "    RETURNING id"
         "  )"
         "SELECT"
         "  (SELECT after_bal FROM upd_from)                       AS after_bal,"
         "  EXISTS (SELECT 1 FROM balances WHERE account_id = $3) AS recv_exists,"
-        "  (SELECT 1 FROM ins)                                  AS inserted";
+        "  (SELECT id FROM ins)                                   AS txn_id";
 
     uint64_t amount_be  = pg_int8(amount);
     uint64_t from_id_be = pg_int8((uint64_t)from_id);
@@ -350,7 +350,7 @@ int db_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount, int t
 
     /* col0 = after_bal (NULL if sender had insufficient balance or no row)
      * col1 = recv_exists (bool)
-     * col2 = inserted (NULL if transfer did not happen) */
+     * col2 = txn_id — the new transfers.id (NULL if insert did not happen) */
     int rc = -3;
     if (PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) {
         int inserted    = !PQgetisnull(r, 0, 2);
@@ -358,7 +358,9 @@ int db_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount, int t
         if (inserted) {
             rc = 0;
             if (after_out)
-                *after_out = (int64_t)from_be64((const uint8_t *)PQgetvalue(r, 0, 0));
+                *after_out  = (int64_t)from_be64((const uint8_t *)PQgetvalue(r, 0, 0));
+            if (txn_id_out)
+                *txn_id_out = (int64_t)from_be64((const uint8_t *)PQgetvalue(r, 0, 2));
         } else if (!recv_exists) rc = -2;
         else                     rc = -1;  /* low balance */
     }

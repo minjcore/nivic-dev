@@ -47,8 +47,8 @@ def cash_in(s, tok, seq, to_uid, amount, tid):
     s.sendall(encode(0x24, seq, body)); _, r = recv_rpc(s)
     assert r[0] == 0
 
-def transfer(s, tok, seq, to_uid, amount):
-    body = tok + struct.pack(">IQ", to_uid, amount)
+def transfer(s, tok, seq, to_uid, amount, ref=0):
+    body = tok + struct.pack(">IQQ", to_uid, amount, ref)
     s.sendall(encode(0x11, seq, body)); _, r = recv_rpc(s)
     assert r[0] == 0
 
@@ -94,11 +94,11 @@ bc.close()
 print("    funded: A=500,000  B=100,000")
 
 # A transfers 150,000 to B
-transfer(ca, ta, seq=3, to_uid=UID_B, amount=150_000)
+transfer(ca, ta, seq=3, to_uid=UID_B, amount=150_000, ref=RUN_ID*10+1)
 print("    A→B transfer 150,000 done")
 
 # A transfers 50,000 to B (second transfer)
-transfer(ca, ta, seq=4, to_uid=UID_B, amount=50_000)
+transfer(ca, ta, seq=4, to_uid=UID_B, amount=50_000, ref=RUN_ID*10+2)
 print("    A→B transfer 50,000 done")
 
 # ── Test 1: A's history — newest first ───────────────────────────────────────

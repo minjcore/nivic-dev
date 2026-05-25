@@ -146,11 +146,13 @@ extension WireFrame {
         return WireFrame(type: .createAccount, seq: seq, body: body)
     }
 
-    static func transfer(token: Data, toID: UInt32, amount: UInt64, seq: UInt32) -> WireFrame {
+    static func transfer(token: Data, toID: UInt32, amount: UInt64,
+                         ref: UInt64, seq: UInt32) -> WireFrame {
         var body = Data()
         body.append(token)
         body.appendBigEndian(toID)
         body.appendBigEndian(amount)
+        body.appendBigEndian(ref)
         return WireFrame(type: .transfer, seq: seq, body: body)
     }
 
@@ -296,6 +298,12 @@ struct EvtTransferInBody {
     let balance: UInt64
 }
 
+// TRANSFER ACK extra: [txn_id 8B][after_balance 8B]
+public struct TransferAckBody {
+    public let txnID:        UInt64
+    public let afterBalance: Int64
+}
+
 // GET_BALANCE ACK extra: [balance 8B][pending 8B][available 8B][version 8B]
 struct BalanceDetail {
     let balance:   Int64
@@ -362,6 +370,15 @@ extension WireFrame {
             fromID:  body.readBigEndianUInt32(at: 0),
             amount:  body.readBigEndianUInt64(at: 4),
             balance: body.readBigEndianUInt64(at: 12)
+        )
+    }
+
+    // TRANSFER ACK extra: [txn_id 8B][after_balance 8B]
+    func parseTransferAck() throws -> TransferAckBody {
+        guard body.count >= 17 else { throw WireError.badFrame("transferAck too short") }
+        return TransferAckBody(
+            txnID:        body.readBigEndianUInt64(at: 1),
+            afterBalance: Int64(bitPattern: body.readBigEndianUInt64(at: 9))
         )
     }
 

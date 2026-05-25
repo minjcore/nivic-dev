@@ -114,16 +114,20 @@ private actor SavingNetwork {
 
     // ─── Transfer ───────────────────────────────────────────────────────────
 
-    func transfer(to: UInt32, amount: UInt64) async throws {
+    @discardableResult
+    func transfer(to: UInt32, amount: UInt64, ref: UInt64) async throws -> TransferAckBody {
         let token = try requireToken()
-        let ack   = try await conn.send(WireFrame.transfer(token: token, toID: to, amount: amount, seq: nextSeq())).parseAck()
-        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+        let frame = try await conn.send(WireFrame.transfer(token: token, toID: to, amount: amount, ref: ref, seq: nextSeq()))
+        let ack   = try frame.parseTransferAck()
+        return ack
     }
 
-    func payMerchant(mid: UInt32, amount: UInt64) async throws {
+    @discardableResult
+    func payMerchant(mid: UInt32, amount: UInt64, ref: UInt64) async throws -> TransferAckBody {
         let token = try requireToken()
-        let ack   = try await conn.send(WireFrame.transfer(token: token, toID: mid, amount: amount, seq: nextSeq())).parseAck()
-        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+        let frame = try await conn.send(WireFrame.transfer(token: token, toID: mid, amount: amount, ref: ref, seq: nextSeq()))
+        let ack   = try frame.parseTransferAck()
+        return ack
     }
 
     // ─── History ────────────────────────────────────────────────────────────
@@ -292,12 +296,14 @@ public final class SavingClient: ObservableObject {
 
     // ─── Transfer ────────────────────────────────────────────────────────────
 
-    public func transfer(to: UInt32, amount: UInt64) async throws {
-        try await net.transfer(to: to, amount: amount)
+    @discardableResult
+    public func transfer(to: UInt32, amount: UInt64, ref: UInt64) async throws -> TransferAckBody {
+        try await net.transfer(to: to, amount: amount, ref: ref)
     }
 
-    public func payMerchant(mid: UInt32, amount: UInt64) async throws {
-        try await net.payMerchant(mid: mid, amount: amount)
+    @discardableResult
+    public func payMerchant(mid: UInt32, amount: UInt64, ref: UInt64) async throws -> TransferAckBody {
+        try await net.payMerchant(mid: mid, amount: amount, ref: ref)
     }
 
     // ─── History ─────────────────────────────────────────────────────────────

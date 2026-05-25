@@ -142,26 +142,27 @@ func (c *WireClient) Balance(token []byte) (balance, pending, available, version
 	return
 }
 
-// Transfer sends amount to toUID. Returns after-balance on success.
-func (c *WireClient) Transfer(token []byte, toUID uint32, amount uint64) (uint64, error) {
-	body := make([]byte, 32+4+8)
+// Transfer sends amount to toUID with a client ref (idempotency key).
+// Returns (txnID, afterBalance) on success.
+func (c *WireClient) Transfer(token []byte, toUID uint32, amount uint64, ref uint64) (txnID uint64, after uint64, err error) {
+	body := make([]byte, 32+4+8+8)
 	copy(body, token)
 	binary.BigEndian.PutUint32(body[32:], toUID)
 	binary.BigEndian.PutUint64(body[36:], amount)
+	binary.BigEndian.PutUint64(body[44:], ref)
 
 	resp, err := c.RPC(wireCmdTransfer, body)
 	if err != nil {
-		return 0, fmt.Errorf("wire transfer: %w", err)
+		return 0, 0, fmt.Errorf("wire transfer: %w", err)
 	}
 	if len(resp.Body) < 1 || resp.Body[0] != wireCodeOK {
-		return 0, fmt.Errorf("wire transfer: code 0x%02x — %s",
-			safeFirstByte(resp.Body), wireErrMsg(safeFirstByte(resp.Body)))
+		return 0, 0, fmt.Errorf("wire transfer: %s", wireErrMsg(safeFirstByte(resp.Body)))
 	}
-	var after uint64
-	if len(resp.Body) >= 9 {
-		after = binary.BigEndian.Uint64(resp.Body[1:9])
+	if len(resp.Body) >= 17 {
+		txnID = binary.BigEndian.Uint64(resp.Body[1:9])
+		after = binary.BigEndian.Uint64(resp.Body[9:17])
 	}
-	return after, nil
+	return txnID, after, nil
 }
 
 // Ping sends a PING and waits for PONG.

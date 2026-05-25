@@ -82,8 +82,8 @@ ct = login(cc, CUST_UID,  f"c{RUN_ID}", seq=1)
 
 print(f"\n--- Money-movement frames while mid=1 OFFLINE ---")
 
-# TRANSFER (0x11): [token 32B][to 4B][amount 8B]
-mc.sendall(encode(0x11, seq=2, body=mt + struct.pack(">IQ", CUST_UID, 1000)))
+# TRANSFER (0x11): [token 32B][to 4B][amount 8B][ref 8B]
+mc.sendall(encode(0x11, seq=2, body=mt + struct.pack(">IQQ", CUST_UID, 1000, RUN_ID*100+1)))
 _, r = recv_rpc(mc)
 print(f"[Test A] TRANSFER → 0x{r[0]:02X} (expect 0x{ERR_SYSTEM_OFFLINE:02X})")
 assert r[0] == ERR_SYSTEM_OFFLINE, f"FAIL: 0x{r[0]:02X}"
@@ -156,7 +156,7 @@ print(f"    mid=1 logged in OK")
 print(f"\n--- Money-movement frames while mid=1 ONLINE ---")
 
 # TRANSFER — expect ERR_LOW_BALANCE (0x08) or OK, NOT 0x0F
-mc.sendall(encode(0x11, seq=7, body=mt + struct.pack(">IQ", CUST_UID, 1000)))
+mc.sendall(encode(0x11, seq=7, body=mt + struct.pack(">IQQ", CUST_UID, 1000, RUN_ID*100+2)))
 _, r = recv_rpc(mc)
 print(f"[Test I] TRANSFER → 0x{r[0]:02X} (expect NOT 0x{ERR_SYSTEM_OFFLINE:02X})")
 assert r[0] != ERR_SYSTEM_OFFLINE, f"FAIL: still blocked"
@@ -175,7 +175,7 @@ bc_on.close()
 print(f"\n[Step 6] Logged mid=1 out again")
 
 # ── Test 7: offline guard back ────────────────────────────────────────────────
-mc.sendall(encode(0x11, seq=8, body=mt + struct.pack(">IQ", CUST_UID, 1000)))
+mc.sendall(encode(0x11, seq=8, body=mt + struct.pack(">IQQ", CUST_UID, 1000, RUN_ID*100+3)))
 _, r = recv_rpc(mc)
 print(f"\n[Test K] TRANSFER after logout → 0x{r[0]:02X} (expect 0x{ERR_SYSTEM_OFFLINE:02X})")
 assert r[0] == ERR_SYSTEM_OFFLINE, f"FAIL: 0x{r[0]:02X}"
