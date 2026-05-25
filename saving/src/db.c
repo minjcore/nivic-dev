@@ -135,7 +135,14 @@ static const char SCHEMA[] =
     "  version     BIGINT      NOT NULL DEFAULT 0,"
     "  create_time TIMESTAMPTZ NOT NULL DEFAULT NOW()"
     ");"
-    "ALTER TABLE balances ADD COLUMN IF NOT EXISTS create_time TIMESTAMPTZ NOT NULL DEFAULT NOW();";
+    "ALTER TABLE balances ADD COLUMN IF NOT EXISTS create_time TIMESTAMPTZ NOT NULL DEFAULT NOW();"
+
+    /* Web admin panel user accounts */
+    "CREATE TABLE IF NOT EXISTS admins ("
+    "  username      TEXT        PRIMARY KEY,"
+    "  password_hash BYTEA       NOT NULL,"
+    "  create_time   TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+    ");";
 
 /* ══════════════════════════════════════════════════════════════════════════
  *  Lifecycle
@@ -1096,6 +1103,40 @@ char *db_export_transfers_csv(DB *db,
 
     PQclear(r);
     return buf;
+}
+
+int db_admin_user_upsert(DB *db, const char *username, const uint8_t *password_hash) {
+    static const char SQL[] =
+        "INSERT INTO admins (username, password_hash) VALUES ($1, $2) "
+        "ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash";
+    const char *vals[2] = { username, (const char *)password_hash };
+    int         lens[2] = { (int)strlen(username), 32 };
+    int         fmts[2] = { 0, 1 };
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+    int ok = PQresultStatus(r) == PGRES_COMMAND_OK;
+    if (!ok) fprintf(stderr, "[db] admin_user_upsert: %s\n", PQerrorMessage(db->conn));
+    PQclear(r);
+    return ok ? 0 : -1;
+}
+
+int db_admin_user_verify(DB *db, const char *username, const uint8_t *password_hash) {
+    static const char SQL[] =
+        "SELECT password_hash FROM admins WHERE username = $1";
+    const char *vals[1] = { username };
+    int         lens[1] = { (int)strlen(username) };
+    int         fmts[1] = { 0 };
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 1);
+    DB_UNLOCK(db);
+    if (PQresultStatus(r) != PGRES_TUPLES_OK || PQntuples(r) == 0) {
+        PQclear(r); return -1;
+    }
+    int len = PQgetlength(r, 0, 0);
+    int ok  = (len == 32 && memcmp(PQgetvalue(r, 0, 0), password_hash, 32) == 0);
+    PQclear(r);
+    return ok ? 0 : -1;
 }
 
 int db_admin_stats(DB *db, AdminStats *out) {

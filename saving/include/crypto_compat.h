@@ -2,11 +2,17 @@
 
 #ifdef __APPLE__
 #  include <CommonCrypto/CommonHMAC.h>
+#  include <CommonCrypto/CommonDigest.h>
+#  define saving_sha256(data,len,out) \
+       CC_SHA256((data),(CC_LONG)(len),(out))
 #else
    /* Linux — use OpenSSL */
 #  include <openssl/hmac.h>
 #  include <openssl/evp.h>
+#  include <openssl/sha.h>
 #  define CC_SHA256_DIGEST_LENGTH 32
+#  define saving_sha256(data,len,out) \
+       SHA256((const unsigned char*)(data),(size_t)(len),(unsigned char*)(out))
 #  define kCCHmacAlgSHA256        0
 
 static inline void CCHmac(int alg,

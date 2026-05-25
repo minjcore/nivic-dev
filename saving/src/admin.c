@@ -14,10 +14,13 @@
 #include "admin.h"
 #include "db.h"
 #include "handlers.h"
+#include "crypto_compat.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
+#include <limits.h>
 #include <pthread.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -29,10 +32,55 @@
 typedef struct {
     DB           *db;
     SessionTable *st;
-    char          pw[128];
 } ACtx;
 
 static ACtx g;
+
+/* ─── Admin sessions (in-memory, TTL 1h) ────────────────────────────────── */
+
+#define ADMIN_SESS_MAX 32
+#define ADMIN_SESS_TTL 3600
+
+typedef struct {
+    char   token[65];    /* 64 hex chars + NUL */
+    char   username[64];
+    time_t expires;
+} AdminSess;
+
+static AdminSess       admin_sess[ADMIN_SESS_MAX];
+static pthread_mutex_t admin_sess_mu = PTHREAD_MUTEX_INITIALIZER;
+
+static void admin_sess_create(const char *username, char out[65]) {
+    uint8_t raw[32];
+    arc4random_buf(raw, 32);
+    for (int i = 0; i < 32; i++) snprintf(out + i*2, 3, "%02x", raw[i]);
+    out[64] = '\0';
+
+    time_t now = time(NULL);
+    pthread_mutex_lock(&admin_sess_mu);
+    int slot = 0; time_t oldest = LONG_MAX;
+    for (int i = 0; i < ADMIN_SESS_MAX; i++) {
+        if (admin_sess[i].expires <= now) { slot = i; break; }
+        if (admin_sess[i].expires < oldest) { oldest = admin_sess[i].expires; slot = i; }
+    }
+    memcpy(admin_sess[slot].token, out, 65);
+    strncpy(admin_sess[slot].username, username, 63);
+    admin_sess[slot].expires = now + ADMIN_SESS_TTL;
+    pthread_mutex_unlock(&admin_sess_mu);
+}
+
+static int admin_sess_valid(const char *token) {
+    if (!token || strlen(token) != 64) return 0;
+    time_t now = time(NULL);
+    int found = 0;
+    pthread_mutex_lock(&admin_sess_mu);
+    for (int i = 0; i < ADMIN_SESS_MAX; i++) {
+        if (admin_sess[i].expires > now &&
+            memcmp(admin_sess[i].token, token, 64) == 0) { found = 1; break; }
+    }
+    pthread_mutex_unlock(&admin_sess_mu);
+    return found;
+}
 
 /* ─── HTTP response helpers ─────────────────────────────────────────────── */
 
@@ -72,9 +120,10 @@ static int authed(const char *req) {
     p += 24;
     const char *e = strpbrk(p, "\r\n");
     if (!e) return 0;
-    int   rlen = (int)(e - p);
-    int   plen = (int)strlen(g.pw);
-    return rlen == plen && memcmp(p, g.pw, rlen) == 0;
+    int rlen = (int)(e - p);
+    if (rlen != 64) return 0;
+    char tok[65]; memcpy(tok, p, 64); tok[64] = '\0';
+    return admin_sess_valid(tok);
 }
 
 /* ─── Tiny JSON field parsers ────────────────────────────────────────────── */
@@ -114,6 +163,25 @@ static void jgetstr(const char *s, const char *key, char *out, int max) {
 }
 
 /* ─── API handlers ───────────────────────────────────────────────────────── */
+
+static void h_login(int fd, const char *body) {
+    char username[64] = "", password[256] = "";
+    jgetstr(body, "username", username, sizeof(username));
+    jgetstr(body, "password", password, sizeof(password));
+    if (!username[0] || !password[0]) {
+        json_err(fd, 400, "missing username or password"); return;
+    }
+    uint8_t pw_hash[32];
+    saving_sha256(password, strlen(password), pw_hash);
+    if (db_admin_user_verify(g.db, username, pw_hash) != 0) {
+        json_err(fd, 401, "invalid credentials"); return;
+    }
+    char token[65];
+    admin_sess_create(username, token);
+    char b[256];
+    snprintf(b, sizeof(b), "{\"token\":\"%s\",\"username\":\"%s\"}", token, username);
+    json_ok(fd, b);
+}
 
 static void h_stats(int fd) {
     AdminStats s = {0};
@@ -288,8 +356,9 @@ static const char ADMIN_HTML[] =
 "</style></head><body>"
 "<div class='hdr'><h1>SAVING ADMIN</h1>"
 "<div class='auth'>"
-"<input id='pw' type='password' placeholder='admin password' style='width:180px'>"
-"<button id='cb'>Connect</button>"
+"<input id='un' type='text' placeholder='username' style='width:110px'>"
+"<input id='pw' type='password' placeholder='password' style='width:130px'>"
+"<button id='cb'>Login</button>"
 "<span id='cs' style='font-size:12px;color:#888'></span>"
 "</div></div>"
 "<div class='tabs'>"
@@ -356,14 +425,23 @@ static const char ADMIN_HTML[] =
 "  },o)).then(function(r){if(!r.ok)throw new Error(r.status);return r.json();});"
 "}"
 "function conn(){"
-"  P=document.getElementById('pw').value;"
+"  var u=document.getElementById('un').value;"
+"  var pw=document.getElementById('pw').value;"
 "  var s=document.getElementById('cs');"
-"  s.textContent='connecting...';"
-"  loadStats().then(function(){"
-"    s.textContent='connected';"
+"  if(!u||!pw){s.textContent='enter username & password';s.style.color='#e94560';return;}"
+"  s.textContent='logging in...';"
+"  fetch('/api/login',{method:'POST',"
+"    headers:{'Content-Type':'application/json'},"
+"    body:JSON.stringify({username:u,password:pw})"
+"  }).then(function(r){return r.json();})"
+"  .then(function(d){"
+"    if(!d.token)throw new Error('no token');"
+"    P=d.token;"
+"    s.textContent='logged in as '+d.username;"
 "    s.style.color='#4caf50';"
 "    if(ar)clearInterval(ar);"
 "    ar=setInterval(loadStats,6000);"
+"    loadStats();"
 "  }).catch(function(){"
 "    s.textContent='auth failed';"
 "    s.style.color='#e94560';"
@@ -435,6 +513,7 @@ static const char ADMIN_HTML[] =
 "}"
 "document.getElementById('cb').onclick=conn;"
 "document.getElementById('pw').onkeydown=function(e){if(e.key==='Enter')conn();};"
+"document.getElementById('un').onkeydown=function(e){if(e.key==='Enter')document.getElementById('pw').focus();};"
 "document.getElementById('rb').onclick=loadSess;"
 "document.getElementById('sb').onclick=lookup;"
 "document.getElementById('xb').onclick=doCash;"
@@ -494,6 +573,32 @@ static void dispatch(int fd) {
     if (strcmp(method, "GET") == 0 && strcmp(path, "/") == 0) {
         http_send(fd, 200, "text/html",
                   ADMIN_HTML, (int)sizeof(ADMIN_HTML) - 1);
+        return;
+    }
+
+    /* Login endpoint — no auth required */
+    if (strcmp(path, "/api/login") == 0 && strcmp(method, "POST") == 0) {
+        /* Read POST body inline (before auth check) */
+        char lbody[1024] = "";
+        const char *cl = strstr(buf, "Content-Length: ");
+        if (cl) {
+            int clen = (int)atol(cl + 16);
+            if (clen > 0 && clen < (int)sizeof(lbody)) {
+                const char *hend = strstr(buf, "\r\n\r\n");
+                if (hend) {
+                    hend += 4;
+                    int have = (int)(buf + total - hend);
+                    if (have > 0) memcpy(lbody, hend, have);
+                    int rem = clen - have;
+                    while (rem > 0) {
+                        int n = (int)read(fd, lbody + clen - rem, rem);
+                        if (n <= 0) break; rem -= n;
+                    }
+                    lbody[clen] = '\0';
+                }
+            }
+        }
+        h_login(fd, lbody);
         return;
     }
 
@@ -561,7 +666,17 @@ static void *admin_thread(void *arg) {
 int admin_start(DB *db, SessionTable *st, uint16_t port, const char *password) {
     g.db = db;
     g.st = st;
-    strncpy(g.pw, password ? password : "", sizeof(g.pw) - 1);
+
+    /* Seed default admin from env (or legacy password param) */
+    const char *user = getenv("ADMIN_USER");
+    if (!user || !user[0]) user = "admin";
+    const char *pw = getenv("ADMIN_PASSWORD");
+    if (!pw || !pw[0]) pw = password;
+    if (pw && pw[0]) {
+        uint8_t ph[32];
+        saving_sha256(pw, strlen(pw), ph);
+        db_admin_user_upsert(db, user, ph);
+    }
 
     int sfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sfd < 0) { perror("[admin] socket"); return -1; }
@@ -581,8 +696,7 @@ int admin_start(DB *db, SessionTable *st, uint16_t port, const char *password) {
         perror("[admin] listen"); close(sfd); return -1;
     }
 
-    fprintf(stderr, "[admin] HTTP admin panel on :%u  (pw: %s)\n",
-            port, strlen(g.pw) ? "set" : "EMPTY - set ADMIN_PASSWORD");
+    fprintf(stderr, "[admin] HTTP admin panel on :%u  (login: %s)\n", port, user);
 
     pthread_t tid;
     pthread_attr_t attr;

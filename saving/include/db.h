@@ -189,6 +189,15 @@ char *db_export_transfers_csv(DB *db,
                               const char *from_date, const char *to_date,
                               int *rows_out);
 
+/* ─── Admin user accounts (web panel login) ─────────────────────────────── */
+
+/* Upsert admin user. password_hash: raw 32-byte SHA-256.
+ * Returns 0 on success, -1 on error. */
+int db_admin_user_upsert(DB *db, const char *username, const uint8_t *password_hash);
+
+/* Verify credentials. Returns 0 if valid, -1 if not found / wrong password. */
+int db_admin_user_verify(DB *db, const char *username, const uint8_t *password_hash);
+
 /* ─── Admin operations ───────────────────────────────────────────────────── */
 
 typedef struct {
