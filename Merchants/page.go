@@ -148,19 +148,24 @@ async function createOrder() {
     if (!res.ok) { alert(data.error || 'Lỗi tạo đơn'); return; }
 
     const payUrl = data.pay_url;
-    document.getElementById('qr-amount-text').textContent = fmtVND(amount);
-    document.getElementById('qr-note-text').textContent = note || '';
-    document.getElementById('pay-link').href = payUrl;
-    document.getElementById('pay-link').textContent = payUrl;
-    document.getElementById('qr-canvas').innerHTML = '';
-    new QRCode(document.getElementById('qr-canvas'), {
-      text: payUrl, width: 220, height: 220,
-      colorDark: '#4f46e5', colorLight: '#fff',
-      correctLevel: QRCode.CorrectLevel.M
-    });
-    window._payUrl = payUrl;
-    document.getElementById('pay-form').style.display = 'none';
-    document.getElementById('qr-section').classList.add('show');
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    if (isMobile) {
+      // Mobile: mở Wire app luôn qua pay_url
+      window.location.href = payUrl;
+    } else {
+      // PC: show QR để user scan bằng điện thoại
+      document.getElementById('qr-amount-text').textContent = fmtVND(amount);
+      document.getElementById('qr-note-text').textContent = note || '';
+      document.getElementById('qr-canvas').innerHTML = '';
+      new QRCode(document.getElementById('qr-canvas'), {
+        text: payUrl, width: 220, height: 220,
+        colorDark: '#4f46e5', colorLight: '#fff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+      document.getElementById('pay-form').style.display = 'none';
+      document.getElementById('qr-section').classList.add('show');
+    }
   } catch(e) {
     alert('Lỗi kết nối');
   } finally {
