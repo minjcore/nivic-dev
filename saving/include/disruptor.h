@@ -50,9 +50,11 @@ typedef struct {
 } FrameSlot;
 
 typedef struct {
-    FrameSlot  slots[FRAME_RING_SIZE];
-    WireSeq    cursor;              /* next sequence to claim (producers) */
-    char       _pad[WIRE_CACHE_LINE];
+    FrameSlot        slots[FRAME_RING_SIZE];
+    WireSeq          cursor;             /* next sequence to claim (producers) */
+    _Atomic uint64_t total_published;   /* cumulative frames published (all producers) */
+    _Atomic uint64_t total_consumed;    /* cumulative frames consumed (event processor) */
+    char             _pad[WIRE_CACHE_LINE];
 } FrameRing;
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -71,9 +73,10 @@ typedef struct {
 } PushSlot;
 
 typedef struct {
-    PushSlot   slots[PUSH_RING_SIZE];
-    uint64_t   prod_seq;            /* only ever written by producer thread */
-    uint64_t   cons_seq;            /* only ever written by consumer thread */
+    PushSlot         slots[PUSH_RING_SIZE];
+    uint64_t         prod_seq;          /* only ever written by producer thread */
+    uint64_t         cons_seq;          /* only ever written by consumer thread */
+    _Atomic uint64_t total_pushed;      /* cumulative outbound push frames enqueued */
 } PushRing;
 
 /* ─── FrameRing API ─────────────────────────────────────────────────────── */

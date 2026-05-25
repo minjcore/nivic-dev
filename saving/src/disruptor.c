@@ -30,6 +30,8 @@ static inline void spin_once(int *count) {
 
 void frame_ring_init(FrameRing *r) {
     atomic_store_explicit(&r->cursor.val, 0, memory_order_relaxed);
+    atomic_store_explicit(&r->total_published, 0, memory_order_relaxed);
+    atomic_store_explicit(&r->total_consumed,  0, memory_order_relaxed);
     for (unsigned i = 0; i < FRAME_RING_SIZE; i++)
         atomic_store_explicit(&r->slots[i].ready, -1LL, memory_order_relaxed);
     atomic_thread_fence(memory_order_seq_cst);
@@ -55,6 +57,7 @@ void frame_ring_publish(FrameRing *r, int fd, void *db,
 
     /* Release-store: makes all slot writes visible to the consumer. */
     atomic_store_explicit(&slot->ready, (int64_t)seq, memory_order_release);
+    atomic_fetch_add_explicit(&r->total_published, 1, memory_order_relaxed);
 }
 
 void frame_ring_publish_close(FrameRing *r, int fd, void *db, void *st) {
@@ -79,6 +82,7 @@ void frame_ring_consume(FrameRing *r, uint64_t seq, FrameSlot *out) {
 void frame_ring_release(FrameRing *r, uint64_t seq) {
     FrameSlot *slot = &r->slots[seq & FRAME_RING_MASK];
     atomic_store_explicit(&slot->ready, -1LL, memory_order_release);
+    atomic_fetch_add_explicit(&r->total_consumed, 1, memory_order_relaxed);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -88,6 +92,7 @@ void frame_ring_release(FrameRing *r, uint64_t seq) {
 void push_ring_init(PushRing *r) {
     r->prod_seq = 0;
     r->cons_seq = 0;
+    atomic_store_explicit(&r->total_pushed, 0, memory_order_relaxed);
     for (unsigned i = 0; i < PUSH_RING_SIZE; i++)
         atomic_store_explicit(&r->slots[i].ready, -1LL, memory_order_relaxed);
     atomic_thread_fence(memory_order_seq_cst);
@@ -108,6 +113,7 @@ void push_ring_enqueue(PushRing *r, int fd, const uint8_t *buf, size_t len) {
 
     atomic_store_explicit(&slot->ready, (int64_t)seq, memory_order_release);
     r->prod_seq = seq + 1;
+    atomic_fetch_add_explicit(&r->total_pushed, 1, memory_order_relaxed);
 }
 
 int push_ring_try_dequeue(PushRing *r, int *fd_out,

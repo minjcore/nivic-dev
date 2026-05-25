@@ -10,8 +10,9 @@
 #include <netinet/in.h>
 #include <unistd.h>
 
-/* ─── Gateway notification (forward-declared before use) ─────────────────── */
+/* ─── Forward declarations ───────────────────────────────────────────────── */
 static void gateway_notify_async(const char *gateway_order_id, uint32_t paid_by);
+static uint64_t fnv64(const uint8_t *data, int len);
 
 /* ─── Session table ──────────────────────────────────────────────────────── */
 
@@ -190,30 +191,31 @@ static void handle_transfer(DB *db, SessionTable *st, int fd, const WireFrame *f
     }
     uint32_t mid    = st_lookup(st, f->body);
     if (!mid) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
-    uint32_t to_id  = rd32(f->body + 32);
+    uint32_t debit  = mid;
+    uint32_t credit = rd32(f->body + 32);
     uint64_t amount = rd64(f->body + 36);
 
     /* Idempotency key: (mid, seq) */
-    int claim = db_idempotency_claim(db, (uint64_t)mid, (uint64_t)f->seq, 0);
+    int claim = db_idempotency_claim(db, (uint64_t)debit, (uint64_t)f->seq, 0);
     if (claim == 0) { send_ack(fd, f->seq, WIRE_OK, NULL, 0); return; }
     if (claim <  0) { send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return; }
 
     int64_t after_bal = 0;
-    int rc = db_transfer(db, mid, to_id, amount, 0, &after_bal);
+    int rc = db_transfer(db, debit, credit, amount, 0, &after_bal);
     if (rc == -1) { send_ack(fd, f->seq, WIRE_ERR_LOW_BALANCE, NULL, 0); return; }
     if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
     if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
 
     /* Push EVT_TRANSFER_IN to recipient if online */
-    int64_t new_bal = db_account_balance(db, to_id);
+    int64_t new_bal = db_account_balance(db, credit);
     if (new_bal >= 0) {
         uint8_t body[20], evt[WIRE_MAX_FRAME];
-        wr32(body,     mid);
-        wr64(body + 4, amount);
+        wr32(body,      debit);
+        wr64(body + 4,  amount);
         wr64(body + 12, (uint64_t)new_bal);
         size_t n = wire_frame_encode(WIRE_EVT_TRANSFER_IN, 0, body, 20,
                                      evt, sizeof(evt));
-        if (n > 0) registry_push(to_id, evt, n);
+        if (n > 0) registry_push(credit, evt, n);
     }
 
     uint8_t extra[8];
@@ -395,12 +397,17 @@ static void handle_enroll_totp(DB *db, SessionTable *st, int fd, const WireFrame
     send_ack(fd, f->seq, WIRE_OK, NULL, 0);
 }
 
-/* CREATE_INTENT  body: [merchant_token 32B][request_id 8B][order_id 8B][amount 8B][gateway_order_id N bytes] */
+/* CREATE_INTENT  body: [merchant_token 32B][request_id 8B][order_id 8B][amount 8B][gateway_order_id N bytes]
+ *
+ * 2-step check after HMAC (done by parser):
+ *   1. Idempotency gate  — (mid, request_id): exact-replay guard
+ *   2. Order dedup       — (mid, order_id):   same order already has an intent → return it
+ */
 static void handle_create_intent(DB *db, SessionTable *st, int fd, const WireFrame *f) {
     if (f->body_len < 56) {
         send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
     }
-    uint32_t mid        = st_lookup(st, f->body);
+    uint32_t mid = st_lookup(st, f->body);
     if (!mid) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
 
     if (db_merchant_exists(db, mid) != 1) {
@@ -411,7 +418,24 @@ static void handle_create_intent(DB *db, SessionTable *st, int fd, const WireFra
     uint64_t order_id   = rd64(f->body + 40);
     uint64_t amount     = rd64(f->body + 48);
 
-    /* Optional gateway_order_id string appended after the 56 mandatory bytes */
+    /* ── Step 1: idempotency (mid, request_id) ───────────────────────────── */
+    int claim = db_idempotency_claim(db, (uint64_t)mid, request_id, order_id);
+    if (claim == 0) { send_ack(fd, f->seq, WIRE_OK, NULL, 0); return; }
+    if (claim <  0) { send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return; }
+
+    /* ── Step 2: order dedup (mid, order_id) — same order, new request ──── */
+    IntentInfo existing;
+    if (db_intent_find_by_order(db, mid, order_id, &existing) == 0) {
+        uint8_t extra[21];
+        extra[0] = 0;   /* 0 = already existed */
+        wr32(extra + 1,  mid);
+        wr64(extra + 5,  request_id);
+        wr64(extra + 13, existing.amount);
+        send_ack(fd, f->seq, WIRE_OK, extra, 21);
+        return;
+    }
+
+    /* ── Create new intent ───────────────────────────────────────────────── */
     char gateway_order_id[256] = "";
     if (f->body_len > 56) {
         size_t n = f->body_len - 56;
@@ -423,9 +447,9 @@ static void handle_create_intent(DB *db, SessionTable *st, int fd, const WireFra
     int rc = db_intent_create(db, mid, request_id, order_id, amount, gateway_order_id);
     if (rc < 0) { send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return; }
 
-    /* Reply with [status 1B][mid 4B][request_id 8B][amount 8B] so client can build QR */
+    /* [status 1B][mid 4B][request_id 8B][amount 8B] — client builds QR from this */
     uint8_t extra[21];
-    extra[0] = (uint8_t)(rc == 0 ? 0 : 1);  /* 0=already existed (replay), 1=created */
+    extra[0] = 1;   /* 1 = newly created */
     wr32(extra + 1,  mid);
     wr64(extra + 5,  request_id);
     wr64(extra + 13, amount);
@@ -461,8 +485,9 @@ static void handle_pay_intent(DB *db, SessionTable *st, int fd, const WireFrame 
         send_ack(fd, f->seq, WIRE_ERR_INTENT_SETTLED, NULL, 0); return;
     }
 
-    /* Atomic debit customer → credit merchant */
-    int rc = db_transfer(db, customer_id, merchant_id, intent.amount, 1, NULL);
+    uint32_t debit  = customer_id;
+    uint32_t credit = merchant_id;
+    int rc = db_transfer(db, debit, credit, intent.amount, 1, NULL);
     if (rc == -1) { send_ack(fd, f->seq, WIRE_ERR_LOW_BALANCE, NULL, 0); return; }
     if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
     if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
@@ -535,24 +560,123 @@ static void handle_totp_charge(DB *db, SessionTable *st, int fd, const WireFrame
         send_ack(fd, f->seq, WIRE_ERR_TOTP_INVALID, NULL, 0); return;
     }
 
-    /* Atomic transfer customer → merchant */
-    int rc = db_transfer(db, customer_id, merchant_id, amount, 2, NULL);
+    uint32_t debit  = customer_id;
+    uint32_t credit = merchant_id;
+    int rc = db_transfer(db, debit, credit, amount, 2, NULL);
     if (rc == -1) { send_ack(fd, f->seq, WIRE_ERR_LOW_BALANCE, NULL, 0); return; }
     if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
     if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
 
     /* Push EVT_TRANSFER_IN to merchant if online */
-    int64_t merch_bal = db_account_balance(db, merchant_id);
+    int64_t merch_bal = db_account_balance(db, credit);
     if (merch_bal >= 0) {
         uint8_t body[20], evt[WIRE_MAX_FRAME];
-        wr32(body,      customer_id);
+        wr32(body,      debit);
         wr64(body + 4,  amount);
         wr64(body + 12, (uint64_t)merch_bal);
         size_t n = wire_frame_encode(WIRE_EVT_TRANSFER_IN, 0, body, 20, evt, sizeof(evt));
-        if (n > 0) registry_push(merchant_id, evt, n);
+        if (n > 0) registry_push(credit, evt, n);
     }
 
     send_ack(fd, f->seq, WIRE_OK, NULL, 0);
+}
+
+/* CASH_OUT  body: [bank_token 32B][from_uid 4B][amount 8B][cashout_id N bytes]
+ * Caller must be a bank entity (uid 1-999). Debits from_uid and credits bank.
+ * cashout_id is hashed for idempotency — safe to retry. */
+static void handle_cash_out(DB *db, SessionTable *st, int fd, const WireFrame *f) {
+    if (f->body_len < 44) {
+        send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
+    }
+    uint32_t bank_mid = st_lookup(st, f->body);
+    if (!bank_mid) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
+
+    if (bank_mid > 999) {
+        send_ack(fd, f->seq, WIRE_ERR_NOT_MERCHANT, NULL, 0); return;
+    }
+
+    uint32_t debit  = rd32(f->body + 32);
+    uint32_t credit = bank_mid;
+    uint64_t amount = rd64(f->body + 36);
+
+    uint64_t idem_key;
+    if (f->body_len > 44) {
+        idem_key = fnv64(f->body + 44, f->body_len - 44);
+    } else {
+        idem_key = (uint64_t)f->seq;
+    }
+
+    int claim = db_idempotency_claim(db, (uint64_t)credit, idem_key, 1);
+    if (claim == 0) { send_ack(fd, f->seq, WIRE_OK, NULL, 0); return; }
+    if (claim <  0) { send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return; }
+
+    int64_t after_bal = 0;
+    int rc = db_transfer(db, debit, credit, amount, 3, &after_bal);
+    if (rc == -1) { send_ack(fd, f->seq, WIRE_ERR_LOW_BALANCE, NULL, 0); return; }
+    if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
+    if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
+
+    /* Push EVT_CASH_OUT to customer if online */
+    if (after_bal >= 0) {
+        uint8_t body[20], evt[WIRE_MAX_FRAME];
+        wr32(body,      credit);
+        wr64(body + 4,  amount);
+        wr64(body + 12, (uint64_t)after_bal);
+        size_t n = wire_frame_encode(WIRE_EVT_CASH_OUT, 0, body, 20,
+                                     evt, sizeof(evt));
+        if (n > 0) registry_push(debit, evt, n);
+    }
+
+    send_ack(fd, f->seq, WIRE_OK, NULL, 0);
+}
+
+/* GET_MERCHANT_INFO  body: [token 32B][merchant_id 4B]
+ * Any authenticated user can query a merchant's public name. */
+static void handle_get_merchant_info(DB *db, SessionTable *st, int fd, const WireFrame *f) {
+    if (f->body_len < 36) {
+        send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
+    }
+    uint32_t mid = st_lookup(st, f->body);
+    if (!mid) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
+
+    uint32_t merchant_id = rd32(f->body + 32);
+
+    char name[256];
+    if (db_merchant_get_name(db, merchant_id, name, sizeof(name)) != 0) {
+        send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND, NULL, 0); return;
+    }
+
+    uint16_t name_len = (uint16_t)strlen(name);
+    send_ack(fd, f->seq, WIRE_OK, (const uint8_t *)name, name_len);
+}
+
+/* LIST_INTENTS  body: [merchant_token 32B]
+ * Returns up to 10 pending (status=0) intents for the calling merchant,
+ * newest first.  ACK extra: [count 1B][request_id 8B | amount 8B] x count */
+static void handle_list_intents(DB *db, SessionTable *st, int fd, const WireFrame *f) {
+    if (f->body_len < 32) {
+        send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
+    }
+    uint32_t mid = st_lookup(st, f->body);
+    if (!mid) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
+
+    if (db_merchant_exists(db, mid) != 1) {
+        send_ack(fd, f->seq, WIRE_ERR_NOT_MERCHANT, NULL, 0); return;
+    }
+
+    IntentSummary intents[10];
+    int n = db_intent_list(db, mid, intents, 10);
+    if (n < 0) { send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return; }
+
+    /* Pack: [count 1B][request_id 8B + amount 8B] x n */
+    uint8_t extra[1 + 10 * 16];
+    extra[0] = (uint8_t)n;
+    for (int i = 0; i < n; i++) {
+        uint8_t *e = extra + 1 + i * 16;
+        wr64(e,     intents[i].request_id);
+        wr64(e + 8, intents[i].amount);
+    }
+    send_ack(fd, f->seq, WIRE_OK, extra, (uint16_t)(1 + n * 16));
 }
 
 /* ─── Gateway notification ───────────────────────────────────────────────── */
@@ -630,7 +754,8 @@ static void handle_cash_in(DB *db, SessionTable *st, int fd, const WireFrame *f)
         send_ack(fd, f->seq, WIRE_ERR_NOT_MERCHANT, NULL, 0); return;
     }
 
-    uint32_t to_uid = rd32(f->body + 32);
+    uint32_t debit  = bank_mid;
+    uint32_t credit = rd32(f->body + 32);
     uint64_t amount = rd64(f->body + 36);
 
     /* Idempotency: hash of topup_id bytes (or fall back to seq) */
@@ -641,26 +766,25 @@ static void handle_cash_in(DB *db, SessionTable *st, int fd, const WireFrame *f)
         idem_key = (uint64_t)f->seq;
     }
 
-    int claim = db_idempotency_claim(db, (uint64_t)bank_mid, idem_key, 0);
-    if (claim == 0) { send_ack(fd, f->seq, WIRE_OK, NULL, 0); return; } /* already done */
+    int claim = db_idempotency_claim(db, (uint64_t)debit, idem_key, 0);
+    if (claim == 0) { send_ack(fd, f->seq, WIRE_OK, NULL, 0); return; }
     if (claim <  0) { send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return; }
 
-    /* Transfer from bank_mid to to_uid — bank_mid must have sufficient balance */
-    int rc = db_transfer(db, bank_mid, to_uid, amount, 2, NULL);
+    int rc = db_transfer(db, debit, credit, amount, 2, NULL);
     if (rc == -1) { send_ack(fd, f->seq, WIRE_ERR_LOW_BALANCE, NULL, 0); return; }
     if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
     if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
 
     /* Push EVT_TRANSFER_IN to recipient if online */
-    int64_t new_bal = db_account_balance(db, to_uid);
+    int64_t new_bal = db_account_balance(db, credit);
     if (new_bal >= 0) {
         uint8_t body[20], evt[WIRE_MAX_FRAME];
-        wr32(body,      bank_mid);
+        wr32(body,      debit);
         wr64(body + 4,  amount);
         wr64(body + 12, (uint64_t)new_bal);
         size_t n = wire_frame_encode(WIRE_EVT_TRANSFER_IN, 0, body, 20,
                                      evt, sizeof(evt));
-        if (n > 0) registry_push(to_uid, evt, n);
+        if (n > 0) registry_push(credit, evt, n);
     }
 
     send_ack(fd, f->seq, WIRE_OK, NULL, 0);
@@ -684,8 +808,11 @@ void handle_frame(DB *db, SessionTable *st, int fd, const WireFrame *f) {
         case WIRE_ENROLL_TOTP:      handle_enroll_totp(db, st, fd, f);            break;
         case WIRE_CREATE_INTENT:    handle_create_intent(db, st, fd, f);          break;
         case WIRE_PAY_INTENT:       handle_pay_intent(db, st, fd, f);             break;
-        case WIRE_CASH_IN:          handle_cash_in(db, st, fd, f);                break;
-        case WIRE_TOTP_CHARGE:      handle_totp_charge(db, st, fd, f);            break;
+        case WIRE_CASH_IN:            handle_cash_in(db, st, fd, f);              break;
+        case WIRE_TOTP_CHARGE:        handle_totp_charge(db, st, fd, f);          break;
+        case WIRE_CASH_OUT:           handle_cash_out(db, st, fd, f);             break;
+        case WIRE_GET_MERCHANT_INFO:  handle_get_merchant_info(db, st, fd, f);    break;
+        case WIRE_LIST_INTENTS:       handle_list_intents(db, st, fd, f);         break;
         default:
             send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0);
     }

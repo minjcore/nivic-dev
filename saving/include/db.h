@@ -144,8 +144,12 @@ int db_intent_create(DB *db, uint32_t mid, uint64_t request_id,
                      uint64_t order_id, uint64_t amount,
                      const char *gateway_order_id);
 
-/* Fill *out. Returns 0 on success, -1 if not found / error. */
+/* Fill *out by (mid, request_id). Returns 0 on success, -1 if not found / error. */
 int db_intent_get(DB *db, uint32_t mid, uint64_t request_id, IntentInfo *out);
+
+/* Look up existing intent by (mid, order_id) — business-level dedup.
+ * Fill *out. Returns 0 if found, -1 if not found / error. */
+int db_intent_find_by_order(DB *db, uint32_t mid, uint64_t order_id, IntentInfo *out);
 
 /* Mark intent as settled. Returns 0 on success, -1 on error. */
 int db_intent_settle(DB *db, uint32_t mid, uint64_t request_id);
@@ -157,6 +161,22 @@ int db_merchant_register(DB *db, uint32_t mid, const char *name);
 
 /* Returns 1 if mid is a registered merchant, 0 if not, -1 on error. */
 int db_merchant_exists(DB *db, uint32_t mid);
+
+/* Fill name_out (NUL-terminated, max name_max bytes including NUL).
+ * Returns 0 on success, -1 if not found / error. */
+int db_merchant_get_name(DB *db, uint32_t mid, char *name_out, size_t name_max);
+
+/* ─── Intent listing ─────────────────────────────────────────────────────── */
+
+typedef struct {
+    uint64_t request_id;
+    uint64_t order_id;
+    uint64_t amount;
+} IntentSummary;
+
+/* Fill out[0..max_count-1] with pending (status=0) intents for mid, newest first.
+ * Returns count (0..max_count) or -1 on error. */
+int db_intent_list(DB *db, uint32_t mid, IntentSummary *out, int max_count);
 
 /* ─── Social Recovery ────────────────────────────────────────────────────── */
 

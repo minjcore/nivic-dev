@@ -332,7 +332,7 @@ int db_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount, int t
         "SELECT"
         "  (SELECT after_bal FROM upd_from)                       AS after_bal,"
         "  EXISTS (SELECT 1 FROM balances WHERE account_id = $3) AS recv_exists,"
-        "  EXISTS (SELECT 1 FROM ins)                            AS inserted";
+        "  (SELECT 1 FROM ins)                                  AS inserted";
 
     uint64_t amount_be  = pg_int8(amount);
     uint64_t from_id_be = pg_int8((uint64_t)from_id);
@@ -861,6 +861,39 @@ int db_intent_get(DB *db, uint32_t mid, uint64_t request_id, IntentInfo *out) {
     return 0;
 }
 
+int db_intent_find_by_order(DB *db, uint32_t mid, uint64_t order_id, IntentInfo *out) {
+    static const char SQL[] =
+        "SELECT amount, status, gateway_order_id FROM payment_intents "
+        "WHERE mid = $1 AND order_id = $2 ORDER BY created_at DESC LIMIT 1";
+
+    uint64_t m  = pg_int8((uint64_t)mid);
+    uint64_t oi = pg_int8(order_id);
+
+    const char *vals[2] = { (char *)&m, (char *)&oi };
+    int         lens[2] = { 8, 8 };
+    int         fmts[2] = { 1, 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 1);
+    DB_UNLOCK(db);
+
+    if (PQresultStatus(r) != PGRES_TUPLES_OK || PQntuples(r) == 0) {
+        PQclear(r);
+        return -1;
+    }
+
+    out->amount = from_be64((uint8_t *)PQgetvalue(r, 0, 0));
+    uint8_t *sp = (uint8_t *)PQgetvalue(r, 0, 1);
+    out->status = (sp[0] << 8) | sp[1];
+    const char *goid = PQgetvalue(r, 0, 2);
+    size_t glen = goid ? strlen(goid) : 0;
+    if (glen >= sizeof(out->gateway_order_id)) glen = sizeof(out->gateway_order_id) - 1;
+    if (goid) memcpy(out->gateway_order_id, goid, glen);
+    out->gateway_order_id[glen] = '\0';
+    PQclear(r);
+    return 0;
+}
+
 int db_intent_settle(DB *db, uint32_t mid, uint64_t request_id) {
     static const char SQL[] =
         "UPDATE payment_intents SET status = 1 "
@@ -937,4 +970,69 @@ int db_merchant_exists(DB *db, uint32_t mid) {
     int found = (PQntuples(r) > 0);
     PQclear(r);
     return found;
+}
+
+int db_merchant_get_name(DB *db, uint32_t mid, char *name_out, size_t name_max) {
+    static const char SQL[] = "SELECT name FROM merchants WHERE mid = $1";
+
+    uint64_t m = pg_int8((uint64_t)mid);
+    const char *vals[1] = { (char *)&m };
+    int         lens[1] = { 8 };
+    int         fmts[1] = { 1 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+
+    if (PQresultStatus(r) != PGRES_TUPLES_OK || PQntuples(r) == 0) {
+        PQclear(r);
+        return -1;
+    }
+    const char *name = PQgetvalue(r, 0, 0);
+    size_t n = name ? strlen(name) : 0;
+    if (n >= name_max) n = name_max - 1;
+    if (name) memcpy(name_out, name, n);
+    name_out[n] = '\0';
+    PQclear(r);
+    return 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Intent listing
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+int db_intent_list(DB *db, uint32_t mid, IntentSummary *out, int max_count) {
+    static const char SQL[] =
+        "SELECT request_id, order_id, amount"
+        " FROM payment_intents"
+        " WHERE mid = $1 AND status = 0"
+        " ORDER BY created_at DESC LIMIT $2";
+
+    uint64_t m = pg_int8((uint64_t)mid);
+    char     limit_str[8];
+    snprintf(limit_str, sizeof(limit_str), "%d", max_count);
+
+    const char *vals[2] = { (char *)&m, limit_str };
+    int         lens[2] = { 8, 0 };
+    int         fmts[2] = { 1, 0 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 1);
+    DB_UNLOCK(db);
+
+    if (PQresultStatus(r) != PGRES_TUPLES_OK) {
+        fprintf(stderr, "[db] intent_list: %s\n", PQerrorMessage(db->conn));
+        PQclear(r);
+        return -1;
+    }
+
+    int n = PQntuples(r);
+    if (n > max_count) n = max_count;
+    for (int i = 0; i < n; i++) {
+        out[i].request_id = from_be64((uint8_t *)PQgetvalue(r, i, 0));
+        out[i].order_id   = from_be64((uint8_t *)PQgetvalue(r, i, 1));
+        out[i].amount     = from_be64((uint8_t *)PQgetvalue(r, i, 2));
+    }
+    PQclear(r);
+    return n;
 }

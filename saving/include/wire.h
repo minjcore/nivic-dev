@@ -46,8 +46,21 @@
  *    0x13  ADD_GUARDIAN    body: [ token 32B ][ guardian_id 4B ]
  *    0x14  RECOVERY_REQ    body: [ mid 4B ]        ← no token (new device)
  *    0x15  RECOVERY_APPROVE body: [ token 32B ][ target_id 4B ]
+ *    0x16  GET_HISTORY     body: [ token 32B ]
+ *                        ACK extra: [ count 1B ][ dir 1B | counterpart 4B | amount 8B | after_bal 8B ]xN
+ *    0x20  CREATE_INTENT   body: [ merchant_token 32B ][ request_id 8B ][ order_id 8B ][ amount 8B ][ gateway_order_id N ]
+ *    0x21  PAY_INTENT      body: [ customer_token 32B ][ merchant_id 4B ][ request_id 8B ][ totp_code 4B ]
+ *    0x22  ENROLL_TOTP     body: [ merchant_token 32B ][ customer_id 4B ][ secret 20B ]
+ *    0x23  REGISTER_MERCHANT body: [ token 32B ][ name N ]
+ *    0x24  CASH_IN         body: [ bank_token 32B ][ to_uid 4B ][ amount 8B ][ topup_id N ]
+ *    0x25  TOTP_CHARGE     body: [ merchant_token 32B ][ customer_uid 4B ][ totp_code 4B ][ amount 8B ]
+ *    0x26  CASH_OUT        body: [ bank_token 32B ][ from_uid 4B ][ amount 8B ][ cashout_id N ]
+ *    0x27  GET_MERCHANT_INFO body: [ token 32B ][ merchant_id 4B ]
+ *                        ACK extra: [ name N bytes ]
+ *    0x28  LIST_INTENTS    body: [ merchant_token 32B ]
+ *                        ACK extra: [ count 1B ][ request_id 8B | amount 8B ]xN  (pending only, newest first)
  *
- *  Server → Client (RESPONSE range 0x80–0xBF, mirrors client seq)
+ *  Server -> Client (RESPONSE range 0x80–0xBF, mirrors client seq)
  *
  *    0x80  PONG            body: –
  *    0x81  LOGIN_ACK       body: [ code 1B ][ token 32B ]  (code 0 = ok)
@@ -60,6 +73,7 @@
  *    0xC2  EVT_RECOVERY_OK  body: [ account_id 4B ]        (your recovery granted)
  *    0xC3  EVT_GUARDIAN_ADD body: [ account_id 4B ]        (someone added you)
  *    0xC4  EVT_INTENT_PAID  body: [ request_id 8B ][ customer_id 4B ][ amount 8B ]
+ *    0xC5  EVT_CASH_OUT     body: [ bank_mid 4B ][ amount 8B ][ balance 8B ]
  *
  * ──────────────────────────────────────────────────────────────────────────
  *  RESPONSE CODES  (1 byte inside LOGIN_ACK / ACK body)
@@ -110,12 +124,15 @@
 /* ENROLL_TOTP       body: [merchant_token 32B][customer_id 4B][secret 20B]   */
 /* CREATE_INTENT     body: [merchant_token 32B][request_id 8B][order_id 8B][amount 8B] */
 /* PAY_INTENT        body: [customer_token 32B][merchant_id 4B][request_id 8B][totp_code 4B] */
-#define WIRE_CASH_IN           0x24   /* body: [bank_token 32B][to_uid 4B][amount 8B][topup_id N bytes] */
-#define WIRE_TOTP_CHARGE       0x25   /* body: [merchant_token 32B][customer_uid 4B][totp_token 32B][amount 8B] */
-#define WIRE_REGISTER_MERCHANT 0x23
-#define WIRE_ENROLL_TOTP     0x22
-#define WIRE_CREATE_INTENT   0x20
-#define WIRE_PAY_INTENT      0x21
+#define WIRE_CASH_IN              0x24
+#define WIRE_TOTP_CHARGE          0x25
+#define WIRE_CASH_OUT             0x26
+#define WIRE_GET_MERCHANT_INFO    0x27
+#define WIRE_LIST_INTENTS         0x28
+#define WIRE_REGISTER_MERCHANT    0x23
+#define WIRE_ENROLL_TOTP          0x22
+#define WIRE_CREATE_INTENT        0x20
+#define WIRE_PAY_INTENT           0x21
 
 #define WIRE_PONG            0x80
 #define WIRE_LOGIN_ACK       0x81
@@ -127,6 +144,8 @@
 #define WIRE_EVT_GUARDIAN_ADD 0xC3
 /* 0xC4  EVT_INTENT_PAID  body: [request_id 8B][customer_id 4B][amount 8B] */
 #define WIRE_EVT_INTENT_PAID  0xC4
+/* 0xC5  EVT_CASH_OUT    body: [bank_mid 4B][amount 8B][balance 8B] */
+#define WIRE_EVT_CASH_OUT     0xC5
 
 /* ─── Response codes ─────────────────────────────────────────────────────── */
 #define WIRE_OK                0x00
@@ -149,6 +168,30 @@
 /* ─── Session token ──────────────────────────────────────────────────────── */
 #define WIRE_TOKEN_SIZE     32
 #define WIRE_TOKEN_TTL_SEC  900         /* 15 minutes idle expiry */
+
+/* ─── Fixed body header (all fields big-endian on wire) ─────────────────── *
+ *
+ *   pad(3) | command(1) | _align(7) | mid(8) | request_id(8) |
+ *   order_id(8) | amount(8) | debit(4) | credit(4) | extraData(N)
+ *
+ *   debit  — uid of account being debited  (money out)
+ *   credit — uid of account being credited (money in)
+ *
+ * ─────────────────────────────────────────────────────────────────────────── */
+typedef struct {
+    uint8_t  pad[3];
+    uint8_t  command;
+    uint8_t  _align[7];
+    uint64_t mid;
+    uint64_t request_id;
+    uint64_t order_id;
+    uint64_t amount;
+    uint32_t debit;
+    uint32_t credit;
+    /* extraData follows immediately after this header */
+} __attribute__((packed)) WireBodyHdr;
+
+#define WIRE_BODY_HDR_SIZE  sizeof(WireBodyHdr)   /* 3+1+7+8+8+8+8+4+4 = 51 */
 
 /* ─── In-memory parsed frame ─────────────────────────────────────────────── */
 typedef struct {

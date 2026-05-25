@@ -13,15 +13,16 @@
  *
  *  Entry format (big-endian):
  *
- *    ┌──────────┬──────────┬────────┬──────────┬──────────────────────┐
- *    │ magic 2B │  len  4B │ fd  4B │  ts_ns 8B│  raw frame (len B)   │
- *    └──────────┴──────────┴────────┴──────────┴──────────────────────┘
+ *    +----------+----------+--------+----------+----------------------+-------+
+ *    | magic 2B |  len  4B | fd  4B |  ts_ns 8B|  raw frame (len B)   | crc 4B|
+ *    +----------+----------+--------+----------+----------------------+-------+
  *
- *    magic  = 0xWA1E (sanity check on replay)
+ *    magic  = 0xA1E0 (sanity check on replay)
  *    len    = byte count of raw frame
  *    fd     = client descriptor at time of receipt (informational)
  *    ts_ns  = CLOCK_MONOTONIC nanoseconds since server start
- *    frame  = the raw encoded frame (including HMAC — already verified)
+ *    frame  = the raw encoded frame (including HMAC -- already verified)
+ *    crc    = CRC-32 (IEEE 802.3) over all preceding bytes in this entry
  *
  *  Thread safety: WAL functions must only be called from one thread
  *  (the event processor).  No internal locking.
