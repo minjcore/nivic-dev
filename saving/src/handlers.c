@@ -1042,7 +1042,7 @@ void handle_frame(DB *db, SessionTable *st, int fd, const WireFrame *f) {
             case WIRE_RENEW_SESSION:
                 break;
             default:
-                send_ack(fd, f->seq, WIRE_ERR_SYSTEM_OFFLINE, NULL, 0);
+                send_ack(fd, f->seq, WIRE_ERR_MAINTENANCE, NULL, 0);
                 return;
         }
     }

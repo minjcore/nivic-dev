@@ -62,6 +62,7 @@ enum WireCode: UInt8 {
     case errIntentSettled  = 0x0D
     case errNotMerchant    = 0x0E
     case errSystemOffline  = 0x0F
+    case errMaintenance    = 0x10
     case errInternal       = 0xFF
 }
 

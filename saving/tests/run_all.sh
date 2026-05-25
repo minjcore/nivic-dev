@@ -14,7 +14,8 @@ for f in test_ping.py test_create_account.py test_login.py \
           test_merchant_history.py \
           test_session_renew.py \
           test_maintenance.py \
-          test_evt_intent_paid.py; do
+          test_evt_intent_paid.py \
+          test_evt_transfer_out.py; do
   result=$(python3 "$f" 2>&1)
   last=$(echo "$result" | tail -1)
   if echo "$last" | grep -qiE "PASSED|ALL PASSED"; then

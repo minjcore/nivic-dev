@@ -105,6 +105,7 @@
  *    0x0D  ERR_INTENT_SETTLED
  *    0x0E  ERR_NOT_MERCHANT
  *    0x0F  ERR_SYSTEM_OFFLINE mid=1 (clearing) not online
+ *    0x10  ERR_MAINTENANCE    server in scheduled maintenance mode
  *    0xFF  ERR_INTERNAL
  *
  * ══════════════════════════════════════════════════════════════════════════
@@ -187,6 +188,7 @@
 #define WIRE_ERR_INTENT_SETTLED 0x0D
 #define WIRE_ERR_NOT_MERCHANT    0x0E
 #define WIRE_ERR_SYSTEM_OFFLINE  0x0F   /* mid=1 (clearing) not online */
+#define WIRE_ERR_MAINTENANCE     0x10   /* server in scheduled maintenance mode */
 #define WIRE_ERR_INTERNAL        0xFF
 
 /* ─── Session token ──────────────────────────────────────────────────────── */

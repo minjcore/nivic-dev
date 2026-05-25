@@ -59,7 +59,7 @@ def create_and_login(uid, pw, base_seq=1):
 
 
 def test_maintenance_blocks_transfer():
-    """With maintenance ON, GET_BALANCE returns ERR_SYSTEM_OFFLINE (0x0F)."""
+    """With maintenance ON, GET_BALANCE returns ERR_MAINTENANCE (0x10)."""
     tok = admin_token()
     set_maintenance(tok, False)   # reset any stale state
     # Create account while server is in normal mode
@@ -82,7 +82,7 @@ def test_maintenance_blocks_transfer():
     _, r2 = recv_rpc(s)
     s.close()
     set_maintenance(tok, False)
-    assert r2[0] == 0x0F, f"expected ERR_SYSTEM_OFFLINE (0x0F), got 0x{r2[0]:02X}"
+    assert r2[0] == 0x10, f"expected ERR_MAINTENANCE (0x10), got 0x{r2[0]:02X}"
 
 def test_maintenance_ping_allowed():
     """PING works even when maintenance is ON."""
