@@ -99,6 +99,31 @@ int wire_recv_frame(int fd, WireFrame *f) {
     return wire_frame_parse(buf, total, f);
 }
 
+int wire_recv_frame_raw(int fd, WireFrame *f,
+                        uint8_t *raw_buf, uint32_t *raw_len) {
+    *raw_len = 0;
+
+    uint8_t hdr[4];
+    ssize_t n = recv(fd, hdr, 4, MSG_WAITALL);
+    if (n != 4) return -1;
+
+    uint32_t total = rd32(hdr);
+    if (total < WIRE_FRAME_OVERHEAD || total > WIRE_MAX_FRAME)
+        return WIRE_ERR_BAD_FRAME;
+
+    uint8_t buf[WIRE_MAX_FRAME];
+    memcpy(buf, hdr, 4);
+    n = recv(fd, buf + 4, total - 4, MSG_WAITALL);
+    if (n != (ssize_t)(total - 4)) return -1;
+
+    int rc = wire_frame_parse(buf, total, f);
+    if (rc == WIRE_OK) {
+        memcpy(raw_buf, buf, total);
+        *raw_len = total;
+    }
+    return rc;
+}
+
 /* ─── wire_send_raw ──────────────────────────────────────────────────────── */
 
 int wire_send_raw(int fd, const uint8_t *buf, size_t len) {

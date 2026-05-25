@@ -47,6 +47,8 @@ typedef struct {
     void            *db;      /* DB * — void* avoids circular header dep */
     void            *st;      /* SessionTable * */
     WireFrame        frame;
+    uint8_t          raw[WIRE_MAX_FRAME]; /* original verified wire bytes */
+    uint32_t         raw_len;             /* 0 for synthetic FRAME_CLOSE */
 } FrameSlot;
 
 typedef struct {
@@ -84,9 +86,11 @@ typedef struct {
 void frame_ring_init(FrameRing *r);
 
 /* Publish a parsed frame from an IO thread.
+ * raw/raw_len: original verified wire bytes (pass NULL/0 for synthetic frames).
  * Spins (with back-off) if the ring is full — provides natural back-pressure. */
-void frame_ring_publish(FrameRing *r, int fd, void *db,
-                        void *st, const WireFrame *f);
+void frame_ring_publish(FrameRing *r, int fd, void *db, void *st,
+                        const WireFrame *f,
+                        const uint8_t *raw, uint32_t raw_len);
 
 /* Publish a synthetic FRAME_CLOSE slot — event processor will call
  * registry_remove(fd) + close(fd), keeping fd lifetime on one thread. */

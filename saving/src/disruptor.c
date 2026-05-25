@@ -37,8 +37,9 @@ void frame_ring_init(FrameRing *r) {
     atomic_thread_fence(memory_order_seq_cst);
 }
 
-void frame_ring_publish(FrameRing *r, int fd, void *db,
-                        void *st, const WireFrame *f) {
+void frame_ring_publish(FrameRing *r, int fd, void *db, void *st,
+                        const WireFrame *f,
+                        const uint8_t *raw, uint32_t raw_len) {
     /* Atomically claim a unique sequence number (multiple IO threads safe). */
     uint64_t seq = atomic_fetch_add_explicit(&r->cursor.val, 1,
                                               memory_order_acq_rel);
@@ -50,9 +51,11 @@ void frame_ring_publish(FrameRing *r, int fd, void *db,
     while (atomic_load_explicit(&slot->ready, memory_order_acquire) >= 0)
         spin_once(&spins);
 
-    slot->fd = fd;
-    slot->db = db;
-    slot->st = st;
+    slot->fd      = fd;
+    slot->db      = db;
+    slot->st      = st;
+    slot->raw_len = raw_len;
+    if (raw_len > 0 && raw) memcpy(slot->raw, raw, raw_len);
     memcpy(&slot->frame, f, sizeof(WireFrame));
 
     /* Release-store: makes all slot writes visible to the consumer. */
@@ -64,7 +67,7 @@ void frame_ring_publish_close(FrameRing *r, int fd, void *db, void *st) {
     WireFrame f;
     memset(&f, 0, sizeof(f));
     f.type = FRAME_CLOSE;
-    frame_ring_publish(r, fd, db, st, &f);
+    frame_ring_publish(r, fd, db, st, &f, NULL, 0);
 }
 
 void frame_ring_consume(FrameRing *r, uint64_t seq, FrameSlot *out) {
@@ -73,9 +76,11 @@ void frame_ring_consume(FrameRing *r, uint64_t seq, FrameSlot *out) {
     while (atomic_load_explicit(&slot->ready, memory_order_acquire) != (int64_t)seq)
         spin_once(&spins);
 
-    out->fd    = slot->fd;
-    out->db    = slot->db;
-    out->st    = slot->st;
+    out->fd      = slot->fd;
+    out->db      = slot->db;
+    out->st      = slot->st;
+    out->raw_len = slot->raw_len;
+    if (slot->raw_len > 0) memcpy(out->raw, slot->raw, slot->raw_len);
     memcpy(&out->frame, &slot->frame, sizeof(WireFrame));
 }
 

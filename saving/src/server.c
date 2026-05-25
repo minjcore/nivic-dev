@@ -69,8 +69,10 @@ static void *io_worker(void *arg) {
     free(ctx);
 
     WireFrame f;
+    uint8_t   raw[WIRE_MAX_FRAME];
+    uint32_t  raw_len;
     int rc;
-    while ((rc = wire_recv_frame(fd, &f)) != -1) {
+    while ((rc = wire_recv_frame_raw(fd, &f, raw, &raw_len)) != -1) {
         if (rc != WIRE_OK) {
             /* Bad frame (HMAC fail, malformed): reply inline from IO thread.
              * This does NOT touch any shared mutable state. */
@@ -79,8 +81,8 @@ static void *io_worker(void *arg) {
             if (n > 0) wire_send_raw(fd, buf, n);
             continue;
         }
-        /* Good frame: publish to ring for the event processor. */
-        frame_ring_publish(&g_frame_ring, fd, db, st, &f);
+        /* Good frame: publish verified raw bytes + parsed frame to ring. */
+        frame_ring_publish(&g_frame_ring, fd, db, st, &f, raw, raw_len);
     }
 
     /* Connection closed — publish a CLOSE sentinel so the event processor
@@ -120,15 +122,9 @@ static void *event_processor(void *arg) {
             continue;
         }
 
-        /* WAL: re-encode the parsed frame so we have raw bytes to log.
-         * wire_frame_encode recomputes the HMAC — the resulting bytes are
-         * a valid, verifiable Wire frame that can be replayed on restart. */
-        uint8_t raw[WIRE_MAX_FRAME];
-        uint32_t raw_len = (uint32_t)wire_frame_encode(
-            slot.frame.type, slot.frame.seq,
-            slot.frame.body, slot.frame.body_len,
-            raw, sizeof(raw));
-        wal_append(wal, slot.fd, raw_len ? raw : NULL, raw_len);
+        /* WAL: original verified wire bytes, stored in the slot by the IO
+         * thread immediately after HMAC check passed — no re-encode needed. */
+        wal_append(wal, slot.fd, slot.raw_len ? slot.raw : NULL, slot.raw_len);
 
         /* Business logic — runs on exactly ONE thread: no mutex contention
          * on SessionTable, no concurrent DB access. */

@@ -77,6 +77,19 @@ static uint32_t st_lookup(SessionTable *st, const uint8_t token[32]) {
     return mid;
 }
 
+static int st_is_online(SessionTable *st, uint32_t mid) {
+    time_t now = time(NULL);
+    int found = 0;
+    pthread_mutex_lock(&st->mu);
+    for (int i = 0; i < SESSION_MAX; i++) {
+        if (st->entries[i].mid == mid && st->entries[i].expires > now) {
+            found = 1; break;
+        }
+    }
+    pthread_mutex_unlock(&st->mu);
+    return found;
+}
+
 static void st_destroy(SessionTable *st, const uint8_t token[32]) {
     pthread_mutex_lock(&st->mu);
     for (int i = 0; i < SESSION_MAX; i++) {
@@ -800,6 +813,24 @@ static void handle_cash_in(DB *db, SessionTable *st, int fd, const WireFrame *f)
 /* ─── Dispatch ───────────────────────────────────────────────────────────── */
 
 void handle_frame(DB *db, SessionTable *st, int fd, const WireFrame *f) {
+    /* Money-movement frames require mid=1 (clearing account) to be online.
+     * This is the "branch must be open" invariant: no transactions without
+     * a teller (mid=1 session) present. */
+    switch (f->type) {
+        case WIRE_TRANSFER:
+        case WIRE_CREATE_INTENT:
+        case WIRE_PAY_INTENT:
+        case WIRE_CASH_IN:
+        case WIRE_TOTP_CHARGE:
+        case WIRE_CASH_OUT:
+            if (!st_is_online(st, 1)) {
+                send_ack(fd, f->seq, WIRE_ERR_SYSTEM_OFFLINE, NULL, 0);
+                return;
+            }
+            break;
+        default:
+            break;
+    }
     switch (f->type) {
         case WIRE_PING:             handle_ping(fd, f);                           break;
         case WIRE_LOGIN:            handle_login(db, st, fd, f);                  break;

@@ -92,6 +92,10 @@
  *    0x09  ERR_GUARDIAN_FULL  already has 3 guardians
  *    0x0A  ERR_NOT_GUARDIAN   caller is not a guardian of target
  *    0x0B  ERR_NEED_GUARDIANS need ≥ 2 guardians before recovery
+ *    0x0C  ERR_TOTP_INVALID
+ *    0x0D  ERR_INTENT_SETTLED
+ *    0x0E  ERR_NOT_MERCHANT
+ *    0x0F  ERR_SYSTEM_OFFLINE mid=1 (clearing) not online
  *    0xFF  ERR_INTERNAL
  *
  * ══════════════════════════════════════════════════════════════════════════
@@ -163,8 +167,9 @@
 #define WIRE_ERR_NEED_GUARDIANS 0x0B
 #define WIRE_ERR_TOTP_INVALID  0x0C
 #define WIRE_ERR_INTENT_SETTLED 0x0D
-#define WIRE_ERR_NOT_MERCHANT  0x0E
-#define WIRE_ERR_INTERNAL      0xFF
+#define WIRE_ERR_NOT_MERCHANT    0x0E
+#define WIRE_ERR_SYSTEM_OFFLINE  0x0F   /* mid=1 (clearing) not online */
+#define WIRE_ERR_INTERNAL        0xFF
 
 /* ─── Session token ──────────────────────────────────────────────────────── */
 #define WIRE_TOKEN_SIZE     32
@@ -222,6 +227,12 @@ size_t wire_ack(uint32_t seq, uint8_t code,
 /* Read exactly one frame from fd (blocking).
  * Returns WIRE_OK, WIRE_ERR_BAD_FRAME on parse error, -1 on I/O error. */
 int wire_recv_frame(int fd, WireFrame *f);
+
+/* Like wire_recv_frame but also copies the original wire bytes into raw_buf
+ * (must be WIRE_MAX_FRAME bytes) and sets *raw_len.  Only populated on
+ * WIRE_OK — on parse/sig error raw_len is set to 0. */
+int wire_recv_frame_raw(int fd, WireFrame *f,
+                        uint8_t *raw_buf, uint32_t *raw_len);
 
 /* Write a raw encoded frame to fd. Returns 0 on success, -1 on error. */
 int wire_send_raw(int fd, const uint8_t *buf, size_t len);
