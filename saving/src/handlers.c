@@ -77,6 +77,24 @@ static uint32_t st_lookup(SessionTable *st, const uint8_t token[32]) {
     return mid;
 }
 
+/* Extends TTL for token. Returns new remaining seconds, or -1 if not found/expired. */
+static int32_t st_renew(SessionTable *st, const uint8_t token[32]) {
+    time_t now = time(NULL);
+    int32_t remaining = -1;
+    pthread_mutex_lock(&st->mu);
+    for (int i = 0; i < SESSION_MAX; i++) {
+        if (st->entries[i].mid != 0 &&
+            st->entries[i].expires > now &&
+            memcmp(st->entries[i].token, token, 32) == 0) {
+            st->entries[i].expires = now + WIRE_TOKEN_TTL_SEC;
+            remaining = (int32_t)WIRE_TOKEN_TTL_SEC;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&st->mu);
+    return remaining;
+}
+
 static int st_is_online(SessionTable *st, uint32_t mid) {
     time_t now = time(NULL);
     int found = 0;
@@ -208,6 +226,24 @@ static void handle_logout(SessionTable *st, int fd, const WireFrame *f) {
     if (f->body_len >= 32) st_destroy(st, f->body);
     registry_remove(fd);
     send_ack(fd, f->seq, WIRE_OK, NULL, 0);
+}
+
+/* RENEW_SESSION  body: [token 32B]
+ * ACK extra: [remaining_s 4B] — seconds remaining until next expiry (= TTL after renewal). */
+static void handle_renew_session(SessionTable *st, int fd, const WireFrame *f) {
+    if (f->body_len < 32) {
+        send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
+    }
+    int32_t remaining = st_renew(st, f->body);
+    if (remaining < 0) {
+        send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return;
+    }
+    uint8_t extra[4];
+    extra[0] = (remaining >> 24) & 0xFF;
+    extra[1] = (remaining >> 16) & 0xFF;
+    extra[2] = (remaining >>  8) & 0xFF;
+    extra[3] = (remaining      ) & 0xFF;
+    send_ack(fd, f->seq, WIRE_OK, extra, 4);
 }
 
 /* CREATE_ACCOUNT  body: [mid 4B][pw_hash 32B] */
@@ -970,6 +1006,7 @@ void handle_frame(DB *db, SessionTable *st, int fd, const WireFrame *f) {
         case WIRE_PING:             handle_ping(fd, f);                           break;
         case WIRE_LOGIN:            handle_login(db, st, fd, f);                  break;
         case WIRE_LOGOUT:           handle_logout(st, fd, f);                     break;
+        case WIRE_RENEW_SESSION:    handle_renew_session(st, fd, f);              break;
         case WIRE_CREATE_ACCOUNT:   handle_create_account(db, fd, f);             break;
         case WIRE_TRANSFER:         handle_transfer(db, st, fd, f);               break;
         case WIRE_GET_BALANCE:      handle_get_balance(db, st, fd, f);            break;

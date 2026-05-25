@@ -8,6 +8,7 @@ enum WireType: UInt8 {
     case ping            = 0x01
     case login           = 0x02
     case logout          = 0x03
+    case renewSession    = 0x04
     case createAccount   = 0x10
     case transfer        = 0x11
     case getBalance      = 0x12
@@ -194,6 +195,10 @@ extension WireFrame {
 
     static func logout(token: Data, seq: UInt32) -> WireFrame {
         WireFrame(type: .logout, seq: seq, body: token)
+    }
+
+    static func renewSession(token: Data, seq: UInt32) -> WireFrame {
+        WireFrame(type: .renewSession, seq: seq, body: token)
     }
 
     /* CREATE_INTENT  body: [token 32B][request_id 8B][order_id 8B][amount 8B][gateway_order_id N bytes] */

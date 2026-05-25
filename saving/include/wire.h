@@ -38,6 +38,8 @@
  *    0x01  PING            body: –
  *    0x02  LOGIN           body: [ mid 4B ][ pw_hash 32B ]
  *    0x03  LOGOUT          body: [ token 32B ]
+ *    0x04  RENEW_SESSION   body: [ token 32B ]
+ *                        ACK extra: [ remaining_s 4B ]  — seconds until next expiry
  *    0x10  CREATE_ACCOUNT  body: [ mid 4B ][ pw_hash 32B ]
  *    0x11  TRANSFER        body: [ token 32B ][ to 4B ][ amount 8B ][ ref 8B ]
  *                        ACK extra: [ txn_id 8B ][ after_balance 8B ]
@@ -122,6 +124,7 @@
 #define WIRE_PING            0x01
 #define WIRE_LOGIN           0x02
 #define WIRE_LOGOUT          0x03
+#define WIRE_RENEW_SESSION   0x04
 #define WIRE_CREATE_ACCOUNT  0x10
 #define WIRE_TRANSFER        0x11
 #define WIRE_GET_BALANCE     0x12

@@ -101,6 +101,16 @@ private actor SavingNetwork {
         sessionToken = nil
     }
 
+    // Returns remaining TTL seconds after renewal, or throws if token expired.
+    @discardableResult
+    func renewSession() async throws -> UInt32 {
+        let token = try requireToken()
+        let ack   = try await conn.send(WireFrame.renewSession(token: token, seq: nextSeq())).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+        let remaining = ack.data.count >= 4 ? ack.data.readBigEndianUInt32(at: 0) : 0
+        return remaining
+    }
+
     // ─── Balance ────────────────────────────────────────────────────────────
 
     func balance() async throws -> BalanceInfo {
@@ -294,6 +304,13 @@ public final class SavingClient: ObservableObject {
     public func logout() async throws {
         try await net.logout()
         uid = nil
+    }
+
+    // Extend session TTL. Call periodically when idle to prevent expiry.
+    // Returns remaining seconds. Throws WireError.serverError(.errBadToken) if expired.
+    @discardableResult
+    public func renewSession() async throws -> UInt32 {
+        try await net.renewSession()
     }
 
     // ─── Balance ─────────────────────────────────────────────────────────────
