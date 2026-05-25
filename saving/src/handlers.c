@@ -426,8 +426,11 @@ static void handle_create_intent(DB *db, SessionTable *st, int fd, const WireFra
     /* ── Step 2: order dedup (mid, order_id) — same order, new request ──── */
     IntentInfo existing;
     if (db_intent_find_by_order(db, mid, order_id, &existing) == 0) {
+        if (existing.status == 1) {
+            send_ack(fd, f->seq, WIRE_ERR_INTENT_SETTLED, NULL, 0); return;
+        }
         uint8_t extra[21];
-        extra[0] = 0;   /* 0 = already existed */
+        extra[0] = 0;   /* 0 = pending intent already exists */
         wr32(extra + 1,  mid);
         wr64(extra + 5,  request_id);
         wr64(extra + 13, existing.amount);
