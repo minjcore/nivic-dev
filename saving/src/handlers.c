@@ -91,11 +91,20 @@ static int st_is_online(SessionTable *st, uint32_t mid) {
 }
 
 static void st_destroy(SessionTable *st, const uint8_t token[32]) {
+    /* Resolve token → mid first, then wipe ALL sessions for that mid.
+     * "Logout everywhere" — guarantees st_is_online(mid) returns 0 after. */
     pthread_mutex_lock(&st->mu);
+    uint32_t mid = 0;
     for (int i = 0; i < SESSION_MAX; i++) {
         if (memcmp(st->entries[i].token, token, 32) == 0) {
-            memset(&st->entries[i], 0, sizeof(Session));
+            mid = st->entries[i].mid;
             break;
+        }
+    }
+    if (mid != 0) {
+        for (int i = 0; i < SESSION_MAX; i++) {
+            if (st->entries[i].mid == mid)
+                memset(&st->entries[i], 0, sizeof(Session));
         }
     }
     pthread_mutex_unlock(&st->mu);
