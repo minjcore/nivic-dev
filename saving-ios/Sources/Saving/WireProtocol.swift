@@ -27,6 +27,7 @@ enum WireType: UInt8 {
     case listIntents       = 0x28
     case confirmIntent     = 0x29
     case getMerchantHistory = 0x2A
+    case registerPushToken  = 0x30
 
     // Server → Client (responses)
     case pong            = 0x80
@@ -306,6 +307,12 @@ extension WireFrame {
         var body = token
         if beforeID != 0 { body.appendBigEndian(beforeID) }
         return WireFrame(type: .getMerchantHistory, seq: seq, body: body)
+    }
+
+    static func registerPushToken(token: Data, deviceToken: String, seq: UInt32) -> WireFrame {
+        var body = token
+        body.append(contentsOf: deviceToken.utf8)
+        return WireFrame(type: .registerPushToken, seq: seq, body: body)
     }
 }
 

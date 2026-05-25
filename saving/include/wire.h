@@ -140,6 +140,7 @@
 /* ENROLL_TOTP       body: [merchant_token 32B][customer_id 4B][secret 20B]   */
 /* CREATE_INTENT     body: [merchant_token 32B][request_id 8B][order_id 8B][amount 8B] */
 /* PAY_INTENT        body: [customer_token 32B][merchant_id 4B][request_id 8B][totp_code 4B] */
+#define WIRE_REGISTER_PUSH_TOKEN  0x30
 #define WIRE_CASH_IN              0x24
 #define WIRE_TOTP_CHARGE          0x25
 #define WIRE_CASH_OUT             0x26

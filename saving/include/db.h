@@ -267,3 +267,13 @@ int db_recovery_is_complete(DB *db, uint32_t account_id);
 
 /* Deletes the open recovery request. */
 void db_recovery_close(DB *db, uint32_t account_id);
+
+/* ─── APNs push tokens ───────────────────────────────────────────────────── */
+
+/* Store/update APNs device token for mid (hex string, 64 chars).
+ * Returns 0 on success, -1 on error. */
+int db_push_token_upsert(DB *db, uint32_t mid, const char *device_token);
+
+/* Retrieve APNs device token for mid into out[outlen].
+ * Returns 0 on success, -1 if not found or error. */
+int db_push_token_get(DB *db, uint32_t mid, char *out, size_t outlen);

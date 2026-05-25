@@ -321,6 +321,13 @@ private actor SavingNetwork {
         guard ack.code == .ok else { throw WireError.serverError(ack.code) }
     }
 
+    func registerPushToken(_ deviceToken: String) async throws {
+        let token = try requireToken()
+        let ack = try await conn.send(WireFrame.registerPushToken(token: token, deviceToken: deviceToken,
+                                                                   seq: nextSeq())).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+    }
+
     // ─── Guardians ──────────────────────────────────────────────────────────
 
     func addGuardian(id: UInt32) async throws {
@@ -481,6 +488,10 @@ public final class SavingClient: ObservableObject {
 
     public func registerMerchant(name: String) async throws {
         try await net.registerMerchant(name: name)
+    }
+
+    public func registerPushToken(_ deviceToken: String) async throws {
+        try await net.registerPushToken(deviceToken)
     }
 
     // ─── Guardians ───────────────────────────────────────────────────────────

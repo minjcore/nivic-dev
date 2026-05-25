@@ -1,5 +1,6 @@
 #include "handlers.h"
 #include "registry.h"
+#include "apns.h"
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
@@ -16,6 +17,16 @@
 static volatile sig_atomic_t g_maintenance = 0;
 void maintenance_set(int on)  { g_maintenance = on ? 1 : 0; }
 int  maintenance_get(void)    { return g_maintenance; }
+
+/* ─── Push helper: registry first, APNs fallback ────────────────────────── */
+static void push_or_apns(DB *db, uint32_t mid,
+                          const uint8_t *buf, size_t len,
+                          const char *title, const char *apns_body) {
+    if (registry_push(mid, buf, len) == 0) return;
+    char tok[128] = "";
+    if (db_push_token_get(db, mid, tok, sizeof(tok)) == 0 && tok[0])
+        apns_notify_async(tok, title, apns_body);
+}
 
 /* ─── Forward declarations ───────────────────────────────────────────────── */
 static void gateway_notify_async(const char *gateway_order_id, uint32_t paid_by);
@@ -296,7 +307,7 @@ static void handle_transfer(DB *db, SessionTable *st, int fd, const WireFrame *f
     if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
     if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
 
-    /* Push EVT_TRANSFER_IN to recipient if online */
+    /* Push EVT_TRANSFER_IN to recipient; APNs fallback if offline */
     int64_t new_bal = db_account_balance(db, credit);
     if (new_bal >= 0) {
         uint8_t body[20], evt[WIRE_MAX_FRAME];
@@ -305,7 +316,12 @@ static void handle_transfer(DB *db, SessionTable *st, int fd, const WireFrame *f
         wr64(body + 12, (uint64_t)new_bal);
         size_t n = wire_frame_encode(WIRE_EVT_TRANSFER_IN, 0, body, 20,
                                      evt, sizeof(evt));
-        if (n > 0) registry_push(credit, evt, n);
+        if (n > 0) {
+            char ab[80];
+            snprintf(ab, sizeof(ab), "+%llu \xe2\x82\xab t\xe1\xbb\xab #%u",
+                     (unsigned long long)amount, (unsigned)debit);
+            push_or_apns(db, credit, evt, n, "Nh\xe1\xba\xadn ti\xe1\xbb\x81n", ab);
+        }
     }
 
     /* Push EVT_TRANSFER_OUT to sender's other sessions if online */
@@ -616,7 +632,7 @@ static void handle_pay_intent(DB *db, SessionTable *st, int fd, const WireFrame 
     /* Notify Merchant Gateway to mark order as paid */
     gateway_notify_async(intent.gateway_order_id, customer_id);
 
-    /* Push EVT_TRANSFER_IN to merchant if online */
+    /* Push EVT_TRANSFER_IN to merchant; APNs fallback if offline */
     int64_t merch_bal = db_account_balance(db, merchant_id);
     if (merch_bal >= 0) {
         uint8_t body[20], evt[WIRE_MAX_FRAME];
@@ -625,7 +641,12 @@ static void handle_pay_intent(DB *db, SessionTable *st, int fd, const WireFrame 
         wr64(body + 12, (uint64_t)merch_bal);
         size_t n = wire_frame_encode(WIRE_EVT_TRANSFER_IN, 0, body, 20,
                                      evt, sizeof(evt));
-        if (n > 0) registry_push(merchant_id, evt, n);
+        if (n > 0) {
+            char ab[80];
+            snprintf(ab, sizeof(ab), "+%llu \xe2\x82\xab t\xe1\xbb\xab #%u",
+                     (unsigned long long)intent.amount, (unsigned)customer_id);
+            push_or_apns(db, merchant_id, evt, n, "Nh\xe1\xba\xadn ti\xe1\xbb\x81n", ab);
+        }
     }
 
     /* Push EVT_INTENT_PAID: [request_id 8B][customer_id 4B][amount 8B] */
@@ -636,7 +657,14 @@ static void handle_pay_intent(DB *db, SessionTable *st, int fd, const WireFrame 
         wr64(ip_body + 12, intent.amount);
         size_t ip_n = wire_frame_encode(WIRE_EVT_INTENT_PAID, 0, ip_body, 20,
                                         ip_evt, sizeof(ip_evt));
-        if (ip_n > 0) registry_push(merchant_id, ip_evt, ip_n);
+        if (ip_n > 0) {
+            char ab[80];
+            snprintf(ab, sizeof(ab), "+%llu \xe2\x82\xab t\xe1\xbb\xab #%u",
+                     (unsigned long long)intent.amount, (unsigned)customer_id);
+            push_or_apns(db, merchant_id, ip_evt, ip_n,
+                         "\xc4\x90\xc6\xa1n h\xc3\xa0ng \xc4\x91\xc6\xb0\xe1\xbb\xa3"
+                         "c thanh to\xc3\xa1n", ab);
+        }
     }
 
     /* Push EVT_TRANSFER_OUT to customer's other sessions */
@@ -683,7 +711,7 @@ static void handle_confirm_intent(DB *db, SessionTable *st, int fd, const WireFr
 
     gateway_notify_async(intent.gateway_order_id, customer_id);
 
-    /* Push EVT_TRANSFER_IN to merchant */
+    /* Push EVT_TRANSFER_IN to merchant; APNs fallback if offline */
     int64_t merch_bal = db_account_balance(db, merchant_id);
     if (merch_bal >= 0) {
         uint8_t body[20], evt[WIRE_MAX_FRAME];
@@ -691,7 +719,12 @@ static void handle_confirm_intent(DB *db, SessionTable *st, int fd, const WireFr
         wr64(body + 4,  intent.amount);
         wr64(body + 12, (uint64_t)merch_bal);
         size_t n = wire_frame_encode(WIRE_EVT_TRANSFER_IN, 0, body, 20, evt, sizeof(evt));
-        if (n > 0) registry_push(merchant_id, evt, n);
+        if (n > 0) {
+            char ab[80];
+            snprintf(ab, sizeof(ab), "+%llu \xe2\x82\xab t\xe1\xbb\xab #%u",
+                     (unsigned long long)intent.amount, (unsigned)customer_id);
+            push_or_apns(db, merchant_id, evt, n, "Nh\xe1\xba\xadn ti\xe1\xbb\x81n", ab);
+        }
     }
 
     /* Push EVT_INTENT_PAID: [request_id 8B][customer_id 4B][amount 8B] */
@@ -702,7 +735,14 @@ static void handle_confirm_intent(DB *db, SessionTable *st, int fd, const WireFr
         wr64(ip_body + 12, intent.amount);
         size_t ip_n = wire_frame_encode(WIRE_EVT_INTENT_PAID, 0, ip_body, 20,
                                         ip_evt, sizeof(ip_evt));
-        if (ip_n > 0) registry_push(merchant_id, ip_evt, ip_n);
+        if (ip_n > 0) {
+            char ab[80];
+            snprintf(ab, sizeof(ab), "+%llu \xe2\x82\xab t\xe1\xbb\xab #%u",
+                     (unsigned long long)intent.amount, (unsigned)customer_id);
+            push_or_apns(db, merchant_id, ip_evt, ip_n,
+                         "\xc4\x90\xc6\xa1n h\xc3\xa0ng \xc4\x91\xc6\xb0\xe1\xbb\xa3"
+                         "c thanh to\xc3\xa1n", ab);
+        }
     }
 
     /* Push EVT_TRANSFER_OUT to customer's other sessions */
@@ -804,14 +844,19 @@ static void handle_totp_charge(DB *db, SessionTable *st, int fd, const WireFrame
         if (n > 0) registry_push(credit, evt, n);
     }
 
-    /* Push EVT_TOTP_CHARGED to customer: [merchant_id 4B][amount 8B][balance 8B] */
+    /* Push EVT_TOTP_CHARGED to customer; APNs fallback if offline */
     {
         uint8_t body[20], evt[WIRE_MAX_FRAME];
         wr32(body,      credit);
         wr64(body + 4,  amount);
         wr64(body + 12, (uint64_t)after_cust);
         size_t n = wire_frame_encode(WIRE_EVT_TOTP_CHARGED, 0, body, 20, evt, sizeof(evt));
-        if (n > 0) registry_push(debit, evt, n);
+        if (n > 0) {
+            char ab[80];
+            snprintf(ab, sizeof(ab), "-%llu \xe2\x82\xab t\xe1\xba\xa1i #%u",
+                     (unsigned long long)amount, (unsigned)credit);
+            push_or_apns(db, debit, evt, n, "Thanh to\xc3\xa1n QR", ab);
+        }
     }
 
     send_ack(fd, f->seq, WIRE_OK, NULL, 0);
@@ -1015,7 +1060,7 @@ static void handle_cash_in(DB *db, SessionTable *st, int fd, const WireFrame *f)
     if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
     if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
 
-    /* Push EVT_TRANSFER_IN to recipient if online */
+    /* Push EVT_TRANSFER_IN to recipient; APNs fallback if offline */
     int64_t new_bal = db_account_balance(db, credit);
     if (new_bal >= 0) {
         uint8_t body[20], evt[WIRE_MAX_FRAME];
@@ -1024,9 +1069,36 @@ static void handle_cash_in(DB *db, SessionTable *st, int fd, const WireFrame *f)
         wr64(body + 12, (uint64_t)new_bal);
         size_t n = wire_frame_encode(WIRE_EVT_TRANSFER_IN, 0, body, 20,
                                      evt, sizeof(evt));
-        if (n > 0) registry_push(credit, evt, n);
+        if (n > 0) {
+            char ab[80];
+            snprintf(ab, sizeof(ab), "+%llu \xe2\x82\xab v\xe1\xbb\xado t\xc3\xa0i kho\xe1\xba\xa3n",
+                     (unsigned long long)amount);
+            push_or_apns(db, credit, evt, n, "N\xe1\xba\xa1p ti\xe1\xbb\x81n", ab);
+        }
     }
 
+    send_ack(fd, f->seq, WIRE_OK, NULL, 0);
+}
+
+/* REGISTER_PUSH_TOKEN  body: [token 32B][device_token N bytes] */
+static void handle_register_push_token(DB *db, SessionTable *st,
+                                        int fd, const WireFrame *f) {
+    if (f->body_len < 33) {
+        send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
+    }
+    uint32_t mid = st_lookup(st, f->body);
+    if (!mid) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
+
+    /* device_token is the remaining bytes after the session token (hex string) */
+    char tok[128] = "";
+    uint16_t tlen = f->body_len - 32;
+    if (tlen >= sizeof(tok)) tlen = sizeof(tok) - 1;
+    memcpy(tok, f->body + 32, tlen);
+    tok[tlen] = '\0';
+
+    if (db_push_token_upsert(db, mid, tok) != 0) {
+        send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return;
+    }
     send_ack(fd, f->seq, WIRE_OK, NULL, 0);
 }
 
@@ -1088,7 +1160,8 @@ void handle_frame(DB *db, SessionTable *st, int fd, const WireFrame *f) {
         case WIRE_GET_MERCHANT_INFO:  handle_get_merchant_info(db, st, fd, f);    break;
         case WIRE_LIST_INTENTS:           handle_list_intents(db, st, fd, f);              break;
         case WIRE_GET_MERCHANT_HISTORY:   handle_get_merchant_history(db, st, fd, f);     break;
-        case WIRE_CONFIRM_INTENT:     handle_confirm_intent(db, st, fd, f);       break;
+        case WIRE_CONFIRM_INTENT:         handle_confirm_intent(db, st, fd, f);           break;
+        case WIRE_REGISTER_PUSH_TOKEN:    handle_register_push_token(db, st, fd, f);      break;
         default:
             send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0);
     }

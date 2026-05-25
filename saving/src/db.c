@@ -153,6 +153,11 @@ static const char SCHEMA[] =
     "  amount      BIGINT      NOT NULL,"
     "  ref         TEXT        NOT NULL DEFAULT '',"
     "  create_time TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+    ");"
+    "CREATE TABLE IF NOT EXISTS push_tokens ("
+    "  mid          BIGINT PRIMARY KEY,"
+    "  device_token TEXT   NOT NULL,"
+    "  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()"
     ");";
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1406,4 +1411,45 @@ int db_intent_list(DB *db, uint32_t mid, IntentSummary *out, int max_count) {
     }
     PQclear(r);
     return n;
+}
+
+/* ─── APNs push tokens ───────────────────────────────────────────────────── */
+
+int db_push_token_upsert(DB *db, uint32_t mid, const char *device_token) {
+    static const char SQL[] =
+        "INSERT INTO push_tokens(mid, device_token, updated_at) "
+        "VALUES($1, $2, NOW()) "
+        "ON CONFLICT(mid) DO UPDATE SET device_token=EXCLUDED.device_token, "
+        "                               updated_at=NOW()";
+    uint64_t mid64 = pg_int8((uint64_t)mid);
+    const char *vals[2] = { (char *)&mid64, device_token };
+    int         lens[2] = { 8, (int)strlen(device_token) };
+    int         fmts[2] = { 1, 0 };
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+    int ok = (PQresultStatus(r) == PGRES_COMMAND_OK);
+    if (!ok) fprintf(stderr, "[db] push_token_upsert: %s\n", PQerrorMessage(db->conn));
+    PQclear(r);
+    return ok ? 0 : -1;
+}
+
+int db_push_token_get(DB *db, uint32_t mid, char *out, size_t outlen) {
+    static const char SQL[] =
+        "SELECT device_token FROM push_tokens WHERE mid=$1";
+    uint64_t mid64 = pg_int8((uint64_t)mid);
+    const char *vals[1] = { (char *)&mid64 };
+    int         lens[1] = { 8 };
+    int         fmts[1] = { 1 };
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+    if (PQresultStatus(r) != PGRES_TUPLES_OK || PQntuples(r) == 0) {
+        PQclear(r); return -1;
+    }
+    const char *tok = PQgetvalue(r, 0, 0);
+    strncpy(out, tok, outlen - 1);
+    out[outlen - 1] = '\0';
+    PQclear(r);
+    return 0;
 }

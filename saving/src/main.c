@@ -1,5 +1,6 @@
 #include "db.h"
 #include "wire.h"
+#include "apns.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -18,6 +19,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     printf("[saving] database: %s\n", conninfo);
+    apns_init();   /* no-op if env vars missing */
 
     server_run(&db, wal_path);
 
