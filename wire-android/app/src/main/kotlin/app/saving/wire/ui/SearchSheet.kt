@@ -10,7 +10,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material3.*
@@ -32,10 +31,7 @@ import app.saving.wire.data.MerchantsClient
 import app.saving.wire.data.SavingClient
 import app.saving.wire.data.Transaction
 import app.saving.wire.protocol.AccountID
-import app.saving.wire.protocol.WireCode
-import app.saving.wire.protocol.WireError
-import app.saving.wire.util.vndFormatted
-import kotlinx.coroutines.launch
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -329,10 +325,7 @@ fun FrontStoreSheet(
     var mcName    by remember { mutableStateOf("") }
     var mcAddress by remember { mutableStateOf("") }
     var menu      by remember { mutableStateOf<List<MenuItem>>(emptyList()) }
-    var error     by remember { mutableStateOf<String?>(null) }
-    var loading   by remember { mutableStateOf(false) }
-    var success   by remember { mutableStateOf(false) }
-    val scope     = rememberCoroutineScope()
+    var showPay   by remember { mutableStateOf(intentPayload != null) }
 
     LaunchedEffect(mid) {
         runCatching { val m = merchantsClient.getMerchant(mid); mcName = m.name; mcAddress = m.address }
@@ -349,6 +342,7 @@ fun FrontStoreSheet(
             contentPadding      = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            // ── Store header ──────────────────────────────────────────────
             item {
                 Column(horizontalAlignment = Alignment.CenterHorizontally,
                        modifier = Modifier.fillMaxWidth()) {
@@ -365,8 +359,12 @@ fun FrontStoreSheet(
                 }
             }
 
+            // ── Menu ──────────────────────────────────────────────────────
             if (menu.isNotEmpty()) {
-                item { Text("Menu", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.fillMaxWidth()) }
+                item {
+                    Text("Menu", color = Color.Gray, fontSize = 12.sp,
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                }
                 items(menu) { item ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically) {
@@ -383,60 +381,30 @@ fun FrontStoreSheet(
                 }
             }
 
-            if (intentPayload != null) {
+            // ── Pay CTA (when no intentPayload pre-loaded) ────────────────
+            if (intentPayload != null && !showPay) {
                 item {
-                    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
-                            color = Color.White.copy(alpha = 0.06f)) {
-                        Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                               verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("Tổng thanh toán", color = Color.Gray, fontSize = 12.sp)
-                            Text(intentPayload.amount.vndFormatted(),
-                                color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
-                        }
-                    }
-                }
-
-                error?.let { item { Text(it, color = Color.Red, fontSize = 13.sp) } }
-
-                item {
-                    if (success) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()) {
-                            Icon(Icons.Default.CheckCircleOutline, null, tint = Color(0xFF4CAF50))
-                            Text("Thanh toán thành công!", color = Color(0xFF4CAF50), fontWeight = FontWeight.SemiBold)
-                        }
-                    } else {
-                        WirePrimaryButton(title = "XÁC NHẬN THANH TOÁN", loading = loading, enabled = !loading) {
-                            scope.launch {
-                                loading = true; error = null
-                                try {
-                                    client.confirmIntent(intentPayload.mid, intentPayload.requestId)
-                                    intentPayload.orderID?.let { oid ->
-                                        merchantsClient.confirmPaid(oid, accountId.toInt())
-                                    }
-                                    success = true
-                                    kotlinx.coroutines.delay(1500)
-                                    onDone()
-                                } catch (e: WireError) {
-                                    error = when (e.code) {
-                                        WireCode.ERR_LOW_BALANCE    -> "Không đủ số dư"
-                                        WireCode.ERR_INTENT_SETTLED -> "Đơn đã thanh toán rồi"
-                                        WireCode.ERR_NOT_FOUND      -> "Không tìm thấy đơn hàng"
-                                        WireCode.ERR_SYSTEM_OFFLINE,
-                                        WireCode.ERR_MAINTENANCE    -> "Hệ thống tạm thời không khả dụng"
-                                        else -> "Lỗi: 0x${e.code.toInt().and(0xFF).toString(16)}"
-                                    }
-                                } catch (e: Exception) {
-                                    error = e.message
-                                } finally { loading = false }
-                            }
-                        }
+                    WirePrimaryButton(title = "THANH TOÁN", loading = false, enabled = true) {
+                        showPay = true
                     }
                 }
             }
 
             item { Spacer(Modifier.height(32.dp)) }
         }
+    }
+
+    // ── Payment confirmation sheet (layered on top) ───────────────────────────
+    if (showPay && intentPayload != null) {
+        PaymentConfirmSheet(
+            intentPayload   = intentPayload,
+            merchantName    = mcName,
+            merchantAddress = mcAddress,
+            client          = client,
+            merchantsClient = merchantsClient,
+            accountId       = accountId,
+            onDone          = onDone,
+            onDismiss       = { showPay = false }
+        )
     }
 }
