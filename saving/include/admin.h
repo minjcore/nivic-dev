@@ -10,3 +10,7 @@ typedef struct SessionTable SessionTable;
  * Password defaults to "saving_admin_dev"; override with ADMIN_PASSWORD.
  * Returns 0 on success, -1 on failure. */
 int admin_start(DB *db, SessionTable *st, uint16_t port, const char *password);
+
+/* Close the admin listen socket so the accept thread exits. Safe to call
+ * from a signal handler. */
+void admin_request_stop(void);

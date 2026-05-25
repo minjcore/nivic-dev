@@ -142,6 +142,17 @@ static const char SCHEMA[] =
     "  username      TEXT        PRIMARY KEY,"
     "  password_hash BYTEA       NOT NULL,"
     "  create_time   TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+    ");"
+
+    /* Admin action audit trail */
+    "CREATE TABLE IF NOT EXISTS admin_audit ("
+    "  id          BIGSERIAL   PRIMARY KEY,"
+    "  username    TEXT        NOT NULL,"
+    "  action      TEXT        NOT NULL,"
+    "  target_uid  BIGINT      NOT NULL,"
+    "  amount      BIGINT      NOT NULL,"
+    "  ref         TEXT        NOT NULL DEFAULT '',"
+    "  create_time TIMESTAMPTZ NOT NULL DEFAULT NOW()"
     ");";
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1219,6 +1230,62 @@ int db_admin_user_delete(DB *db, const char *username) {
     int ok = PQresultStatus(r) == PGRES_COMMAND_OK;
     PQclear(r);
     return ok ? 0 : -1;
+}
+
+int db_admin_audit_log(DB *db, const char *username, const char *action,
+                       uint32_t target_uid, uint64_t amount, const char *ref) {
+    static const char SQL[] =
+        "INSERT INTO admin_audit (username, action, target_uid, amount, ref)"
+        " VALUES ($1, $2, $3, $4, $5)";
+    uint64_t uid = pg_int8((uint64_t)target_uid);
+    uint64_t amt = pg_int8(amount);
+    const char *vals[5] = { username, action, (char *)&uid, (char *)&amt, ref };
+    int         lens[5] = { (int)strlen(username), (int)strlen(action), 8, 8, (int)strlen(ref) };
+    int         fmts[5] = { 0, 0, 1, 1, 0 };
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 5, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+    int ok = PQresultStatus(r) == PGRES_COMMAND_OK;
+    if (!ok) fprintf(stderr, "[db] audit_log: %s\n", PQerrorMessage(db->conn));
+    PQclear(r);
+    return ok ? 0 : -1;
+}
+
+char *db_admin_audit_list(DB *db, int limit) {
+    static const char SQL[] =
+        "SELECT username, action, target_uid, amount, ref,"
+        " TO_CHAR(create_time AT TIME ZONE 'Asia/Ho_Chi_Minh','YYYY-MM-DD HH24:MI:SS')"
+        " FROM admin_audit ORDER BY create_time DESC LIMIT $1";
+    char limit_str[8];
+    snprintf(limit_str, sizeof(limit_str), "%d", limit);
+    const char *vals[1] = { limit_str };
+    int         lens[1] = { 0 };
+    int         fmts[1] = { 0 };
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+    if (PQresultStatus(r) != PGRES_TUPLES_OK) {
+        fprintf(stderr, "[db] audit_list: %s\n", PQerrorMessage(db->conn));
+        PQclear(r); return NULL;
+    }
+    int n = PQntuples(r);
+    int bufsz = 64 + n * 320;
+    char *buf = malloc(bufsz);
+    if (!buf) { PQclear(r); return NULL; }
+    int off = snprintf(buf, bufsz, "[");
+    for (int i = 0; i < n && off < bufsz - 512; i++) {
+        off += snprintf(buf + off, bufsz - off,
+            "%s{\"username\":\"%s\",\"action\":\"%s\","
+            "\"target_uid\":%s,\"amount\":%s,"
+            "\"ref\":\"%s\",\"time\":\"%s\"}",
+            i ? "," : "",
+            PQgetvalue(r, i, 0), PQgetvalue(r, i, 1),
+            PQgetvalue(r, i, 2), PQgetvalue(r, i, 3),
+            PQgetvalue(r, i, 4), PQgetvalue(r, i, 5));
+    }
+    snprintf(buf + off, bufsz - off, "]");
+    PQclear(r);
+    return buf;
 }
 
 int db_admin_stats(DB *db, AdminStats *out) {

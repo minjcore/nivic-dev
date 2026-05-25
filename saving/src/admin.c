@@ -51,6 +51,7 @@ typedef struct {
 
 static AdminSess       admin_sess[ADMIN_SESS_MAX];
 static pthread_mutex_t admin_sess_mu = PTHREAD_MUTEX_INITIALIZER;
+static volatile int    g_admin_sfd   = -1;
 
 static void admin_sess_create(const char *username, char out[65]) {
     uint8_t raw[32];
@@ -82,6 +83,28 @@ static int admin_sess_valid(const char *token) {
     }
     pthread_mutex_unlock(&admin_sess_mu);
     return found;
+}
+
+/* Extract username for the Bearer token in the request headers. */
+static void admin_sess_get_username(const char *req, char *out, int max) {
+    out[0] = '\0';
+    const char *p = strstr(req, "\r\nAuthorization: Bearer ");
+    if (!p) return;
+    p += 24;
+    const char *e = strpbrk(p, "\r\n");
+    if (!e || (int)(e - p) != 64) return;
+    char tok[65]; memcpy(tok, p, 64); tok[64] = '\0';
+    time_t now = time(NULL);
+    pthread_mutex_lock(&admin_sess_mu);
+    for (int i = 0; i < ADMIN_SESS_MAX; i++) {
+        if (admin_sess[i].expires > now &&
+            memcmp(admin_sess[i].token, tok, 64) == 0) {
+            strncpy(out, admin_sess[i].username, max - 1);
+            out[max - 1] = '\0';
+            break;
+        }
+    }
+    pthread_mutex_unlock(&admin_sess_mu);
 }
 
 /* ─── HTTP response helpers ─────────────────────────────────────────────── */
@@ -249,7 +272,7 @@ static void h_account(int fd, const char *query) {
     json_ok(fd, b);
 }
 
-static void h_cashin(int fd, const char *body) {
+static void h_cashin(int fd, const char *body, const char *actor) {
     uint32_t uid    = jgetu32(body, "uid");
     uint64_t amount = jgetu64(body, "amount");
     char ref[128];  jgetstr(body, "ref", ref, sizeof(ref));
@@ -261,6 +284,8 @@ static void h_cashin(int fd, const char *body) {
     if (db_admin_cash_in(g.db, uid, amount, &after) != 0) {
         json_err(fd, 500, "db error"); return;
     }
+
+    db_admin_audit_log(g.db, actor, "cash_in", uid, amount, ref);
 
     /* Push EVT_CASH_IN to customer if online */
     uint8_t pb[16], evt[WIRE_MAX_FRAME];
@@ -350,7 +375,7 @@ static void h_export(int fd, const char *query) {
     free(csv);
 }
 
-static void h_cashout(int fd, const char *body) {
+static void h_cashout(int fd, const char *body, const char *actor) {
     uint32_t uid    = jgetu32(body, "uid");
     uint64_t amount = jgetu64(body, "amount");
     char ref[128];  jgetstr(body, "ref", ref, sizeof(ref));
@@ -362,9 +387,40 @@ static void h_cashout(int fd, const char *body) {
     if (db_admin_cash_out(g.db, uid, amount, &after) != 0) {
         json_err(fd, 400, "insufficient balance"); return;
     }
+    db_admin_audit_log(g.db, actor, "cash_out", uid, amount, ref);
+
     char b[128];
     snprintf(b, sizeof(b), "{\"ok\":true,\"after_balance\":%lld}", (long long)after);
     json_ok(fd, b);
+}
+
+static void h_maintenance_get(int fd) {
+    char b[48];
+    snprintf(b, sizeof(b), "{\"maintenance\":%s}", maintenance_get() ? "true" : "false");
+    json_ok(fd, b);
+}
+
+static void h_maintenance_set(int fd, const char *body) {
+    int on = (strstr(body, "\"enabled\":true") != NULL ||
+              strstr(body, "\"enabled\": true") != NULL) ? 1 : 0;
+    maintenance_set(on);
+    char b[48];
+    snprintf(b, sizeof(b), "{\"maintenance\":%s}", on ? "true" : "false");
+    json_ok(fd, b);
+}
+
+static void h_audit(int fd) {
+    char *json = db_admin_audit_list(g.db, 200);
+    if (!json) { json_err(fd, 500, "db error"); return; }
+    /* db_admin_audit_list returns a JSON array — wrap it */
+    int jsz = (int)strlen(json);
+    int bufsz = jsz + 32;
+    char *out = malloc(bufsz);
+    if (!out) { free(json); json_err(fd, 500, "oom"); return; }
+    snprintf(out, bufsz, "{\"audit\":%s}", json);
+    free(json);
+    json_ok(fd, out);
+    free(out);
 }
 
 /* ─── Embedded HTML admin panel ─────────────────────────────────────────── */
@@ -420,6 +476,7 @@ static const char ADMIN_HTML[] =
 "<div class='tab' id='t3'>Cash Ops</div>"
 "<div class='tab' id='t4'>Export</div>"
 "<div class='tab' id='t5'>Admins</div>"
+"<div class='tab' id='t6'>Audit</div>"
 "</div>"
 "<div id='pg-dash' class='pg on'>"
 "<div class='grid'>"
@@ -429,6 +486,13 @@ static const char ADMIN_HTML[] =
 "<div class='card'><div class='ct'>Volume (VND)</div><div class='cv' id='s3'>-</div></div>"
 "</div>"
 "<p style='color:#555;font-size:12px'>Auto-refreshes every 6s after connecting.</p>"
+"<div class='sec' style='max-width:360px;margin-top:16px'>"
+"<h2>Maintenance Mode</h2>"
+"<p style='color:#666;font-size:12px;margin-bottom:12px'>When ON: all Wire commands except PING/LOGIN/LOGOUT return ERR_SYSTEM_OFFLINE.</p>"
+"<div style='display:flex;align-items:center;gap:12px'>"
+"<span id='mst' style='font-size:13px'>—</span>"
+"<button id='mtb' onclick='toggleMaint()'>Toggle</button>"
+"</div></div>"
 "</div>"
 "<div id='pg-sess' class='pg'>"
 "<div class='sec'>"
@@ -481,6 +545,12 @@ static const char ADMIN_HTML[] =
 "<table><thead><tr><th>Username</th><th>Created</th><th></th></tr></thead>"
 "<tbody id='atb'></tbody></table>"
 "</div></div>"
+"<div id='pg-audit' class='pg'>"
+"<div class='sec'>"
+"<h2>Admin Audit Log <button id='aulb' style='font-size:11px;padding:3px 8px;margin-left:6px'>Refresh</button></h2>"
+"<table><thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>UID</th><th>Amount</th><th>Ref</th></tr></thead>"
+"<tbody id='autb'></tbody></table>"
+"</div></div>"
 "<script>"
 "var P='',ar=null;"
 "var fmt=function(n){return Number(n).toLocaleString('vi-VN');};"
@@ -506,8 +576,8 @@ static const char ADMIN_HTML[] =
 "    s.textContent='logged in as '+d.username;"
 "    s.style.color='#4caf50';"
 "    if(ar)clearInterval(ar);"
-"    ar=setInterval(loadStats,6000);"
-"    loadStats();"
+"    ar=setInterval(function(){loadStats();loadMaint();},6000);"
+"    loadStats();loadMaint();"
 "  }).catch(function(){"
 "    s.textContent='auth failed';"
 "    s.style.color='#e94560';"
@@ -521,7 +591,20 @@ static const char ADMIN_HTML[] =
 "    document.getElementById('s3').textContent=fmt(d.total_volume);"
 "  });"
 "}"
-"var TABS=['dash','sess','acct','cash','exp','adm'];"
+"function loadMaint(){"
+"  api('/maintenance').then(function(d){"
+"    var on=d.maintenance;"
+"    var el=document.getElementById('mst');"
+"    el.textContent=on?'ON — System offline':'OFF — Normal operation';"
+"    el.style.color=on?'#e94560':'#4caf50';"
+"  }).catch(function(){});"
+"}"
+"function toggleMaint(){"
+"  api('/maintenance').then(function(d){"
+"    return api('/maintenance',{method:'POST',body:JSON.stringify({enabled:!d.maintenance})});"
+"  }).then(function(){loadMaint();}).catch(function(){});"
+"}"
+"var TABS=['dash','sess','acct','cash','exp','adm','audit'];"
 "function tab(n){"
 "  TABS.forEach(function(t,i){"
 "    document.getElementById('pg-'+t).className='pg'+(t===n?' on':'');"
@@ -529,6 +612,7 @@ static const char ADMIN_HTML[] =
 "  });"
 "  if(n==='sess')loadSess();"
 "  if(n==='adm')loadAdmins();"
+"  if(n==='audit')loadAudit();"
 "}"
 "function loadSess(){"
 "  api('/sessions').then(function(d){"
@@ -591,6 +675,8 @@ static const char ADMIN_HTML[] =
 "document.getElementById('t3').onclick=function(){tab('cash');};"
 "document.getElementById('t4').onclick=function(){tab('exp');};"
 "document.getElementById('t5').onclick=function(){tab('adm');};"
+"document.getElementById('t6').onclick=function(){tab('audit');};"
+"document.getElementById('aulb').onclick=loadAudit;"
 "document.getElementById('arb').onclick=loadAdmins;"
 "document.getElementById('anb').onclick=function(){"
 "  var u=document.getElementById('anu').value.trim();"
@@ -619,6 +705,17 @@ static const char ADMIN_HTML[] =
 "  if(!confirm('Delete admin \\'' +u+ '\\'?'))return;"
 "  api('/admins/delete',{method:'POST',body:JSON.stringify({username:u})})"
 "    .then(function(){loadAdmins();});"
+"}"
+"function loadAudit(){"
+"  api('/audit').then(function(d){"
+"    document.getElementById('autb').innerHTML=d.audit.map(function(a){"
+"      var ac=a.action==='cash_in'?'<span style=\"color:#4caf50\">cash_in</span>'"
+"             :'<span style=\"color:#e94560\">cash_out</span>';"
+"      return '<tr><td>'+a.time+'</td><td>'+a.username+'</td><td>'+ac+'</td>'"
+"            +'<td>'+a.target_uid+'</td><td>'+fmt(a.amount)+'</td>'"
+"            +'<td>'+a.ref+'</td></tr>';"
+"    }).join('');"
+"  }).catch(function(){document.getElementById('autb').innerHTML='';});"
 "}"
 "document.getElementById('dlb').onclick=function(){"
 "  var from=document.getElementById('ef').value;"
@@ -702,6 +799,9 @@ static void dispatch(int fd) {
     /* All /api/... require auth */
     if (!authed(buf)) { json_err(fd, 401, "unauthorized"); return; }
 
+    char actor[64] = "";
+    admin_sess_get_username(buf, actor, sizeof(actor));
+
     /* Read POST body */
     char body[4096] = "";
     if (strcmp(method, "POST") == 0) {
@@ -732,14 +832,20 @@ static void dispatch(int fd) {
              strcmp(method, "GET")              == 0) h_sessions(fd);
     else if (strcmp(path, "/api/sessions/kill") == 0) h_kill(fd, body);
     else if (strcmp(path, "/api/account")       == 0) h_account(fd, query);
-    else if (strcmp(path, "/api/cashin")        == 0) h_cashin(fd, body);
-    else if (strcmp(path, "/api/cashout")       == 0) h_cashout(fd, body);
+    else if (strcmp(path, "/api/cashin")        == 0) h_cashin(fd, body, actor);
+    else if (strcmp(path, "/api/cashout")       == 0) h_cashout(fd, body, actor);
     else if (strcmp(path, "/api/export")        == 0) h_export(fd, query);
     else if (strcmp(path, "/api/admins")        == 0 &&
              strcmp(method, "GET")              == 0) h_admin_users_list(fd);
     else if (strcmp(path, "/api/admins")        == 0 &&
              strcmp(method, "POST")             == 0) h_admin_users_create(fd, body);
     else if (strcmp(path, "/api/admins/delete") == 0) h_admin_users_delete(fd, body);
+    else if (strcmp(path, "/api/audit")         == 0 &&
+             strcmp(method, "GET")              == 0) h_audit(fd);
+    else if (strcmp(path, "/api/maintenance")   == 0 &&
+             strcmp(method, "GET")              == 0) h_maintenance_get(fd);
+    else if (strcmp(path, "/api/maintenance")   == 0 &&
+             strcmp(method, "POST")             == 0) h_maintenance_set(fd, body);
     else json_err(fd, 404, "not found");
 }
 
@@ -753,7 +859,7 @@ static void *admin_thread(void *arg) {
         int fd = accept(sfd, (struct sockaddr *)&addr, &alen);
         if (fd < 0) {
             if (errno == EINTR) continue;
-            break;
+            break;  /* sfd was closed by admin_request_stop() */
         }
         struct timeval tv = { .tv_sec = 5 };
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
@@ -761,6 +867,14 @@ static void *admin_thread(void *arg) {
         close(fd);
     }
     return NULL;
+}
+
+void admin_request_stop(void) {
+    int fd = g_admin_sfd;
+    if (fd >= 0) {
+        g_admin_sfd = -1;
+        close(fd);
+    }
 }
 
 /* ─── Startup ────────────────────────────────────────────────────────────── */
@@ -799,6 +913,8 @@ int admin_start(DB *db, SessionTable *st, uint16_t port, const char *password) {
     }
 
     fprintf(stderr, "[admin] HTTP admin panel on :%u  (login: %s)\n", port, user);
+
+    g_admin_sfd = sfd;
 
     pthread_t tid;
     pthread_attr_t attr;

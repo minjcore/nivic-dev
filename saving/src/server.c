@@ -14,6 +14,7 @@
 #include <sys/socket.h>
 #include <signal.h>
 #include <time.h>
+#include <errno.h>
 
 /*
  * ══════════════════════════════════════════════════════════════════════════
@@ -50,6 +51,20 @@
 
 #define SAVING_PORT  7474
 #define BACKLOG      128
+
+static volatile sig_atomic_t g_shutdown  = 0;
+static volatile int          g_server_fd = -1;
+
+static void handle_shutdown(int sig) {
+    (void)sig;
+    g_shutdown = 1;
+    int fd = g_server_fd;
+    if (fd >= 0) {
+        g_server_fd = -1;
+        close(fd);
+    }
+    admin_request_stop();
+}
 
 /* Global ring — shared between all IO threads and the event processor. */
 static FrameRing g_frame_ring;
@@ -165,6 +180,11 @@ static void *push_writer(void *arg) {
 void server_run(DB *db, const char *wal_path) {
     signal(SIGPIPE, SIG_IGN);
 
+    struct sigaction sa = { .sa_handler = handle_shutdown, .sa_flags = 0 };
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGTERM, &sa, NULL);
+    sigaction(SIGINT,  &sa, NULL);
+
     registry_init();
     frame_ring_init(&g_frame_ring);
 
@@ -215,17 +235,22 @@ void server_run(DB *db, const char *wal_path) {
     }
     if (listen(server_fd, BACKLOG) < 0) { perror("listen"); exit(1); }
 
+    g_server_fd = server_fd;
+
     printf("[saving] Wire server listening on :%d  |  WAL: %s\n",
            SAVING_PORT, wal_path ? wal_path : "disabled");
     printf("[saving] Disruptor: FrameRing[%u]  PushRing[%u]\n",
            FRAME_RING_SIZE, PUSH_RING_SIZE);
 
-    while (1) {
+    while (!g_shutdown) {
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
         int client_fd = accept(server_fd, (struct sockaddr *)&client_addr,
                                 &client_len);
-        if (client_fd < 0) { perror("accept"); continue; }
+        if (client_fd < 0) {
+            if (errno == EINTR) continue;
+            break;
+        }
 
         WorkerCtx *ctx = malloc(sizeof(WorkerCtx));
         ctx->client_fd = client_fd;
@@ -240,7 +265,11 @@ void server_run(DB *db, const char *wal_path) {
         pthread_attr_destroy(&attr);
     }
 
-    /* unreachable — but clean up if we ever add graceful shutdown */
+    fprintf(stderr, "[saving] shutting down...\n");
+    /* Brief drain window for in-flight requests */
+    struct timespec ts = { .tv_sec = 1, .tv_nsec = 0 };
+    nanosleep(&ts, NULL);
+
     wal_close(&wal);
     session_table_free(st);
 }

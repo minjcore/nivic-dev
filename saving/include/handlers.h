@@ -24,3 +24,8 @@ int  st_list_sessions(SessionTable *st, SessionInfo *out, int max);
 
 /* Kill all sessions for the given mid. */
 void st_kill_mid(SessionTable *st, uint32_t mid);
+
+/* Maintenance mode — when on, all Wire commands except PING/LOGIN/LOGOUT/
+ * RENEW_SESSION return ERR_SYSTEM_OFFLINE. */
+void maintenance_set(int on);
+int  maintenance_get(void);

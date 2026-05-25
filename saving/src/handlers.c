@@ -10,6 +10,13 @@
 #include <netinet/in.h>
 #include <unistd.h>
 
+/* ─── Maintenance mode ───────────────────────────────────────────────────── */
+
+#include <signal.h>
+static volatile sig_atomic_t g_maintenance = 0;
+void maintenance_set(int on)  { g_maintenance = on ? 1 : 0; }
+int  maintenance_get(void)    { return g_maintenance; }
+
 /* ─── Forward declarations ───────────────────────────────────────────────── */
 static void gateway_notify_async(const char *gateway_order_id, uint32_t paid_by);
 static uint64_t fnv64(const uint8_t *data, int len);
@@ -992,6 +999,20 @@ static void handle_cash_in(DB *db, SessionTable *st, int fd, const WireFrame *f)
 /* ─── Dispatch ───────────────────────────────────────────────────────────── */
 
 void handle_frame(DB *db, SessionTable *st, int fd, const WireFrame *f) {
+    /* Maintenance mode — reject everything except housekeeping commands. */
+    if (g_maintenance) {
+        switch (f->type) {
+            case WIRE_PING:
+            case WIRE_LOGIN:
+            case WIRE_LOGOUT:
+            case WIRE_RENEW_SESSION:
+                break;
+            default:
+                send_ack(fd, f->seq, WIRE_ERR_SYSTEM_OFFLINE, NULL, 0);
+                return;
+        }
+    }
+
     /* Money-movement frames require mid=1 (clearing account) to be online.
      * This is the "branch must be open" invariant: no transactions without
      * a teller (mid=1 session) present. */
