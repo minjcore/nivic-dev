@@ -91,11 +91,15 @@ static const char SCHEMA[] =
 
     /* TOTP secrets enrolled by merchants for customers */
     "CREATE TABLE IF NOT EXISTS totp_enrollments ("
-    "  merchant_id BIGINT NOT NULL,"
-    "  customer_id BIGINT NOT NULL,"
-    "  secret      BYTEA  NOT NULL,"
+    "  merchant_id BIGINT      NOT NULL,"
+    "  customer_id BIGINT      NOT NULL,"
+    "  secret      BYTEA       NOT NULL,"
+    "  create_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+    "  update_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
     "  PRIMARY KEY (merchant_id, customer_id)"
     ");"
+    "ALTER TABLE totp_enrollments ADD COLUMN IF NOT EXISTS create_time TIMESTAMPTZ NOT NULL DEFAULT NOW();"
+    "ALTER TABLE totp_enrollments ADD COLUMN IF NOT EXISTS update_time TIMESTAMPTZ NOT NULL DEFAULT NOW();"
 
     /* Payment intents created by merchants */
     "CREATE TABLE IF NOT EXISTS payment_intents ("
@@ -754,7 +758,7 @@ int db_totp_enroll(DB *db, uint32_t merchant_id, uint32_t customer_id,
     static const char SQL[] =
         "INSERT INTO totp_enrollments (merchant_id, customer_id, secret) "
         "VALUES ($1, $2, $3) "
-        "ON CONFLICT (merchant_id, customer_id) DO UPDATE SET secret = EXCLUDED.secret";
+        "ON CONFLICT (merchant_id, customer_id) DO UPDATE SET secret = EXCLUDED.secret, update_time = NOW()";
 
     uint64_t mid = pg_int8((uint64_t)merchant_id);
     uint64_t cid = pg_int8((uint64_t)customer_id);
