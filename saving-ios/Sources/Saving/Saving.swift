@@ -38,6 +38,23 @@ public struct TransferOut {
     public let balance: UInt64
 }
 
+public struct PendingIntent {
+    public let requestID: UInt64
+    public let amount:    UInt64
+}
+
+public struct MerchantTransaction: Identifiable {
+    public let id = UUID()
+    public let customerID:   UInt32
+    public let amount:       UInt64
+    public let afterBalance: UInt64
+}
+
+public struct MerchantTransactionPage {
+    public let transactions: [MerchantTransaction]
+    public let nextCursor:   UInt64
+}
+
 public enum SavingEvent {
     case transferIn(SavingTransfer)
     case recoveryRequested(accountID: UInt32)
@@ -236,6 +253,67 @@ private actor SavingNetwork {
         guard ack.code == .ok else { throw WireError.serverError(ack.code) }
     }
 
+    func totpCharge(customerUID: UInt32, totpCode: UInt32, amount: UInt64) async throws {
+        let token = try requireToken()
+        let ack = try await conn.send(WireFrame.totpCharge(token: token, customerUID: customerUID,
+                                                            totpCode: totpCode, amount: amount,
+                                                            seq: nextSeq())).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+    }
+
+    func listIntents() async throws -> [PendingIntent] {
+        let token = try requireToken()
+        let ack = try await conn.send(WireFrame.listIntents(token: token, seq: nextSeq())).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+        let data = ack.data
+        guard !data.isEmpty else { return [] }
+        let count = Int(data[0])
+        return (0..<count).compactMap { i in
+            let base = 1 + i * 16
+            guard base + 16 <= data.count else { return nil }
+            return PendingIntent(requestID: data.readBigEndianUInt64(at: base),
+                                 amount:    data.readBigEndianUInt64(at: base + 8))
+        }
+    }
+
+    func confirmIntent(merchantID: UInt32, requestID: UInt64) async throws -> UInt64 {
+        let token = try requireToken()
+        let ack = try await conn.send(WireFrame.confirmIntent(token: token, merchantID: merchantID,
+                                                               requestID: requestID,
+                                                               seq: nextSeq())).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+        return ack.data.count >= 8 ? ack.data.readBigEndianUInt64(at: 0) : 0
+    }
+
+    func getMerchantInfo(merchantID: UInt32) async throws -> String {
+        let token = try requireToken()
+        let ack = try await conn.send(WireFrame.getMerchantInfo(token: token, merchantID: merchantID,
+                                                                 seq: nextSeq())).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+        return String(data: ack.data, encoding: .utf8) ?? ""
+    }
+
+    func merchantHistory(cursor: UInt64 = 0) async throws -> MerchantTransactionPage {
+        let token = try requireToken()
+        let ack = try await conn.send(WireFrame.getMerchantHistory(token: token, beforeID: cursor,
+                                                                    seq: nextSeq())).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+        let data = ack.data
+        guard !data.isEmpty else { return MerchantTransactionPage(transactions: [], nextCursor: 0) }
+        let count = Int(data[0])
+        let eSize = 4 + 8 + 8
+        let txs: [MerchantTransaction] = (0..<count).compactMap { i in
+            let base = 1 + i * eSize
+            guard base + eSize <= data.count else { return nil }
+            return MerchantTransaction(customerID:   data.readBigEndianUInt32(at: base),
+                                       amount:       data.readBigEndianUInt64(at: base + 4),
+                                       afterBalance: data.readBigEndianUInt64(at: base + 12))
+        }
+        let next = data.count >= 1 + count * eSize + 8
+                 ? data.readBigEndianUInt64(at: 1 + count * eSize) : 0
+        return MerchantTransactionPage(transactions: txs, nextCursor: next)
+    }
+
     func registerMerchant(name: String) async throws {
         let token = try requireToken()
         let ack = try await conn.send(WireFrame.registerMerchant(token: token, name: name,
@@ -379,6 +457,26 @@ public final class SavingClient: ObservableObject {
 
     public func enrollTotp(customerID: UInt32, secret: Data) async throws {
         try await net.enrollTotp(customerID: customerID, secret: secret)
+    }
+
+    public func totpCharge(customerUID: UInt32, totpCode: UInt32, amount: UInt64) async throws {
+        try await net.totpCharge(customerUID: customerUID, totpCode: totpCode, amount: amount)
+    }
+
+    public func listIntents() async throws -> [PendingIntent] {
+        try await net.listIntents()
+    }
+
+    public func confirmIntent(merchantID: UInt32, requestID: UInt64) async throws -> UInt64 {
+        try await net.confirmIntent(merchantID: merchantID, requestID: requestID)
+    }
+
+    public func getMerchantInfo(merchantID: UInt32) async throws -> String {
+        try await net.getMerchantInfo(merchantID: merchantID)
+    }
+
+    public func merchantHistory(cursor: UInt64 = 0) async throws -> MerchantTransactionPage {
+        try await net.merchantHistory(cursor: cursor)
     }
 
     public func registerMerchant(name: String) async throws {
