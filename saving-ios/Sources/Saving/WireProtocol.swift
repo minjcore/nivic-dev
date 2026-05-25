@@ -37,6 +37,7 @@ enum WireType: UInt8 {
     case evtGuardianAdd  = 0xC3
     case evtIntentPaid   = 0xC4
     case evtCashOut      = 0xC5
+    case evtTotpCharged  = 0xC6
 }
 
 enum WireCode: UInt8 {
@@ -348,6 +349,13 @@ struct EvtCashOutBody {
     let balance: UInt64
 }
 
+// EVT_TOTP_CHARGED  body: [merchant_id 4B][amount 8B][balance 8B]
+struct EvtTotpChargedBody {
+    let merchantID: UInt32
+    let amount:     UInt64
+    let balance:    UInt64
+}
+
 extension WireFrame {
 
     func parseLoginAck() throws -> LoginAckBody {
@@ -444,6 +452,15 @@ extension WireFrame {
             bankMID: body.readBigEndianUInt32(at: 0),
             amount:  body.readBigEndianUInt64(at: 4),
             balance: body.readBigEndianUInt64(at: 12)
+        )
+    }
+
+    func parseEvtTotpCharged() throws -> EvtTotpChargedBody {
+        guard body.count >= 20 else { throw WireError.badFrame("evtTotpCharged too short") }
+        return EvtTotpChargedBody(
+            merchantID: body.readBigEndianUInt32(at: 0),
+            amount:     body.readBigEndianUInt64(at: 4),
+            balance:    body.readBigEndianUInt64(at: 12)
         )
     }
 }

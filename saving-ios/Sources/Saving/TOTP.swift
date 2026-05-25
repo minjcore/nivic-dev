@@ -110,7 +110,8 @@ enum TOTPEnrollmentStore {
 class TOTPManager: ObservableObject {
     static let shared = TOTPManager()
 
-    @Published var code    = ""
+    @Published var code        = ""        // 32-char Base32 display token
+    @Published var numericCode: UInt32 = 0 // 6-digit RFC 6238 code for Wire frames
     @Published var remaining: Int = 0
 
     private let secretKey = "totp_secret_b32"
@@ -136,8 +137,9 @@ class TOTPManager: ObservableObject {
 
     private func refresh() {
         let now = Date()
-        code      = TOTP.code(secret: secret, at: now)
-        remaining = TOTP.secondsRemaining(at: now)
+        code        = TOTP.code(secret: secret, at: now)
+        numericCode = TOTP.generateCode(secret: secret, at: now)
+        remaining   = TOTP.secondsRemaining(at: now)
     }
 
     func enrollmentURL(uid: UInt32) -> String {
@@ -145,7 +147,7 @@ class TOTPManager: ObservableObject {
     }
 
     func paymentURL(uid: UInt32, amount: UInt64 = 0) -> String {
-        var url = "saving://totp-pay?uid=\(uid)&token=\(code)"
+        var url = "saving://totp-pay?uid=\(uid)&code=\(numericCode)"
         if amount > 0 { url += "&amount=\(amount)" }
         return url
     }

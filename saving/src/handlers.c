@@ -583,8 +583,9 @@ static void handle_pay_intent(DB *db, SessionTable *st, int fd, const WireFrame 
 }
 
 /* TOTP_CHARGE  body: [merchant_token 32B][customer_uid 4B][totp_code 4B][amount 8B]
- * Merchant-initiated (VIP only): verify customer TOTP then transfer customer→merchant.
- * Android merchant verifies Base32 token locally, then sends RFC 6238 6-digit code.
+ * Any registered merchant may charge a customer via their TOTP code.
+ * Merchant scans customer QR (saving://totp-pay?uid=X&code=6DIGITS&amount=A),
+ * then sends this frame with the 6-digit RFC 6238 code.
  */
 static void handle_totp_charge(DB *db, SessionTable *st, int fd, const WireFrame *f) {
     if (f->body_len < 48) {
@@ -593,8 +594,7 @@ static void handle_totp_charge(DB *db, SessionTable *st, int fd, const WireFrame
     uint32_t merchant_id = st_lookup(st, f->body);
     if (!merchant_id) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
 
-    /* Only VIP accounts (uid < 16_777_216) may use TOTP_CHARGE */
-    if (merchant_id >= 16777216) {
+    if (db_merchant_exists(db, merchant_id) != 1) {
         send_ack(fd, f->seq, WIRE_ERR_NOT_MERCHANT, NULL, 0); return;
     }
 
@@ -602,7 +602,6 @@ static void handle_totp_charge(DB *db, SessionTable *st, int fd, const WireFrame
     uint32_t totp_code   = rd32(f->body + 36);
     uint64_t amount      = rd64(f->body + 40);
 
-    /* Verify TOTP secret enrolled for this merchant↔customer pair */
     uint8_t secret[20];
     if (db_totp_get_secret(db, merchant_id, customer_id, secret) != 0) {
         send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND, NULL, 0); return;
@@ -613,7 +612,8 @@ static void handle_totp_charge(DB *db, SessionTable *st, int fd, const WireFrame
 
     uint32_t debit  = customer_id;
     uint32_t credit = merchant_id;
-    int rc = db_transfer(db, debit, credit, amount, 2, NULL, NULL);
+    int64_t after_cust = 0;
+    int rc = db_transfer(db, debit, credit, amount, 1, &after_cust, NULL);
     if (rc == -1) { send_ack(fd, f->seq, WIRE_ERR_LOW_BALANCE, NULL, 0); return; }
     if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
     if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
@@ -627,6 +627,16 @@ static void handle_totp_charge(DB *db, SessionTable *st, int fd, const WireFrame
         wr64(body + 12, (uint64_t)merch_bal);
         size_t n = wire_frame_encode(WIRE_EVT_TRANSFER_IN, 0, body, 20, evt, sizeof(evt));
         if (n > 0) registry_push(credit, evt, n);
+    }
+
+    /* Push EVT_TOTP_CHARGED to customer: [merchant_id 4B][amount 8B][balance 8B] */
+    {
+        uint8_t body[20], evt[WIRE_MAX_FRAME];
+        wr32(body,      credit);
+        wr64(body + 4,  amount);
+        wr64(body + 12, (uint64_t)after_cust);
+        size_t n = wire_frame_encode(WIRE_EVT_TOTP_CHARGED, 0, body, 20, evt, sizeof(evt));
+        if (n > 0) registry_push(debit, evt, n);
     }
 
     send_ack(fd, f->seq, WIRE_OK, NULL, 0);
