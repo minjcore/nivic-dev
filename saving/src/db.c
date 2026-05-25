@@ -56,11 +56,13 @@ static const char SCHEMA[] =
 
     /* Idempotency gate — ported from Java JdbcIdempotencyGate */
     "CREATE TABLE IF NOT EXISTS wallet_idempotency ("
-    "  mid        BIGINT NOT NULL,"
-    "  request_id BIGINT NOT NULL,"
-    "  order_id   BIGINT,"
+    "  mid         BIGINT      NOT NULL,"
+    "  request_id  BIGINT      NOT NULL,"
+    "  order_id    BIGINT,"
+    "  create_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
     "  PRIMARY KEY (mid, request_id)"
     ");"
+    "ALTER TABLE wallet_idempotency ADD COLUMN IF NOT EXISTS create_time TIMESTAMPTZ NOT NULL DEFAULT NOW();"
 
     /* Append-only ledger — ported from Java JdbcWalletLedger */
     "CREATE TABLE IF NOT EXISTS wallet_ledger ("
