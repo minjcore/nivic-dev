@@ -41,16 +41,20 @@ static const char SCHEMA[] =
 
     /* Guardian links */
     "CREATE TABLE IF NOT EXISTS guardians ("
-    "  account_id   BIGINT NOT NULL,"
-    "  guardian_id  BIGINT NOT NULL,"
+    "  account_id  BIGINT      NOT NULL,"
+    "  guardian_id BIGINT      NOT NULL,"
+    "  create_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
     "  PRIMARY KEY (account_id, guardian_id)"
     ");"
+    "ALTER TABLE guardians ADD COLUMN IF NOT EXISTS create_time TIMESTAMPTZ NOT NULL DEFAULT NOW();"
 
     /* Open device-switch requests */
     "CREATE TABLE IF NOT EXISTS recovery_requests ("
-    "  account_id  BIGINT PRIMARY KEY,"
-    "  approvals   TEXT   NOT NULL DEFAULT ''"  /* comma-separated guardian IDs */
+    "  account_id  BIGINT      PRIMARY KEY,"
+    "  approvals   TEXT        NOT NULL DEFAULT '',"  /* comma-separated guardian IDs */
+    "  create_time TIMESTAMPTZ NOT NULL DEFAULT NOW()"
     ");"
+    "ALTER TABLE recovery_requests ADD COLUMN IF NOT EXISTS create_time TIMESTAMPTZ NOT NULL DEFAULT NOW();"
 
     /* Idempotency gate — ported from Java JdbcIdempotencyGate */
     "CREATE TABLE IF NOT EXISTS wallet_idempotency ("
