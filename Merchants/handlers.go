@@ -116,6 +116,9 @@ func (h *handler) routes() http.Handler {
 	mux.HandleFunc("POST /admin/migrate-slugs",                    h.handleMigrateSlugs)
 	// Public pay endpoint (no merchant token needed — QR is Ed25519-signed)
 	mux.HandleFunc("POST /public/{mid}/order",                     h.handlePublicCreateOrder)
+	// Universal pay page — Shopify model: one URL, all platforms
+	mux.HandleFunc("GET /pay/{order_id}",                          h.handlePayPage)
+	mux.HandleFunc("GET /pay/{order_id}/status",                   h.handlePayStatus)
 
 	// Middleware: merchant public page for *.nivic.dev subdomains and custom domains
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1044,9 +1047,15 @@ func (h *handler) handlePublicCreateOrder(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		jsonErr(w, 500, "encode failed"); return
 	}
+	scheme := "https"
+	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
+		scheme = "http"
+	}
+	payURL := scheme + "://" + r.Host + "/pay/" + orderID
 	jsonOK(w, map[string]any{
 		"order_id": orderID,
 		"qr_url":   "saving://pay?pr=" + prB64,
+		"pay_url":  payURL,
 	})
 }
 
@@ -1181,6 +1190,47 @@ func jsonErr(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+// GET /pay/{order_id} — universal pay page (Shopify model)
+func (h *handler) handlePayPage(w http.ResponseWriter, r *http.Request) {
+	orderID := r.PathValue("order_id")
+	o, err := h.store.GetOrder(orderID)
+	if err != nil || o == nil {
+		http.Error(w, "Không tìm thấy đơn hàng", 404)
+		return
+	}
+	m, err := h.store.Get(o.MID)
+	if err != nil || m == nil {
+		http.Error(w, "Merchant not found", 404)
+		return
+	}
+	pr, err := buildPaymentRequest(m, orderID, o.Amount)
+	if err != nil {
+		http.Error(w, "error", 500)
+		return
+	}
+	prB64, _ := prToBase64URL(pr)
+	deepLink := "saving://pay?pr=" + prB64
+	renderPayPage(w, payPageData{
+		OrderID:      orderID,
+		MerchantName: m.Name,
+		Amount:       o.Amount,
+		Note:         o.Note,
+		DeepLink:     deepLink,
+		Status:       o.Status,
+	})
+}
+
+// GET /pay/{order_id}/status — poll for payment completion
+func (h *handler) handlePayStatus(w http.ResponseWriter, r *http.Request) {
+	orderID := r.PathValue("order_id")
+	o, err := h.store.GetOrder(orderID)
+	if err != nil || o == nil {
+		jsonErr(w, 404, "not found")
+		return
+	}
+	jsonOK(w, map[string]any{"status": o.Status})
 }
 
 func formatVND(amount int64) string {

@@ -147,14 +147,18 @@ async function createOrder() {
     const data = await res.json();
     if (!res.ok) { alert(data.error || 'Lỗi tạo đơn'); return; }
 
+    const payUrl = data.pay_url;
     document.getElementById('qr-amount-text').textContent = fmtVND(amount);
     document.getElementById('qr-note-text').textContent = note || '';
+    document.getElementById('pay-link').href = payUrl;
+    document.getElementById('pay-link').textContent = payUrl;
     document.getElementById('qr-canvas').innerHTML = '';
     new QRCode(document.getElementById('qr-canvas'), {
-      text: data.qr_url, width: 220, height: 220,
+      text: payUrl, width: 220, height: 220,
       colorDark: '#4f46e5', colorLight: '#fff',
       correctLevel: QRCode.CorrectLevel.M
     });
+    window._payUrl = payUrl;
     document.getElementById('pay-form').style.display = 'none';
     document.getElementById('qr-section').classList.add('show');
   } catch(e) {
@@ -199,4 +203,136 @@ func renderMerchantPage(w http.ResponseWriter, m *Merchant, items []MenuItem) {
 		Merchant  *Merchant
 		MenuItems []MenuItem
 	}{m, items})
+}
+
+// ─── Universal pay page ───────────────────────────────────────────────────────
+
+type payPageData struct {
+	OrderID      string
+	MerchantName string
+	Amount       uint64
+	Note         string
+	DeepLink     string
+	Status       string
+}
+
+var payPageTmpl = template.Must(template.New("pay").Funcs(template.FuncMap{
+	"fmtVND": func(v uint64) string {
+		s := fmt.Sprintf("%d", v)
+		var b strings.Builder
+		n := len(s)
+		for i, c := range s {
+			if i > 0 && (n-i)%3 == 0 {
+				b.WriteByte('.')
+			}
+			b.WriteRune(c)
+		}
+		b.WriteString("₫")
+		return b.String()
+	},
+}).Parse(`<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Thanh toán {{fmtVND .Amount}} — {{.MerchantName}}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0a;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+.card{width:100%;max-width:380px;background:#111;border-radius:24px;padding:32px 28px;border:1px solid #222;text-align:center}
+.merchant{font-size:.85rem;color:#666;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px}
+.amount{font-size:2.8rem;font-weight:900;letter-spacing:-.02em;margin-bottom:4px}
+.note{font-size:.9rem;color:#555;margin-bottom:32px;min-height:1.2em}
+.divider{border:none;border-top:1px solid #1e1e1e;margin:24px 0}
+.btn-pay{display:block;width:100%;padding:16px;background:#fff;color:#000;border:none;border-radius:14px;font-size:1rem;font-weight:700;cursor:pointer;text-decoration:none;letter-spacing:.02em;transition:opacity .15s}
+.btn-pay:hover{opacity:.88}
+.btn-pay:active{opacity:.75}
+.btn-qr{display:block;margin-top:12px;padding:12px;background:transparent;color:#444;border:1px solid #222;border-radius:14px;font-size:.9rem;cursor:pointer;width:100%;text-align:center;transition:border-color .15s}
+.btn-qr:hover{border-color:#444;color:#888}
+.qr-wrap{display:none;margin-top:24px}
+.qr-wrap canvas{border-radius:12px;border:6px solid #fff}
+.qr-hint{font-size:.78rem;color:#555;margin-top:10px}
+.status-paid{display:flex;flex-direction:column;align-items:center;gap:12px}
+.check{font-size:3.5rem}
+.status-paid h2{font-size:1.3rem;font-weight:700}
+.status-paid p{color:#666;font-size:.9rem}
+.badge{display:inline-flex;align-items:center;gap:6px;margin-bottom:24px;padding:5px 14px;border:1px solid #222;border-radius:999px;font-size:.72rem;color:#555;letter-spacing:.04em}
+.badge-dot{width:6px;height:6px;background:#4ade80;border-radius:50%}
+</style>
+</head>
+<body>
+
+<div class="card">
+{{if eq .Status "paid"}}
+  <div class="status-paid">
+    <div class="check">✅</div>
+    <h2>Đã thanh toán</h2>
+    <p>Đơn hàng đã được xác nhận thành công</p>
+  </div>
+{{else}}
+  <div class="badge"><span class="badge-dot"></span>Saving · Thanh toán an toàn</div>
+  <div class="merchant">{{.MerchantName}}</div>
+  <div class="amount">{{fmtVND .Amount}}</div>
+  <div class="note">{{if .Note}}{{.Note}}{{end}}</div>
+
+  <a class="btn-pay" id="btn-open" href="{{.DeepLink}}">Mở trong Saving</a>
+  <button class="btn-qr" onclick="showQR()">Hiện mã QR</button>
+
+  <div class="qr-wrap" id="qr-wrap">
+    <div class="divider"></div>
+    <canvas id="qr-canvas"></canvas>
+    <div class="qr-hint">Quét bằng app Saving để thanh toán</div>
+  </div>
+{{end}}
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous"></script>
+<script>
+var DEEPLINK = {{.DeepLink | js}};
+var ORDER_ID = {{.OrderID | js}};
+var paid     = {{eq .Status "paid"}};
+
+// Mobile: auto-trigger deeplink on load
+var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+if (!paid && isMobile) {
+  var hidden = false;
+  document.addEventListener('visibilitychange', function() { hidden = document.hidden; });
+  setTimeout(function() { window.location.href = DEEPLINK; }, 400);
+  setTimeout(function() {
+    if (!hidden) showQR(); // app not installed or user dismissed
+  }, 2200);
+}
+
+function showQR() {
+  var wrap = document.getElementById('qr-wrap');
+  if (wrap.style.display === 'block') return;
+  wrap.style.display = 'block';
+  new QRCode(document.getElementById('qr-canvas'), {
+    text: DEEPLINK, width: 220, height: 220,
+    colorDark: '#000', colorLight: '#fff',
+    correctLevel: QRCode.CorrectLevel.M
+  });
+}
+
+// Poll for payment status every 3s
+if (!paid) {
+  var poll = setInterval(async function() {
+    try {
+      var r = await fetch('/pay/' + ORDER_ID + '/status');
+      var d = await r.json();
+      if (d.status === 'paid') {
+        clearInterval(poll);
+        location.reload();
+      }
+    } catch(_) {}
+  }, 3000);
+}
+</script>
+</body>
+</html>
+`))
+
+func renderPayPage(w http.ResponseWriter, d payPageData) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = payPageTmpl.Execute(w, d)
 }
