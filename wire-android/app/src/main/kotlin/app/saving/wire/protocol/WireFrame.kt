@@ -22,6 +22,7 @@ object WireCmd {
     const val ENROLL_TOTP:         Byte = 0x22.toByte()
     const val REGISTER_MERCHANT:   Byte = 0x23.toByte()
     const val TOTP_CHARGE:         Byte = 0x25.toByte()
+    const val CONFIRM_INTENT:      Byte = 0x29.toByte()
 
     const val PONG:              Byte = 0x80.toByte()
     const val LOGIN_ACK:         Byte = 0x81.toByte()
@@ -49,6 +50,9 @@ object WireCode {
     const val ERR_NEED_GUARDIANS:  Byte = 0x0B
     const val ERR_TOTP_INVALID:    Byte = 0x0C
     const val ERR_INTENT_SETTLED:  Byte = 0x0D
+    const val ERR_NOT_MERCHANT:    Byte = 0x0E
+    const val ERR_SYSTEM_OFFLINE:  Byte = 0x0F
+    const val ERR_MAINTENANCE:     Byte = 0x10
     const val ERR_INTERNAL:        Byte = 0xFF.toByte()
 }
 
@@ -159,6 +163,11 @@ fun WireFrame.Companion.payIntent(token: ByteArray, merchantId: Long, requestId:
                                    totpCode: Int, seq: Int) =
     WireFrame(WireCmd.PAY_INTENT, seq,
         token + merchantId.toUInt32Bytes() + requestId.toInt64Bytes() + totpCode.toLong().toUInt32Bytes())
+
+/* CONFIRM_INTENT body: [customer_token 32B][merchant_id 4B][request_id 8B] */
+fun WireFrame.Companion.confirmIntent(token: ByteArray, merchantId: Long, requestId: Long, seq: Int) =
+    WireFrame(WireCmd.CONFIRM_INTENT, seq,
+        token + merchantId.toUInt32Bytes() + requestId.toInt64Bytes())
 
 // ─── Body parsers ──────────────────────────────────────────────────────────
 

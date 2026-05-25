@@ -211,20 +211,23 @@ private fun MerchantDashboardView(
     var stats           by remember { mutableStateOf<MerchantStats?>(null) }
     var orders          by remember { mutableStateOf<List<MerchantOrder>>(emptyList()) }
     var members         by remember { mutableStateOf<List<LoyaltyMember>>(emptyList()) }
+    var menuItems       by remember { mutableStateOf<List<app.saving.wire.data.MenuItem>>(emptyList()) }
     var showCreateOrder  by remember { mutableStateOf(false) }
     var showLoyalty      by remember { mutableStateOf(false) }
     var showBankSetup    by remember { mutableStateOf(false) }
     var showChatInbox    by remember { mutableStateOf(false) }
+    var showAddMenuItem  by remember { mutableStateOf(false) }
     var chatCustomerUid  by remember { mutableLongStateOf(0L) }
     var inbox            by remember { mutableStateOf<List<app.saving.wire.data.ChatInboxItem>>(emptyList()) }
     var toast           by remember { mutableStateOf<String?>(null) }
     val scope           = rememberCoroutineScope()
 
     suspend fun load() {
-        runCatching { stats   = client.stats(uid, token) }
-        runCatching { orders  = client.listOrders(uid, token) }
-        runCatching { members = client.loyaltyMembers(uid, token) }
-        runCatching { inbox   = client.getInbox(uid, token) }
+        runCatching { stats     = client.stats(uid, token) }
+        runCatching { orders    = client.listOrders(uid, token) }
+        runCatching { members   = client.loyaltyMembers(uid, token) }
+        runCatching { inbox     = client.getInbox(uid, token) }
+        runCatching { menuItems = client.listMenu(uid) }
     }
 
     LaunchedEffect(Unit) {
@@ -374,7 +377,40 @@ private fun MerchantDashboardView(
                 }
             }
 
+            // ── Menu ─────────────────────────────────────────────────────────
+            item {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment     = Alignment.CenterVertically
+                ) {
+                    Text("Menu", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    IconButton(onClick = { showAddMenuItem = true }) {
+                        Icon(Icons.Default.Add, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
+            if (menuItems.isEmpty()) {
+                item {
+                    Text("Chưa có món nào — nhấn + để thêm",
+                        color = Color.Gray, fontSize = 13.sp,
+                        modifier = Modifier.padding(horizontal = 20.dp))
+                }
+            } else {
+                items(menuItems, key = { it.id }) { item ->
+                    MenuItemRow(item) {
+                        scope.launch {
+                            runCatching { client.deleteMenuItem(uid, token, item.id) }
+                            runCatching { menuItems = client.listMenu(uid) }
+                        }
+                    }
+                }
+            }
+            item { HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(vertical = 8.dp)) }
+
             // ── Orders ───────────────────────────────────────────────────────
+            item { Text("Đơn hàng", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) }
             if (orders.isEmpty()) {
                 item {
                     Text("Chưa có đơn hàng nào",
@@ -446,6 +482,83 @@ private fun MerchantDashboardView(
             onDismiss       = { chatCustomerUid = 0L; scope.launch { load() } }
         )
     }
+    if (showAddMenuItem) {
+        AddMenuItemDialog(
+            onDismiss = { showAddMenuItem = false },
+            onAdd     = { itemName, price, desc ->
+                scope.launch {
+                    runCatching { client.addMenuItem(uid, token, itemName, price, desc) }
+                    runCatching { menuItems = client.listMenu(uid) }
+                    showAddMenuItem = false
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun MenuItemRow(item: app.saving.wire.data.MenuItem, onDelete: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment     = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(item.name, color = Color.White, fontSize = 14.sp)
+            if (item.description.isNotEmpty())
+                Text(item.description, color = Color.Gray, fontSize = 11.sp, maxLines = 1)
+        }
+        Text("${vndFmt(item.price)} ₫", color = Color.White, fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp))
+        IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+            Icon(Icons.Default.Delete, null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+        }
+    }
+    HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
+}
+
+@Composable
+private fun AddMenuItemDialog(onDismiss: () -> Unit, onAdd: (String, Long, String) -> Unit) {
+    var name  by remember { mutableStateOf("") }
+    var price by remember { mutableStateOf("") }
+    var desc  by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor   = Color(0xFF1A1A1A),
+        title            = { Text("Thêm món", color = Color.White) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(value = name, onValueChange = { name = it },
+                    label = { Text("Tên món") }, modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White, focusedBorderColor = Color.White,
+                        unfocusedBorderColor = Color.Gray, focusedLabelColor = Color.White,
+                        unfocusedLabelColor = Color.Gray))
+                OutlinedTextField(value = price, onValueChange = { price = it.filter { c -> c.isDigit() } },
+                    label = { Text("Giá (₫)") }, modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White, focusedBorderColor = Color.White,
+                        unfocusedBorderColor = Color.Gray, focusedLabelColor = Color.White,
+                        unfocusedLabelColor = Color.Gray))
+                OutlinedTextField(value = desc, onValueChange = { desc = it },
+                    label = { Text("Mô tả (tuỳ chọn)") }, modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White, focusedBorderColor = Color.White,
+                        unfocusedBorderColor = Color.Gray, focusedLabelColor = Color.White,
+                        unfocusedLabelColor = Color.Gray))
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick  = { price.toLongOrNull()?.let { onAdd(name.trim(), it, desc.trim()) } },
+                enabled  = name.isNotBlank() && price.toLongOrNull() != null,
+                colors   = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
+            ) { Text("Thêm") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Huỷ", color = Color.Gray) } }
+    )
 }
 
 @Composable

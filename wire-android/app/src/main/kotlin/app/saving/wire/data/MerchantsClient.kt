@@ -31,6 +31,15 @@ data class ChatMessage(
     val createdAt: Long
 )
 
+data class MenuItem(
+    val id:          Long,
+    val mid:         Long,
+    val name:        String,
+    val price:       Long,
+    val description: String = "",
+    val sortOrder:   Int    = 0,
+)
+
 data class ChatInboxItem(
     val uid:         Long,
     val lastMessage: String,
@@ -175,6 +184,38 @@ class MerchantsClient(private val baseURL: String = "https://saving.nivic.dev") 
             val resp = readResponse(conn)
             JSONObject(resp).optInt("points_awarded", 0)
         }
+
+    suspend fun getMerchant(mid: Long): MerchantInfo = withContext(Dispatchers.IO) {
+        val j = JSONObject(readResponse(get("$baseURL/merchants/$mid")))
+        MerchantInfo(j.getLong("mid"), j.getString("name"), j.optString("address", ""))
+    }
+
+    suspend fun listMenu(mid: Long): List<MenuItem> = withContext(Dispatchers.IO) {
+        val arr = JSONArray(readResponse(get("$baseURL/merchants/$mid/menu")))
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            MenuItem(o.getLong("id"), o.getLong("mid"), o.getString("name"),
+                o.getLong("price"), o.optString("description", ""), o.optInt("sort_order", 0))
+        }
+    }
+
+    suspend fun addMenuItem(mid: Long, token: String, name: String, price: Long, description: String = ""): Long =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().apply {
+                put("name", name); put("price", price)
+                if (description.isNotEmpty()) put("description", description)
+            }.toString()
+            val conn = post("$baseURL/merchants/$mid/menu", body, token)
+            JSONObject(readResponse(conn)).getLong("id")
+        }
+
+    suspend fun deleteMenuItem(mid: Long, token: String, itemId: Long) = withContext(Dispatchers.IO) {
+        val conn = URL("$baseURL/merchants/$mid/menu/$itemId").openConnection() as HttpURLConnection
+        conn.requestMethod = "DELETE"
+        conn.connectTimeout = 10_000; conn.readTimeout = 10_000
+        conn.setRequestProperty("X-Merchant-Token", token)
+        conn.responseCode
+    }
 
     private fun readResponse(conn: HttpURLConnection): String {
         val code = conn.responseCode

@@ -7,8 +7,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import app.saving.wire.util.vndFormatted
@@ -380,69 +383,154 @@ private fun IntentPayContent(
     payload:         IntentPayload,
     onDone:          () -> Unit,
 ) {
-    var error   by remember { mutableStateOf<String?>(null) }
-    var loading by remember { mutableStateOf(false) }
-    var success by remember { mutableStateOf(false) }
-    val scope   = rememberCoroutineScope()
+    var error        by remember { mutableStateOf<String?>(null) }
+    var loading      by remember { mutableStateOf(false) }
+    var success      by remember { mutableStateOf(false) }
+    var mcName       by remember { mutableStateOf("") }
+    var mcAddress    by remember { mutableStateOf("") }
+    var menuItems    by remember { mutableStateOf<List<app.saving.wire.data.MenuItem>>(emptyList()) }
+    val hasTOTP      = prefs.getString("own_totp_secret", null) != null
+    val scope        = rememberCoroutineScope()
 
-    Column(
-        modifier            = Modifier.fillMaxWidth().padding(24.dp),
+    LaunchedEffect(payload.mid) {
+        runCatching {
+            val info = merchantsClient.getMerchant(payload.mid)
+            mcName = info.name; mcAddress = info.address
+        }
+        runCatching { menuItems = merchantsClient.listMenu(payload.mid) }
+    }
+
+    androidx.compose.foundation.lazy.LazyColumn(
+        modifier            = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding      = androidx.compose.foundation.layout.PaddingValues(vertical = 16.dp)
     ) {
-        Icon(Icons.Default.Store, null, modifier = Modifier.size(64.dp),
-            tint = Color.White.copy(alpha = 0.85f))
-
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Người bán", color = Color.Gray, fontSize = 12.sp)
-            Text("#${payload.mid}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+        item {
+            Column(horizontalAlignment = Alignment.CenterHorizontally,
+                   verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Icon(Icons.Default.Store, null, modifier = Modifier.size(56.dp),
+                    tint = Color.White.copy(alpha = 0.85f))
+                if (mcName.isNotEmpty())
+                    Text(mcName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                else
+                    Text("#${payload.mid}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                if (mcAddress.isNotEmpty())
+                    Text(mcAddress, color = Color.Gray, fontSize = 12.sp)
+            }
         }
 
-        Text(payload.amount.vndFormatted(), color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Black)
-
-        error?.let { Text(it, color = Color.Red, fontSize = 13.sp) }
-
-        if (success) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.CheckCircleOutline, null, tint = Color(0xFF4CAF50))
-                Text("Thanh toán thành công!", color = Color(0xFF4CAF50), fontWeight = FontWeight.SemiBold)
+        if (menuItems.isNotEmpty()) {
+            item {
+                Text("Menu", color = Color.Gray, fontSize = 12.sp,
+                    modifier = Modifier.fillMaxWidth())
             }
-        } else {
-            WirePrimaryButton(title = "XÁC NHẬN THANH TOÁN", loading = loading, enabled = !loading) {
-                scope.launch {
-                    /* Customer pays using their own TOTP secret (enrolled with merchant) */
-                    val ownB32 = prefs.getString("own_totp_secret", null)
-                    if (ownB32 == null) {
-                        error = "Chưa đăng ký TOTP với shop này"
-                        return@launch
+            items(menuItems) { item ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Column {
+                        Text(item.name, color = Color.White, fontSize = 14.sp)
+                        if (item.description.isNotEmpty())
+                            Text(item.description, color = Color.Gray, fontSize = 11.sp)
                     }
-                    loading = true; error = null
-                    try {
-                        val secret = base32Decode(ownB32)
-                        val code = TOTP.generateCode(secret)
-                        client.payIntent(payload.mid, payload.requestId, code)
-                        payload.orderID?.let { oid -> merchantsClient.confirmPaid(oid, accountId.toInt()) }
-                        success = true
-                        kotlinx.coroutines.delay(1500)
-                        onDone()
-                    } catch (e: WireError) {
-                        error = when (e.code) {
-                            WireCode.ERR_LOW_BALANCE    -> "Không đủ số dư"
-                            WireCode.ERR_TOTP_INVALID   -> "Mã TOTP không hợp lệ"
-                            WireCode.ERR_INTENT_SETTLED -> "Đơn đã thanh toán rồi"
-                            WireCode.ERR_NOT_FOUND      -> "Chưa đăng ký TOTP với shop này"
-                            else -> "Lỗi: 0x${e.code.toInt().and(0xFF).toString(16)}"
-                        }
-                    } catch (e: Exception) {
-                        error = e.message
-                    } finally {
-                        loading = false
-                    }
+                    Text("${item.price / 1000}k ₫", color = Color.Gray, fontSize = 13.sp)
+                }
+                HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
+            }
+        }
+
+        item {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape    = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                color    = Color.White.copy(alpha = 0.06f)
+            ) {
+                Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                       verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Tổng thanh toán", color = Color.Gray, fontSize = 12.sp)
+                    Text(payload.amount.vndFormatted(), color = Color.White,
+                        fontSize = 28.sp, fontWeight = FontWeight.Black)
                 }
             }
         }
-        Spacer(Modifier.height(8.dp))
+
+        error?.let { msg ->
+            item { Text(msg, color = Color.Red, fontSize = 13.sp) }
+        }
+
+        item {
+            if (success) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.CheckCircleOutline, null, tint = Color(0xFF4CAF50))
+                    Text("Thanh toán thành công!", color = Color(0xFF4CAF50), fontWeight = FontWeight.SemiBold)
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    WirePrimaryButton(title = "XÁC NHẬN THANH TOÁN", loading = loading, enabled = !loading) {
+                        scope.launch {
+                            loading = true; error = null
+                            try {
+                                client.confirmIntent(payload.mid, payload.requestId)
+                                payload.orderID?.let { oid -> merchantsClient.confirmPaid(oid, accountId.toInt()) }
+                                success = true
+                                kotlinx.coroutines.delay(1500)
+                                onDone()
+                            } catch (e: WireError) {
+                                error = when (e.code) {
+                                    WireCode.ERR_LOW_BALANCE    -> "Không đủ số dư"
+                                    WireCode.ERR_INTENT_SETTLED -> "Đơn đã thanh toán rồi"
+                                    WireCode.ERR_NOT_FOUND      -> "Không tìm thấy đơn hàng"
+                                    WireCode.ERR_SYSTEM_OFFLINE,
+                                    WireCode.ERR_MAINTENANCE    -> "Hệ thống tạm thời không khả dụng"
+                                    else -> "Lỗi: 0x${e.code.toInt().and(0xFF).toString(16)}"
+                                }
+                            } catch (e: Exception) {
+                                error = e.message
+                            } finally {
+                                loading = false
+                            }
+                        }
+                    }
+                    if (hasTOTP) {
+                        OutlinedButton(
+                            onClick  = {
+                                scope.launch {
+                                    loading = true; error = null
+                                    try {
+                                        val b32 = prefs.getString("own_totp_secret", null)!!
+                                        val code = TOTP.generateCode(base32Decode(b32))
+                                        client.payIntent(payload.mid, payload.requestId, code)
+                                        payload.orderID?.let { oid -> merchantsClient.confirmPaid(oid, accountId.toInt()) }
+                                        success = true
+                                        kotlinx.coroutines.delay(1500)
+                                        onDone()
+                                    } catch (e: WireError) {
+                                        error = when (e.code) {
+                                            WireCode.ERR_LOW_BALANCE    -> "Không đủ số dư"
+                                            WireCode.ERR_TOTP_INVALID   -> "Mã TOTP không hợp lệ"
+                                            WireCode.ERR_INTENT_SETTLED -> "Đơn đã thanh toán rồi"
+                                            else -> "Lỗi TOTP: 0x${e.code.toInt().and(0xFF).toString(16)}"
+                                        }
+                                    } catch (e: Exception) {
+                                        error = e.message
+                                    } finally {
+                                        loading = false
+                                    }
+                                }
+                            },
+                            enabled  = !loading,
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            shape    = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                            border   = androidx.compose.foundation.BorderStroke(1.dp, Color.Gray)
+                        ) { Text("Thanh toán TOTP", color = Color.Gray, fontWeight = FontWeight.Medium) }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
     }
 }
 

@@ -135,6 +135,15 @@ class SavingClient(
         if (ack.code != WireCode.OK) throw WireError(ack.code)
     }
 
+    suspend fun confirmIntent(merchantId: Long, requestId: Long): Long {
+        val ack = conn.send(
+            WireFrame.confirmIntent(requireToken(), merchantId, requestId, conn.nextSeq())
+        ).parseAck()
+        if (ack.code != WireCode.OK) throw WireError(ack.code)
+        val d = ack.data
+        return if (d.size >= 16) d.getLong(8) else 0L   // after_balance at offset 8
+    }
+
     // ─── History ─────────────────────────────────────────────────────────────
 
     suspend fun history(): List<Transaction> {
