@@ -35,9 +35,11 @@ static const char SCHEMA[] =
     "CREATE TABLE IF NOT EXISTS accounts ("
     "  id            BIGINT PRIMARY KEY,"
     "  password_hash BYTEA  NOT NULL,"
-    "  balance       BIGINT NOT NULL DEFAULT 0,"
-    "  create_time    TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+    "  balance      BIGINT      NOT NULL DEFAULT 0,"
+    "  create_time  TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+    "  update_time  TIMESTAMPTZ NOT NULL DEFAULT NOW()"
     ");"
+    "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS update_time TIMESTAMPTZ NOT NULL DEFAULT NOW();"
 
     /* Guardian links */
     "CREATE TABLE IF NOT EXISTS guardians ("
