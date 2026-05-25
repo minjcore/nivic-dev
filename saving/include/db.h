@@ -61,7 +61,7 @@ int db_account_balance_detail(DB *db, uint32_t id, BalanceDetail *out);
  *
  *  Balance is the running SUM of the transfers log (no accounts.balance write).
  *  Inserts a new transfers row atomically if balance is sufficient.
- *  type: 0=transfer, 1=payment, 2=cash_in, 3=cash_out
+ *  type: 0=C2C (transfer), 1=C2M (pay intent/TOTP charge), 2=M2C (cash in), 3=C2B (cash out)
  *  Returns:
  *    0  = success
  *   -1  = sender insufficient balance
@@ -110,8 +110,9 @@ int db_guardian_list(DB *db, uint32_t account_id, uint32_t ids[3]);
 /* ─── Transfer history ───────────────────────────────────────────────────── */
 
 typedef struct {
-    int      direction;    /* 0=transfer_sent, 1=transfer_recv, 2=payment_sent,
-                              3=payment_recv,  4=cash_in,       5=cash_out */
+    int      direction;    /* 0=C2C_sent, 1=C2C_recv,
+                              2=C2M_sent, 3=C2M_recv,
+                              4=M2C_recv, 5=C2B_sent */
     uint32_t counterpart;
     uint64_t amount;
     int64_t  after_balance; /* running balance after this tx */

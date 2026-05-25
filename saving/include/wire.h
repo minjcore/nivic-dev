@@ -48,6 +48,7 @@
  *    0x15  RECOVERY_APPROVE body: [ token 32B ][ target_id 4B ]
  *    0x16  GET_HISTORY     body: [ token 32B ]
  *                        ACK extra: [ count 1B ][ dir 1B | counterpart 4B | amount 8B | after_bal 8B ]xN
+ *                        dir: 0=C2C_sent 1=C2C_recv 2=C2M_sent 3=C2M_recv 4=M2C_recv 5=C2B_sent
  *    0x20  CREATE_INTENT   body: [ merchant_token 32B ][ request_id 8B ][ order_id 8B ][ amount 8B ][ gateway_order_id N ]
  *    0x21  PAY_INTENT      body: [ customer_token 32B ][ merchant_id 4B ][ request_id 8B ][ totp_code 4B ]
  *    0x22  ENROLL_TOTP     body: [ merchant_token 32B ][ customer_id 4B ][ secret 20B ]
