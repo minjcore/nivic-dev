@@ -19,6 +19,11 @@ enum WireType: UInt8 {
     case payIntent         = 0x21
     case enrollTotp        = 0x22
     case registerMerchant  = 0x23
+    case cashIn            = 0x24
+    case totpCharge        = 0x25
+    case cashOut           = 0x26
+    case getMerchantInfo   = 0x27
+    case listIntents       = 0x28
 
     // Server → Client (responses)
     case pong            = 0x80
@@ -30,6 +35,8 @@ enum WireType: UInt8 {
     case evtRecoveryReq  = 0xC1
     case evtRecoveryOK   = 0xC2
     case evtGuardianAdd  = 0xC3
+    case evtIntentPaid   = 0xC4
+    case evtCashOut      = 0xC5
 }
 
 enum WireCode: UInt8 {
@@ -48,6 +55,7 @@ enum WireCode: UInt8 {
     case errTotpInvalid    = 0x0C
     case errIntentSettled  = 0x0D
     case errNotMerchant    = 0x0E
+    case errSystemOffline  = 0x0F
     case errInternal       = 0xFF
 }
 
@@ -222,6 +230,52 @@ extension WireFrame {
         body.append(Data(name.utf8))
         return WireFrame(type: .registerMerchant, seq: seq, body: body)
     }
+
+    /* CASH_IN  body: [bank_token 32B][to_uid 4B][amount 8B][topup_id N bytes] */
+    static func cashIn(token: Data, toUID: UInt32, amount: UInt64,
+                       topupID: String, seq: UInt32) -> WireFrame {
+        var body = Data()
+        body.append(token)
+        body.appendBigEndian(toUID)
+        body.appendBigEndian(amount)
+        body.append(Data(topupID.utf8))
+        return WireFrame(type: .cashIn, seq: seq, body: body)
+    }
+
+    /* TOTP_CHARGE  body: [merchant_token 32B][customer_uid 4B][totp_code 4B][amount 8B] */
+    static func totpCharge(token: Data, customerUID: UInt32, totpCode: UInt32,
+                           amount: UInt64, seq: UInt32) -> WireFrame {
+        var body = Data()
+        body.append(token)
+        body.appendBigEndian(customerUID)
+        body.appendBigEndian(totpCode)
+        body.appendBigEndian(amount)
+        return WireFrame(type: .totpCharge, seq: seq, body: body)
+    }
+
+    /* CASH_OUT  body: [bank_token 32B][from_uid 4B][amount 8B][cashout_id N bytes] */
+    static func cashOut(token: Data, fromUID: UInt32, amount: UInt64,
+                        cashoutID: String, seq: UInt32) -> WireFrame {
+        var body = Data()
+        body.append(token)
+        body.appendBigEndian(fromUID)
+        body.appendBigEndian(amount)
+        body.append(Data(cashoutID.utf8))
+        return WireFrame(type: .cashOut, seq: seq, body: body)
+    }
+
+    /* GET_MERCHANT_INFO  body: [token 32B][merchant_id 4B] */
+    static func getMerchantInfo(token: Data, merchantID: UInt32, seq: UInt32) -> WireFrame {
+        var body = Data()
+        body.append(token)
+        body.appendBigEndian(merchantID)
+        return WireFrame(type: .getMerchantInfo, seq: seq, body: body)
+    }
+
+    /* LIST_INTENTS  body: [merchant_token 32B] */
+    static func listIntents(token: Data, seq: UInt32) -> WireFrame {
+        WireFrame(type: .listIntents, seq: seq, body: token)
+    }
 }
 
 // ─── Body parsers (server → client) ───────────────────────────────────────
@@ -238,6 +292,50 @@ struct AckBody {
 
 struct EvtTransferInBody {
     let fromID:  UInt32
+    let amount:  UInt64
+    let balance: UInt64
+}
+
+// GET_BALANCE ACK extra: [balance 8B][pending 8B][available 8B][version 8B]
+struct BalanceDetail {
+    let balance:   Int64
+    let pending:   Int64
+    let available: Int64
+    let version:   Int64
+}
+
+// GET_HISTORY ACK entry: [dir 1B][counterpart 4B][amount 8B][after_balance 8B]
+struct TxEntry {
+    enum Direction: UInt8 {
+        case c2cSent  = 0
+        case c2cRecv  = 1
+        case c2mSent  = 2
+        case c2mRecv  = 3
+        case m2cRecv  = 4
+        case c2bSent  = 5
+    }
+    let direction:    Direction
+    let counterpart:  UInt32
+    let amount:       UInt64
+    let afterBalance: Int64
+}
+
+// LIST_INTENTS ACK entry: [request_id 8B][amount 8B]
+struct IntentSummary {
+    let requestID: UInt64
+    let amount:    UInt64
+}
+
+// EVT_INTENT_PAID  body: [request_id 8B][customer_id 4B][amount 8B]
+struct EvtIntentPaidBody {
+    let requestID:  UInt64
+    let customerID: UInt32
+    let amount:     UInt64
+}
+
+// EVT_CASH_OUT  body: [bank_mid 4B][amount 8B][balance 8B]
+struct EvtCashOutBody {
+    let bankMID: UInt32
     let amount:  UInt64
     let balance: UInt64
 }
@@ -262,6 +360,71 @@ extension WireFrame {
         guard body.count >= 20 else { throw WireError.badFrame("evtTransferIn too short") }
         return EvtTransferInBody(
             fromID:  body.readBigEndianUInt32(at: 0),
+            amount:  body.readBigEndianUInt64(at: 4),
+            balance: body.readBigEndianUInt64(at: 12)
+        )
+    }
+
+    // GET_BALANCE ACK extra: [balance 8B][pending 8B][available 8B][version 8B]
+    func parseBalanceDetail() throws -> BalanceDetail {
+        guard body.count >= 33 else { throw WireError.badFrame("balanceDetail too short") }
+        return BalanceDetail(
+            balance:   Int64(bitPattern: body.readBigEndianUInt64(at: 1)),
+            pending:   Int64(bitPattern: body.readBigEndianUInt64(at: 9)),
+            available: Int64(bitPattern: body.readBigEndianUInt64(at: 17)),
+            version:   Int64(bitPattern: body.readBigEndianUInt64(at: 25))
+        )
+    }
+
+    // GET_HISTORY ACK extra: [count 1B][dir 1B | counterpart 4B | amount 8B | after_bal 8B]xN
+    func parseHistory() throws -> [TxEntry] {
+        guard body.count >= 2 else { throw WireError.badFrame("history too short") }
+        let count = Int(body[1])
+        let entrySize = 1 + 4 + 8 + 8  // 21 bytes per entry
+        guard body.count >= 2 + count * entrySize else {
+            throw WireError.badFrame("history body truncated")
+        }
+        return (0..<count).map { i in
+            let off = 2 + i * entrySize
+            return TxEntry(
+                direction:    TxEntry.Direction(rawValue: body[off]) ?? .c2cSent,
+                counterpart:  body.readBigEndianUInt32(at: off + 1),
+                amount:       body.readBigEndianUInt64(at: off + 5),
+                afterBalance: Int64(bitPattern: body.readBigEndianUInt64(at: off + 13))
+            )
+        }
+    }
+
+    // LIST_INTENTS ACK extra: [count 1B][request_id 8B | amount 8B]xN
+    func parseIntentList() throws -> [IntentSummary] {
+        guard body.count >= 2 else { throw WireError.badFrame("intentList too short") }
+        let count = Int(body[1])
+        let entrySize = 8 + 8  // 16 bytes per entry
+        guard body.count >= 2 + count * entrySize else {
+            throw WireError.badFrame("intentList body truncated")
+        }
+        return (0..<count).map { i in
+            let off = 2 + i * entrySize
+            return IntentSummary(
+                requestID: body.readBigEndianUInt64(at: off),
+                amount:    body.readBigEndianUInt64(at: off + 8)
+            )
+        }
+    }
+
+    func parseEvtIntentPaid() throws -> EvtIntentPaidBody {
+        guard body.count >= 20 else { throw WireError.badFrame("evtIntentPaid too short") }
+        return EvtIntentPaidBody(
+            requestID:  body.readBigEndianUInt64(at: 0),
+            customerID: body.readBigEndianUInt32(at: 8),
+            amount:     body.readBigEndianUInt64(at: 12)
+        )
+    }
+
+    func parseEvtCashOut() throws -> EvtCashOutBody {
+        guard body.count >= 20 else { throw WireError.badFrame("evtCashOut too short") }
+        return EvtCashOutBody(
+            bankMID: body.readBigEndianUInt32(at: 0),
             amount:  body.readBigEndianUInt64(at: 4),
             balance: body.readBigEndianUInt64(at: 12)
         )
