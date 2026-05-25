@@ -3,12 +3,13 @@
 Test TOTP_CHARGE (0x25):
   body: [merchant_token 32B][customer_uid 4B][totp_code 4B][amount 8B]
   Merchant-initiated: verify customer TOTP then debit customer → credit merchant.
-  Only VIP (uid < 16,777,216) may call this.
-  - Normal charge
-  - Wrong TOTP     → ERR_TOTP_INVALID (0x0C)
-  - Low balance    → ERR_LOW_BALANCE  (0x08)
-  - Non-VIP caller → ERR_NOT_MERCHANT (0x0E)
-  - No TOTP enrolled → ERR_NOT_FOUND (0x05)
+  Any registered merchant (VIP or regular uid) may call this.
+  - Normal charge (VIP merchant)
+  - Wrong TOTP          → ERR_TOTP_INVALID (0x0C)
+  - Low balance         → ERR_LOW_BALANCE  (0x08)
+  - Unregistered caller → ERR_NOT_MERCHANT (0x0E)
+  - No TOTP enrolled    → ERR_NOT_FOUND    (0x05)
+  - Regular-uid registered merchant can charge (new behavior)
 """
 import socket, struct, hmac, hashlib, random, time
 
@@ -130,18 +131,33 @@ print(f"\n[Test 3] Charge > balance → code=0x{rc3:02X} (expect 0x08)")
 assert rc3 == 0x08, f"FAIL: 0x{rc3:02X}"
 print(f"    ✓ ERR_LOW_BALANCE")
 
-# ── Test 4: non-VIP caller → ERR_NOT_MERCHANT ────────────────────────────────
-# Use a regular user (uid >= 16,777,216) as caller
+# ── Test 4: unregistered caller → ERR_NOT_MERCHANT ───────────────────────────
 uc = socket.create_connection((HOST, PORT)); uc.settimeout(5)
 CUST2 = 16_777_216 + RUN_ID + 2
 create_account(uc, CUST2, f"u{RUN_ID}", seq=1)
 ut = login(uc, CUST2, f"u{RUN_ID}", seq=2)
 totp4 = totp_now(TSEC)
 rc4 = totp_charge(uc, ut, seq=3, cust_uid=CUST, totp_code=totp4, amount=AMT)
-print(f"\n[Test 4] Non-VIP caller → code=0x{rc4:02X} (expect 0x0E)")
+print(f"\n[Test 4] Unregistered caller → code=0x{rc4:02X} (expect 0x0E)")
 assert rc4 == 0x0E, f"FAIL: 0x{rc4:02X}"
 print(f"    ✓ ERR_NOT_MERCHANT")
 uc.close()
+
+# ── Test 4b: regular-uid registered merchant can charge ───────────────────────
+MERCH2 = 16_777_216 + RUN_ID + 4
+TSEC2  = hashlib.sha256(f"tm2{RUN_ID}".encode()).digest()[:20]
+mc = socket.create_connection((HOST, PORT)); mc.settimeout(5)
+create_account(mc, MERCH2, f"m2{RUN_ID}", seq=1)
+mt2 = login(mc, MERCH2, f"m2{RUN_ID}", seq=2)
+register_merchant(mc, mt2, seq=3, name=f"RegMerch-{RUN_ID}")
+cash_in(bc, bt, seq=11, to_uid=CUST, amount=200_000, tid=f"TC-FUND2-{RUN_ID}")
+enroll_totp(mc, mt2, seq=4, cid=CUST, secret=TSEC2)
+totp4b = totp_now(TSEC2)
+rc4b = totp_charge(mc, mt2, seq=5, cust_uid=CUST, totp_code=totp4b, amount=AMT)
+print(f"\n[Test 4b] Regular-uid registered merchant → code=0x{rc4b:02X} (expect 0x00)")
+assert rc4b == 0x00, f"FAIL: 0x{rc4b:02X}"
+print(f"    ✓ registered merchant charged successfully")
+mc.close()
 
 # ── Test 5: no TOTP enrolled for this pair ────────────────────────────────────
 CUST3 = 16_777_216 + RUN_ID + 3
