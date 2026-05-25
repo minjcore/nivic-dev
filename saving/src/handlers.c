@@ -403,12 +403,14 @@ static void handle_get_history(DB *db, SessionTable *st, int fd, const WireFrame
     uint32_t mid = st_lookup(st, f->body);
     if (!mid) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
 
+    int64_t before_id = (f->body_len >= 40) ? (int64_t)rd64(f->body + 32) : 0;
+
     TxEntry entries[20];
-    int n = db_history(db, mid, entries, 20);
+    int n = db_history(db, mid, entries, 20, before_id);
     if (n < 0) { send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return; }
 
-    /* Pack: [count 1B][direction 1B + counterpart 4B + amount 8B + after_balance 8B] × n */
-    uint8_t extra[1 + 20 * 21];
+    /* Pack: [count 1B][dir 1B + counterpart 4B + amount 8B + after_bal 8B]×n + [next_cursor 8B] */
+    uint8_t extra[1 + 20 * 21 + 8];
     extra[0] = (uint8_t)n;
     for (int i = 0; i < n; i++) {
         uint8_t *e = extra + 1 + i * 21;
@@ -417,7 +419,10 @@ static void handle_get_history(DB *db, SessionTable *st, int fd, const WireFrame
         wr64(e + 5,  entries[i].amount);
         wr64(e + 13, (uint64_t)entries[i].after_balance);
     }
-    send_ack(fd, f->seq, WIRE_OK, extra, (uint16_t)(1 + n * 21));
+    /* next_cursor = txn_id of the oldest (last) entry; 0 if empty or last page */
+    int64_t cursor = (n > 0) ? entries[n - 1].txn_id : 0;
+    wr64(extra + 1 + n * 21, (uint64_t)cursor);
+    send_ack(fd, f->seq, WIRE_OK, extra, (uint16_t)(1 + n * 21 + 8));
 }
 
 /* ─── TOTP verify (HMAC-SHA256, 30s window ±1 step) ─────────────────────── */
@@ -691,12 +696,14 @@ static void handle_get_merchant_history(DB *db, SessionTable *st,
         send_ack(fd, f->seq, WIRE_ERR_NOT_MERCHANT, NULL, 0); return;
     }
 
+    int64_t before_id = (f->body_len >= 40) ? (int64_t)rd64(f->body + 32) : 0;
+
     MerchantTxEntry entries[20];
-    int n = db_merchant_history(db, mid, entries, 20);
+    int n = db_merchant_history(db, mid, entries, 20, before_id);
     if (n < 0) { send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return; }
 
-    /* Pack: [count 1B][customer_id 4B + amount 8B + after_balance 8B] × n */
-    uint8_t extra[1 + 20 * 20];
+    /* Pack: [count 1B][customer_id 4B + amount 8B + after_bal 8B]×n + [next_cursor 8B] */
+    uint8_t extra[1 + 20 * 20 + 8];
     extra[0] = (uint8_t)n;
     for (int i = 0; i < n; i++) {
         uint8_t *e = extra + 1 + i * 20;
@@ -704,7 +711,9 @@ static void handle_get_merchant_history(DB *db, SessionTable *st,
         wr64(e + 4,  entries[i].amount);
         wr64(e + 12, (uint64_t)entries[i].after_balance);
     }
-    send_ack(fd, f->seq, WIRE_OK, extra, (uint16_t)(1 + n * 20));
+    int64_t cursor = (n > 0) ? entries[n - 1].txn_id : 0;
+    wr64(extra + 1 + n * 20, (uint64_t)cursor);
+    send_ack(fd, f->seq, WIRE_OK, extra, (uint16_t)(1 + n * 20 + 8));
 }
 
 /* TOTP_CHARGE  body: [merchant_token 32B][customer_uid 4B][totp_code 4B][amount 8B]

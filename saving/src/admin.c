@@ -230,7 +230,7 @@ static void h_account(int fd, const char *query) {
     if (bal < 0) { json_err(fd, 404, "not found"); return; }
 
     TxEntry hist[20];
-    int nh = db_history(g.db, uid, hist, 20);
+    int nh = db_history(g.db, uid, hist, 20, 0);
     if (nh < 0) nh = 0;
 
     char b[16384];

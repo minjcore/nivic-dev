@@ -189,8 +189,10 @@ extension WireFrame {
         WireFrame(type: .ping, seq: seq, body: Data())
     }
 
-    static func getHistory(token: Data, seq: UInt32) -> WireFrame {
-        WireFrame(type: .getHistory, seq: seq, body: token)
+    static func getHistory(token: Data, beforeID: UInt64 = 0, seq: UInt32) -> WireFrame {
+        var body = token
+        if beforeID != 0 { body.appendBigEndian(beforeID) }
+        return WireFrame(type: .getHistory, seq: seq, body: body)
     }
 
     static func logout(token: Data, seq: UInt32) -> WireFrame {
@@ -298,8 +300,10 @@ extension WireFrame {
         return WireFrame(type: .confirmIntent, seq: seq, body: body)
     }
 
-    static func getMerchantHistory(token: Data, seq: UInt32) -> WireFrame {
-        return WireFrame(type: .getMerchantHistory, seq: seq, body: token)
+    static func getMerchantHistory(token: Data, beforeID: UInt64 = 0, seq: UInt32) -> WireFrame {
+        var body = token
+        if beforeID != 0 { body.appendBigEndian(beforeID) }
+        return WireFrame(type: .getMerchantHistory, seq: seq, body: body)
     }
 }
 
@@ -384,11 +388,22 @@ struct EvtCashInBody {
     let balance: UInt64
 }
 
+// GET_HISTORY ACK page: entries + next_cursor (0 = last page)
+struct HistoryPage {
+    let entries:    [TxEntry]
+    let nextCursor: UInt64
+}
+
 // GET_MERCHANT_HISTORY ACK entry: [customer_id 4B][amount 8B][after_balance 8B]
 struct MerchantTxEntry {
     let customerID:   UInt32
     let amount:       UInt64
     let afterBalance: Int64
+}
+
+struct MerchantHistoryPage {
+    let entries:    [MerchantTxEntry]
+    let nextCursor: UInt64
 }
 
 extension WireFrame {
@@ -437,14 +452,14 @@ extension WireFrame {
     }
 
     // GET_HISTORY ACK extra: [count 1B][dir 1B | counterpart 4B | amount 8B | after_bal 8B]xN
-    func parseHistory() throws -> [TxEntry] {
+    func parseHistory() throws -> HistoryPage {
         guard body.count >= 2 else { throw WireError.badFrame("history too short") }
-        let count = Int(body[1])
-        let entrySize = 1 + 4 + 8 + 8  // 21 bytes per entry
-        guard body.count >= 2 + count * entrySize else {
+        let count     = Int(body[1])
+        let entrySize = 1 + 4 + 8 + 8  // 21 bytes
+        guard body.count >= 2 + count * entrySize + 8 else {
             throw WireError.badFrame("history body truncated")
         }
-        return (0..<count).map { i in
+        let entries = (0..<count).map { i -> TxEntry in
             let off = 2 + i * entrySize
             return TxEntry(
                 direction:    TxEntry.Direction(rawValue: body[off]) ?? .c2cSent,
@@ -453,6 +468,8 @@ extension WireFrame {
                 afterBalance: Int64(bitPattern: body.readBigEndianUInt64(at: off + 13))
             )
         }
+        let cursor = body.readBigEndianUInt64(at: 2 + count * entrySize)
+        return HistoryPage(entries: entries, nextCursor: cursor)
     }
 
     // LIST_INTENTS ACK extra: [count 1B][request_id 8B | amount 8B]xN
@@ -507,21 +524,26 @@ extension WireFrame {
         )
     }
 
-    func parseMerchantHistory() throws -> [MerchantTxEntry] {
+    func parseMerchantHistory() throws -> MerchantHistoryPage {
         guard body.count >= 2 else { throw WireError.badFrame("merchantHistory too short") }
         guard body[0] == WireCode.ok.rawValue else {
             throw WireError.serverError(WireCode(rawValue: body[0]) ?? .errInternal)
         }
-        let count = Int(body[1])
-        guard body.count >= 2 + count * 20 else { throw WireError.badFrame("merchantHistory truncated") }
-        return (0..<count).map { i in
-            let off = 2 + i * 20
+        let count     = Int(body[1])
+        let entrySize = 4 + 8 + 8  // 20 bytes
+        guard body.count >= 2 + count * entrySize + 8 else {
+            throw WireError.badFrame("merchantHistory truncated")
+        }
+        let entries = (0..<count).map { i -> MerchantTxEntry in
+            let off = 2 + i * entrySize
             return MerchantTxEntry(
                 customerID:   body.readBigEndianUInt32(at: off),
                 amount:       body.readBigEndianUInt64(at: off + 4),
                 afterBalance: Int64(bitPattern: body.readBigEndianUInt64(at: off + 12))
             )
         }
+        let cursor = body.readBigEndianUInt64(at: 2 + count * entrySize)
+        return MerchantHistoryPage(entries: entries, nextCursor: cursor)
     }
 }
 

@@ -110,6 +110,7 @@ int db_guardian_list(DB *db, uint32_t account_id, uint32_t ids[3]);
 /* ─── Transfer history ───────────────────────────────────────────────────── */
 
 typedef struct {
+    int64_t  txn_id;       /* transfer row id — used as pagination cursor */
     int      direction;    /* 0=C2C_sent, 1=C2C_recv,
                               2=C2M_sent, 3=C2M_recv,
                               4=M2C_recv, 5=C2B_sent */
@@ -118,20 +119,24 @@ typedef struct {
     int64_t  after_balance; /* running balance after this tx */
 } TxEntry;
 
-/* Fill out[0..max_count-1] sorted newest-first. Returns count or -1 on error. */
-int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count);
+/* Fill out[0..max_count-1] sorted newest-first.
+ * before_id: return only rows with id < before_id (0 = no cursor, start from newest).
+ * Returns count or -1 on error. */
+int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count, int64_t before_id);
 
 /* ─── Merchant payment history ───────────────────────────────────────────── */
 
 typedef struct {
+    int64_t  txn_id;       /* transfer row id — used as pagination cursor */
     uint32_t customer_id;
     uint64_t amount;
     int64_t  after_balance;
 } MerchantTxEntry;
 
 /* Fill out[0..max_count-1] with C2M payments received by mid, newest-first.
+ * before_id: return only rows with id < before_id (0 = no cursor, start from newest).
  * Returns count or -1 on error. */
-int db_merchant_history(DB *db, uint32_t mid, MerchantTxEntry *out, int max_count);
+int db_merchant_history(DB *db, uint32_t mid, MerchantTxEntry *out, int max_count, int64_t before_id);
 
 /* ─── TOTP Enrollments ───────────────────────────────────────────────────── */
 

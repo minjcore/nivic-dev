@@ -36,6 +36,11 @@ public enum SavingEvent {
     case totpCharged(merchantID: UInt32, update: BalanceUpdate)
 }
 
+public struct TransactionPage {
+    public let transactions: [Transaction]
+    public let nextCursor:   UInt64    // pass to history(cursor:) for next page; 0 = last page
+}
+
 public struct Transaction: Identifiable {
     public let id = UUID()
     public let direction: Direction
@@ -150,13 +155,14 @@ private actor SavingNetwork {
 
     // ─── History ────────────────────────────────────────────────────────────
 
-    func history() async throws -> [Transaction] {
+    func history(beforeID: UInt64 = 0) async throws -> TransactionPage {
         let token = try requireToken()
-        let ack   = try await conn.send(WireFrame.getHistory(token: token, seq: nextSeq())).parseAck()
+        let frame = WireFrame.getHistory(token: token, beforeID: beforeID, seq: nextSeq())
+        let ack   = try await conn.send(frame).parseAck()
         guard ack.code == .ok else { throw WireError.serverError(ack.code) }
 
         let data  = ack.data
-        guard !data.isEmpty else { return [] }
+        guard data.count >= 9 else { return TransactionPage(transactions: [], nextCursor: 0) }
         let count = Int(data[0])
         var txs: [Transaction] = []
         txs.reserveCapacity(count)
@@ -179,7 +185,9 @@ private actor SavingNetwork {
             txs.append(Transaction(direction: dir, counterpartID: counterpart,
                                    amount: amount, afterBalance: afterBalance))
         }
-        return txs
+        let cursor = data.count >= 1 + count * 21 + 8
+                   ? data.readBigEndianUInt64(at: 1 + count * 21) : 0
+        return TransactionPage(transactions: txs, nextCursor: cursor)
     }
 
     // ─── Payment Intents ────────────────────────────────────────────────────
@@ -333,8 +341,8 @@ public final class SavingClient: ObservableObject {
 
     // ─── History ─────────────────────────────────────────────────────────────
 
-    public func history() async throws -> [Transaction] {
-        try await net.history()
+    public func history(cursor: UInt64 = 0) async throws -> TransactionPage {
+        try await net.history(beforeID: cursor)
     }
 
     // ─── Payment Intents ─────────────────────────────────────────────────────

@@ -699,29 +699,30 @@ int db_record_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount
     return ok ? 0 : -1;
 }
 
-int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count) {
+int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count, int64_t before_id) {
     /* Window SUM over all rows (incl. seed type=99) gives correct running balance.
-     * Outer WHERE type != 99 hides seed rows from the visible history. */
+     * Outer WHERE type != 99 hides seed rows; id < before_id implements cursor. */
     static const char SQL[] =
-        "SELECT from_id, to_id, amount, type, after_balance FROM ("
-        "  SELECT from_id, to_id, amount, type, create_time,"
+        "SELECT id, from_id, to_id, amount, type, after_balance FROM ("
+        "  SELECT id, from_id, to_id, amount, type, create_time,"
         "    CAST(SUM(CASE WHEN to_id = $1 THEN amount ELSE -amount END)"
         "         OVER (ORDER BY id ASC ROWS UNBOUNDED PRECEDING) AS BIGINT) AS after_balance"
         "  FROM transfers"
         "  WHERE from_id = $1 OR to_id = $1"
-        ") t WHERE type != 99"
+        ") t WHERE type != 99 AND ($3::BIGINT = 0 OR id < $3::BIGINT)"
         " ORDER BY create_time DESC LIMIT $2";
 
-    uint64_t id_be = pg_int8((uint64_t)account_id);
+    uint64_t acct_be   = pg_int8((uint64_t)account_id);
+    uint64_t cursor_be = pg_int8((uint64_t)before_id);
     char     limit_str[8];
     snprintf(limit_str, sizeof(limit_str), "%d", max_count);
 
-    const char *vals[2] = { (char *)&id_be, limit_str };
-    int         lens[2] = { 8, 0 };   /* binary, text */
-    int         fmts[2] = { 1, 0 };
+    const char *vals[3] = { (char *)&acct_be, limit_str, (char *)&cursor_be };
+    int         lens[3] = { 8, 0, 8 };
+    int         fmts[3] = { 1, 0, 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 1); /* binary result */
+    PGresult *r = PQexecParams(db->conn, SQL, 3, NULL, vals, lens, fmts, 1);
     DB_UNLOCK(db);
 
     if (PQresultStatus(r) != PGRES_TUPLES_OK) {
@@ -734,22 +735,23 @@ int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count) {
     if (n > max_count) n = max_count;
 
     for (int i = 0; i < n; i++) {
-        uint64_t from = from_be64((uint8_t *)PQgetvalue(r, i, 0));
-        uint64_t to   = from_be64((uint8_t *)PQgetvalue(r, i, 1));
-        uint64_t amt  = from_be64((uint8_t *)PQgetvalue(r, i, 2));
-        uint8_t *tp   = (uint8_t *)PQgetvalue(r, i, 3);
-        int      type = (tp[0] << 8) | tp[1];  /* SMALLINT big-endian */
-
-        int64_t after_bal = (int64_t)from_be64((uint8_t *)PQgetvalue(r, i, 4));
+        int64_t  txn_id   = (int64_t)from_be64((uint8_t *)PQgetvalue(r, i, 0));
+        uint64_t from     = from_be64((uint8_t *)PQgetvalue(r, i, 1));
+        uint64_t to       = from_be64((uint8_t *)PQgetvalue(r, i, 2));
+        uint64_t amt      = from_be64((uint8_t *)PQgetvalue(r, i, 3));
+        uint8_t *tp       = (uint8_t *)PQgetvalue(r, i, 4);
+        int      type     = (tp[0] << 8) | tp[1];
+        int64_t  after_bal = (int64_t)from_be64((uint8_t *)PQgetvalue(r, i, 5));
 
         int sent = (from == (uint64_t)account_id);
         int kind;
         switch (type) {
-            case 1:  kind = sent ? 2 : 3; break;  /* payment */
-            case 2:  kind = 4;            break;  /* cash_in */
-            case 3:  kind = 5;            break;  /* cash_out */
-            default: kind = sent ? 0 : 1; break;  /* transfer */
+            case 1:  kind = sent ? 2 : 3; break;
+            case 2:  kind = 4;            break;
+            case 3:  kind = 5;            break;
+            default: kind = sent ? 0 : 1; break;
         }
+        out[i].txn_id        = txn_id;
         out[i].direction     = kind;
         out[i].counterpart   = (uint32_t)(sent ? to : from);
         out[i].amount        = amt;
@@ -760,29 +762,30 @@ int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count) {
     return n;
 }
 
-int db_merchant_history(DB *db, uint32_t mid, MerchantTxEntry *out, int max_count) {
+int db_merchant_history(DB *db, uint32_t mid, MerchantTxEntry *out, int max_count, int64_t before_id) {
     /* Window over all merchant rows gives correct running balance.
-     * Outer WHERE keeps only C2M payments received (type=1, to_id=mid). */
+     * Outer WHERE keeps only C2M payments received; id < before_id is cursor. */
     static const char SQL[] =
-        "SELECT from_id, amount, after_balance FROM ("
-        "  SELECT from_id, to_id, amount, type, create_time,"
+        "SELECT id, from_id, amount, after_balance FROM ("
+        "  SELECT id, from_id, to_id, amount, type, create_time,"
         "    CAST(SUM(CASE WHEN to_id = $1 THEN amount ELSE -amount END)"
         "         OVER (ORDER BY id ASC ROWS UNBOUNDED PRECEDING) AS BIGINT) AS after_balance"
         "  FROM transfers"
         "  WHERE from_id = $1 OR to_id = $1"
-        ") t WHERE type = 1 AND to_id = $1"
+        ") t WHERE type = 1 AND to_id = $1 AND ($3::BIGINT = 0 OR id < $3::BIGINT)"
         " ORDER BY create_time DESC LIMIT $2";
 
-    uint64_t id_be = pg_int8((uint64_t)mid);
+    uint64_t mid_be    = pg_int8((uint64_t)mid);
+    uint64_t cursor_be = pg_int8((uint64_t)before_id);
     char     limit_str[8];
     snprintf(limit_str, sizeof(limit_str), "%d", max_count);
 
-    const char *vals[2] = { (char *)&id_be, limit_str };
-    int         lens[2] = { 8, 0 };
-    int         fmts[2] = { 1, 0 };
+    const char *vals[3] = { (char *)&mid_be, limit_str, (char *)&cursor_be };
+    int         lens[3] = { 8, 0, 8 };
+    int         fmts[3] = { 1, 0, 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 1);
+    PGresult *r = PQexecParams(db->conn, SQL, 3, NULL, vals, lens, fmts, 1);
     DB_UNLOCK(db);
 
     if (PQresultStatus(r) != PGRES_TUPLES_OK) {
@@ -794,9 +797,10 @@ int db_merchant_history(DB *db, uint32_t mid, MerchantTxEntry *out, int max_coun
     if (n > max_count) n = max_count;
 
     for (int i = 0; i < n; i++) {
-        out[i].customer_id   = (uint32_t)from_be64((uint8_t *)PQgetvalue(r, i, 0));
-        out[i].amount        =           from_be64((uint8_t *)PQgetvalue(r, i, 1));
-        out[i].after_balance = (int64_t) from_be64((uint8_t *)PQgetvalue(r, i, 2));
+        out[i].txn_id        = (int64_t) from_be64((uint8_t *)PQgetvalue(r, i, 0));
+        out[i].customer_id   = (uint32_t)from_be64((uint8_t *)PQgetvalue(r, i, 1));
+        out[i].amount        =           from_be64((uint8_t *)PQgetvalue(r, i, 2));
+        out[i].after_balance = (int64_t) from_be64((uint8_t *)PQgetvalue(r, i, 3));
     }
 
     PQclear(r);
