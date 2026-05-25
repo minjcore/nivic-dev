@@ -32,6 +32,12 @@ public struct IntentPaid {
     public let amount:     UInt64
 }
 
+public struct TransferOut {
+    public let toID:    UInt32
+    public let amount:  UInt64
+    public let balance: UInt64
+}
+
 public enum SavingEvent {
     case transferIn(SavingTransfer)
     case recoveryRequested(accountID: UInt32)
@@ -41,6 +47,7 @@ public enum SavingEvent {
     case cashOut(BalanceUpdate)
     case totpCharged(merchantID: UInt32, update: BalanceUpdate)
     case intentPaid(IntentPaid)
+    case transferOut(TransferOut)
 }
 
 public struct TransactionPage {
@@ -450,6 +457,10 @@ public final class SavingClient: ObservableObject {
             fmt.numberStyle = .decimal; fmt.groupingSeparator = "."
             let amtStr = (fmt.string(from: NSNumber(value: body.amount)) ?? "\(body.amount)") + " ₫"
             pushNotification(title: "Đơn hàng được thanh toán", body: "+\(amtStr) từ #\(body.customerID)")
+        case .evtTransferOut:
+            guard let body = try? frame.parseEvtTransferOut() else { return }
+            let out = TransferOut(toID: body.toID, amount: body.amount, balance: body.balance)
+            onEvent?(.transferOut(out))
         default:
             break
         }

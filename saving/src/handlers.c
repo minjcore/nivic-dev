@@ -308,6 +308,17 @@ static void handle_transfer(DB *db, SessionTable *st, int fd, const WireFrame *f
         if (n > 0) registry_push(credit, evt, n);
     }
 
+    /* Push EVT_TRANSFER_OUT to sender's other sessions if online */
+    {
+        uint8_t body[20], evt[WIRE_MAX_FRAME];
+        wr32(body,      credit);
+        wr64(body + 4,  amount);
+        wr64(body + 12, (uint64_t)after_bal);
+        size_t n = wire_frame_encode(WIRE_EVT_TRANSFER_OUT, 0, body, 20,
+                                     evt, sizeof(evt));
+        if (n > 0) registry_push(debit, evt, n);
+    }
+
     uint8_t extra[16];
     wr64(extra,     (uint64_t)txn_id);
     wr64(extra + 8, (uint64_t)after_bal);
@@ -586,7 +597,8 @@ static void handle_pay_intent(DB *db, SessionTable *st, int fd, const WireFrame 
 
     uint32_t debit  = customer_id;
     uint32_t credit = merchant_id;
-    int rc = db_transfer(db, debit, credit, intent.amount, 1, NULL, NULL);
+    int64_t after_cust = 0;
+    int rc = db_transfer(db, debit, credit, intent.amount, 1, &after_cust, NULL);
     if (rc == -1) { send_ack(fd, f->seq, WIRE_ERR_LOW_BALANCE, NULL, 0); return; }
     if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
     if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
@@ -625,6 +637,17 @@ static void handle_pay_intent(DB *db, SessionTable *st, int fd, const WireFrame 
         size_t ip_n = wire_frame_encode(WIRE_EVT_INTENT_PAID, 0, ip_body, 20,
                                         ip_evt, sizeof(ip_evt));
         if (ip_n > 0) registry_push(merchant_id, ip_evt, ip_n);
+    }
+
+    /* Push EVT_TRANSFER_OUT to customer's other sessions */
+    {
+        uint8_t body[20], evt[WIRE_MAX_FRAME];
+        wr32(body,      merchant_id);
+        wr64(body + 4,  intent.amount);
+        wr64(body + 12, (uint64_t)after_cust);
+        size_t n = wire_frame_encode(WIRE_EVT_TRANSFER_OUT, 0, body, 20,
+                                     evt, sizeof(evt));
+        if (n > 0) registry_push(customer_id, evt, n);
     }
 
     send_ack(fd, f->seq, WIRE_OK, NULL, 0);
@@ -680,6 +703,17 @@ static void handle_confirm_intent(DB *db, SessionTable *st, int fd, const WireFr
         size_t ip_n = wire_frame_encode(WIRE_EVT_INTENT_PAID, 0, ip_body, 20,
                                         ip_evt, sizeof(ip_evt));
         if (ip_n > 0) registry_push(merchant_id, ip_evt, ip_n);
+    }
+
+    /* Push EVT_TRANSFER_OUT to customer's other sessions */
+    {
+        uint8_t body[20], evt[WIRE_MAX_FRAME];
+        wr32(body,      merchant_id);
+        wr64(body + 4,  intent.amount);
+        wr64(body + 12, (uint64_t)after_cust);
+        size_t n = wire_frame_encode(WIRE_EVT_TRANSFER_OUT, 0, body, 20,
+                                     evt, sizeof(evt));
+        if (n > 0) registry_push(customer_id, evt, n);
     }
 
     /* ACK extra: [after_balance 8B] so customer app can update display */

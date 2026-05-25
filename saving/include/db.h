@@ -222,6 +222,16 @@ int db_admin_user_list(DB *db, char *out_json, int buf_size);
 /* Delete admin user. Returns 0 on success, -1 on error. */
 int db_admin_user_delete(DB *db, const char *username);
 
+/* ─── Admin audit log ────────────────────────────────────────────────────── */
+
+/* Append one audit row. action: "cash_in" or "cash_out". Returns 0 / -1. */
+int db_admin_audit_log(DB *db, const char *username, const char *action,
+                       uint32_t target_uid, uint64_t amount, const char *ref);
+
+/* Returns malloc'd JSON array string of recent entries (newest first, up to limit).
+ * Caller must free. Returns NULL on error. */
+char *db_admin_audit_list(DB *db, int limit);
+
 /* ─── Admin operations ───────────────────────────────────────────────────── */
 
 typedef struct {

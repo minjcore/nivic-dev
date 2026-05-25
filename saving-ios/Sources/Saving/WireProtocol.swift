@@ -42,6 +42,7 @@ enum WireType: UInt8 {
     case evtCashOut      = 0xC5
     case evtTotpCharged  = 0xC6
     case evtCashIn       = 0xC7
+    case evtTransferOut  = 0xC8
 }
 
 enum WireCode: UInt8 {
@@ -388,6 +389,13 @@ struct EvtCashInBody {
     let balance: UInt64
 }
 
+// EVT_TRANSFER_OUT  body: [to_id 4B][amount 8B][balance 8B]
+struct EvtTransferOutBody {
+    let toID:    UInt32
+    let amount:  UInt64
+    let balance: UInt64
+}
+
 // GET_HISTORY ACK page: entries + next_cursor (0 = last page)
 struct HistoryPage {
     let entries:    [TxEntry]
@@ -521,6 +529,15 @@ extension WireFrame {
         return EvtCashInBody(
             amount:  body.readBigEndianUInt64(at: 0),
             balance: body.readBigEndianUInt64(at: 8)
+        )
+    }
+
+    func parseEvtTransferOut() throws -> EvtTransferOutBody {
+        guard body.count >= 20 else { throw WireError.badFrame("evtTransferOut too short") }
+        return EvtTransferOutBody(
+            toID:    body.readBigEndianUInt32(at: 0),
+            amount:  body.readBigEndianUInt64(at: 4),
+            balance: body.readBigEndianUInt64(at: 12)
         )
     }
 
