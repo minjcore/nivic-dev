@@ -114,10 +114,13 @@ static const char SCHEMA[] =
 
     /* Merchant registry — mid mirrors the Wire account ID */
     "CREATE TABLE IF NOT EXISTS merchants ("
-    "  mid           BIGINT PRIMARY KEY,"
-    "  name          TEXT   NOT NULL,"
-    "  registered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+    "  mid         BIGINT      PRIMARY KEY,"
+    "  name        TEXT        NOT NULL,"
+    "  create_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+    "  update_time TIMESTAMPTZ NOT NULL DEFAULT NOW()"
     ");"
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS create_time TIMESTAMPTZ NOT NULL DEFAULT NOW();"
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS update_time TIMESTAMPTZ NOT NULL DEFAULT NOW();"
 
     /* Balance cache — separated from accounts so profile updates don't lock balance rows */
     "CREATE TABLE IF NOT EXISTS balances ("
@@ -937,7 +940,7 @@ int db_intent_settle(DB *db, uint32_t mid, uint64_t request_id) {
 int db_merchant_register(DB *db, uint32_t mid, const char *name) {
     static const char SQL[] =
         "INSERT INTO merchants (mid, name) VALUES ($1, $2) "
-        "ON CONFLICT (mid) DO UPDATE SET name = EXCLUDED.name";
+        "ON CONFLICT (mid) DO UPDATE SET name = EXCLUDED.name, update_time = NOW()";
 
     uint64_t m = pg_int8((uint64_t)mid);
     const char *vals[2] = { (char *)&m, name };
