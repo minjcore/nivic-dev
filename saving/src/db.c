@@ -130,10 +130,12 @@ static const char SCHEMA[] =
 
     /* Balance cache — separated from accounts so profile updates don't lock balance rows */
     "CREATE TABLE IF NOT EXISTS balances ("
-    "  account_id BIGINT PRIMARY KEY REFERENCES accounts(id),"
-    "  balance    BIGINT NOT NULL DEFAULT 0,"
-    "  version    BIGINT NOT NULL DEFAULT 0"
-    ");";
+    "  account_id  BIGINT      PRIMARY KEY REFERENCES accounts(id),"
+    "  balance     BIGINT      NOT NULL DEFAULT 0,"
+    "  version     BIGINT      NOT NULL DEFAULT 0,"
+    "  create_time TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+    ");"
+    "ALTER TABLE balances ADD COLUMN IF NOT EXISTS create_time TIMESTAMPTZ NOT NULL DEFAULT NOW();";
 
 /* ══════════════════════════════════════════════════════════════════════════
  *  Lifecycle
