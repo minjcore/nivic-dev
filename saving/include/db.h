@@ -179,6 +179,16 @@ typedef struct {
  * Returns count (0..max_count) or -1 on error. */
 int db_intent_list(DB *db, uint32_t mid, IntentSummary *out, int max_count);
 
+/* ─── CSV export ─────────────────────────────────────────────────────────── */
+
+/* Returns a malloc'd CSV string (header + rows), caller must free.
+ * from_date / to_date: "YYYY-MM-DD", inclusive, displayed in ICT (UTC+7).
+ * *rows_out is set to the number of data rows written (max 100 000).
+ * Returns NULL on DB error. */
+char *db_export_transfers_csv(DB *db,
+                              const char *from_date, const char *to_date,
+                              int *rows_out);
+
 /* ─── Admin operations ───────────────────────────────────────────────────── */
 
 typedef struct {

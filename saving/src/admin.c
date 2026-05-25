@@ -196,6 +196,40 @@ static void h_cashin(int fd, const char *body) {
     json_ok(fd, b);
 }
 
+static void h_export(int fd, const char *query) {
+    char from_date[16] = "", to_date[16] = "";
+
+    const char *p = strstr(query, "from=");
+    if (p) { p += 5; int i=0; while(*p&&*p!='&'&&i<10) from_date[i++]=*p++; }
+    p = strstr(query, "to=");
+    if (p) { p += 3;  int i=0; while(*p&&*p!='&'&&i<10) to_date[i++]=*p++;  }
+
+    if (!from_date[0] || !to_date[0]) {
+        json_err(fd, 400, "missing from/to (YYYY-MM-DD)"); return;
+    }
+
+    int rows = 0;
+    char *csv = db_export_transfers_csv(g.db, from_date, to_date, &rows);
+    if (!csv) { json_err(fd, 500, "db error"); return; }
+
+    char fname[64];
+    snprintf(fname, sizeof(fname), "transfers_%s_%s.csv", from_date, to_date);
+
+    int csv_len = (int)strlen(csv);
+    char hdr[512];
+    int n = snprintf(hdr, sizeof(hdr),
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/csv; charset=utf-8\r\n"
+        "Content-Disposition: attachment; filename=\"%s\"\r\n"
+        "Content-Length: %d\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
+        "Connection: close\r\n\r\n",
+        fname, csv_len);
+    write(fd, hdr, n);
+    write(fd, csv, csv_len);
+    free(csv);
+}
+
 static void h_cashout(int fd, const char *body) {
     uint32_t uid    = jgetu32(body, "uid");
     uint64_t amount = jgetu64(body, "amount");
@@ -263,6 +297,7 @@ static const char ADMIN_HTML[] =
 "<div class='tab' id='t1'>Sessions</div>"
 "<div class='tab' id='t2'>Account</div>"
 "<div class='tab' id='t3'>Cash Ops</div>"
+"<div class='tab' id='t4'>Export</div>"
 "</div>"
 "<div id='pg-dash' class='pg on'>"
 "<div class='grid'>"
@@ -301,6 +336,16 @@ static const char ADMIN_HTML[] =
 "<div class='fg'><label>Reference</label><input id='cref' type='text' placeholder='ADM-2024-001'></div>"
 "<button id='xb' style='width:100%'>Execute</button>"
 "</div></div>"
+"<div id='pg-exp' class='pg'>"
+"<div class='sec' style='max-width:480px'>"
+"<h2>Export Transfers CSV</h2>"
+"<p style='color:#666;font-size:12px;margin-bottom:16px'>Thoi gian theo gio ICT (UTC+7). Toi da 100,000 dong.</p>"
+"<div id='er2'></div>"
+"<div class='fg'><label>Tu ngay</label><input id='ef' type='date' style='width:100%'></div>"
+"<div class='fg'><label>Den ngay</label><input id='et' type='date' style='width:100%'></div>"
+"<button id='dlb' style='width:100%'>Download CSV</button>"
+"<div id='einfo' style='margin-top:12px;font-size:12px;color:#555'></div>"
+"</div></div>"
 "<script>"
 "var P='',ar=null;"
 "var fmt=function(n){return Number(n).toLocaleString('vi-VN');};"
@@ -332,7 +377,7 @@ static const char ADMIN_HTML[] =
 "    document.getElementById('s3').textContent=fmt(d.total_volume);"
 "  });"
 "}"
-"var TABS=['dash','sess','acct','cash'];"
+"var TABS=['dash','sess','acct','cash','exp'];"
 "function tab(n){"
 "  TABS.forEach(function(t,i){"
 "    document.getElementById('pg-'+t).className='pg'+(t===n?' on':'');"
@@ -398,6 +443,28 @@ static const char ADMIN_HTML[] =
 "document.getElementById('t1').onclick=function(){tab('sess');};"
 "document.getElementById('t2').onclick=function(){tab('acct');};"
 "document.getElementById('t3').onclick=function(){tab('cash');};"
+"document.getElementById('t4').onclick=function(){tab('exp');};"
+"document.getElementById('dlb').onclick=function(){"
+"  var from=document.getElementById('ef').value;"
+"  var to=document.getElementById('et').value;"
+"  if(!from||!to){alert('Chon ngay');return;}"
+"  document.getElementById('einfo').textContent='Dang tai...';"
+"  fetch('/api/export?from='+from+'&to='+to,{"
+"    headers:{'Authorization':'Bearer '+P}"
+"  }).then(function(r){"
+"    if(!r.ok)throw new Error(r.status);"
+"    return r.blob();"
+"  }).then(function(b){"
+"    var a=document.createElement('a');"
+"    a.href=URL.createObjectURL(b);"
+"    a.download='transfers_'+from+'_'+to+'.csv';"
+"    a.click();"
+"    document.getElementById('einfo').textContent='Da tai xong.';"
+"  }).catch(function(e){"
+"    document.getElementById('er2').innerHTML='<div class=\"er\">Loi: '+e.message+'</div>';"
+"    document.getElementById('einfo').textContent='';"
+"  });"
+"};"
 "</script></body></html>";
 
 /* ─── Request dispatcher ─────────────────────────────────────────────────── */
@@ -465,6 +532,7 @@ static void dispatch(int fd) {
     else if (strcmp(path, "/api/account")       == 0) h_account(fd, query);
     else if (strcmp(path, "/api/cashin")        == 0) h_cashin(fd, body);
     else if (strcmp(path, "/api/cashout")       == 0) h_cashout(fd, body);
+    else if (strcmp(path, "/api/export")        == 0) h_export(fd, query);
     else json_err(fd, 404, "not found");
 }
 

@@ -1007,6 +1007,80 @@ int db_merchant_get_name(DB *db, uint32_t mid, char *name_out, size_t name_max) 
  *  Admin stats & cash ops
  * ══════════════════════════════════════════════════════════════════════════ */
 
+char *db_export_transfers_csv(DB *db,
+                              const char *from_date, const char *to_date,
+                              int *rows_out) {
+    /* Filter by ICT (UTC+7); label mid=1 as Bank, merchants by name, rest as User */
+    static const char SQL[] =
+        "SELECT t.id, t.from_id,"
+        "  CASE WHEN t.from_id <= 999 THEN 'Bank'"
+        "       ELSE COALESCE(mf.name, 'User') END AS from_label,"
+        "  t.to_id,"
+        "  CASE WHEN t.to_id <= 999 THEN 'Bank'"
+        "       ELSE COALESCE(mt.name, 'User') END AS to_label,"
+        "  t.amount, t.type,"
+        "  TO_CHAR(t.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh','YYYY-MM-DD HH24:MI:SS') AS ts"
+        " FROM transfers t"
+        " LEFT JOIN merchants mf ON mf.mid = t.from_id"
+        " LEFT JOIN merchants mt ON mt.mid = t.to_id"
+        " WHERE (t.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::DATE >= $1::DATE"
+        "   AND (t.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::DATE <= $2::DATE"
+        " ORDER BY t.id ASC LIMIT 100000";
+
+    const char *vals[2] = { from_date, to_date };
+    int         lens[2] = { 0, 0 };
+    int         fmts[2] = { 0, 0 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+
+    if (PQresultStatus(r) != PGRES_TUPLES_OK) {
+        fprintf(stderr, "[db] export_transfers: %s\n", PQerrorMessage(db->conn));
+        PQclear(r);
+        return NULL;
+    }
+
+    int n = PQntuples(r);
+    if (rows_out) *rows_out = n;
+
+    static const char *TYPES[] = { "transfer","payment","cash_in","cash_out" };
+
+    /* Header + n rows * ~120 chars; realloc if needed */
+    int cap = 256 + n * 120;
+    if (cap < 16384) cap = 16384;
+    char *buf = malloc(cap);
+    if (!buf) { PQclear(r); return NULL; }
+
+    int off = snprintf(buf, cap,
+        "id,from_id,from_label,to_id,to_label,amount,type,type_name,created_at_ict\n");
+
+    for (int i = 0; i < n; i++) {
+        if (off + 200 > cap) {
+            cap *= 2;
+            char *nb = realloc(buf, cap);
+            if (!nb) { break; }
+            buf = nb;
+        }
+        int tp = atoi(PQgetvalue(r, i, 6));
+        const char *tname = (tp >= 0 && tp <= 3) ? TYPES[tp] : "?";
+        off += snprintf(buf + off, cap - off,
+            "%s,%s,\"%s\",%s,\"%s\",%s,%s,%s,%s\n",
+            PQgetvalue(r, i, 0),  /* id */
+            PQgetvalue(r, i, 1),  /* from_id */
+            PQgetvalue(r, i, 2),  /* from_label */
+            PQgetvalue(r, i, 3),  /* to_id */
+            PQgetvalue(r, i, 4),  /* to_label */
+            PQgetvalue(r, i, 5),  /* amount */
+            PQgetvalue(r, i, 6),  /* type */
+            tname,
+            PQgetvalue(r, i, 7)); /* created_at_ict */
+    }
+
+    PQclear(r);
+    return buf;
+}
+
 int db_admin_stats(DB *db, AdminStats *out) {
     static const char SQL[] =
         "SELECT "
