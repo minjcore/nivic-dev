@@ -418,10 +418,13 @@ public final class SavingClient: ObservableObject {
             let amtStr = (fmt.string(from: NSNumber(value: body.amount)) ?? "\(body.amount)") + " ₫"
             pushNotification(title: "Nạp tiền thành công", body: "+\(amtStr) vào tài khoản")
         case .evtCashOut:
-            guard frame.body.count >= 20 else { return }
-            let amount  = frame.body.readBigEndianUInt64(at: 4)
-            let balance = frame.body.readBigEndianUInt64(at: 12)
-            onEvent?(.cashOut(BalanceUpdate(amount: amount, balance: balance)))
+            guard let body = try? frame.parseEvtCashOut() else { return }
+            let update = BalanceUpdate(amount: body.amount, balance: body.balance)
+            onEvent?(.cashOut(update))
+            let fmt = NumberFormatter()
+            fmt.numberStyle = .decimal; fmt.groupingSeparator = "."
+            let amtStr = (fmt.string(from: NSNumber(value: body.amount)) ?? "\(body.amount)") + " ₫"
+            pushNotification(title: "Rút tiền thành công", body: "-\(amtStr) khỏi tài khoản")
         case .evtTotpCharged:
             guard let body = try? frame.parseEvtTotpCharged() else { return }
             let update = BalanceUpdate(amount: body.amount, balance: body.balance)

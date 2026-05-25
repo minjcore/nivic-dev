@@ -389,6 +389,23 @@ static void h_cashout(int fd, const char *body, const char *actor) {
     }
     db_admin_audit_log(g.db, actor, "cash_out", uid, amount, ref);
 
+    /* Push EVT_CASH_OUT to customer if online */
+    uint8_t pb[20], evt[WIRE_MAX_FRAME];
+    uint32_t bank = 1;
+    uint64_t amt64 = amount, bal64 = (uint64_t)after;
+    pb[0]=(bank>>24)&0xFF; pb[1]=(bank>>16)&0xFF;
+    pb[2]=(bank>> 8)&0xFF; pb[3]=(bank    )&0xFF;
+    pb[4]=(amt64>>56)&0xFF; pb[5]=(amt64>>48)&0xFF;
+    pb[6]=(amt64>>40)&0xFF; pb[7]=(amt64>>32)&0xFF;
+    pb[8]=(amt64>>24)&0xFF; pb[9]=(amt64>>16)&0xFF;
+    pb[10]=(amt64>> 8)&0xFF; pb[11]=(amt64    )&0xFF;
+    pb[12]=(bal64>>56)&0xFF; pb[13]=(bal64>>48)&0xFF;
+    pb[14]=(bal64>>40)&0xFF; pb[15]=(bal64>>32)&0xFF;
+    pb[16]=(bal64>>24)&0xFF; pb[17]=(bal64>>16)&0xFF;
+    pb[18]=(bal64>> 8)&0xFF; pb[19]=(bal64    )&0xFF;
+    size_t pn = wire_frame_encode(WIRE_EVT_CASH_OUT, 0, pb, 20, evt, sizeof(evt));
+    if (pn > 0) registry_push(uid, evt, pn);
+
     char b[128];
     snprintf(b, sizeof(b), "{\"ok\":true,\"after_balance\":%lld}", (long long)after);
     json_ok(fd, b);
