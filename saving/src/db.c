@@ -102,11 +102,13 @@ static const char SCHEMA[] =
     "  order_id         BIGINT   NOT NULL,"
     "  amount           BIGINT   NOT NULL,"
     "  status           SMALLINT NOT NULL DEFAULT 0,"
-    "  gateway_order_id TEXT     NOT NULL DEFAULT '',"
-    "  create_time       TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+    "  gateway_order_id TEXT        NOT NULL DEFAULT '',"
+    "  create_time      TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+    "  update_time      TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
     "  PRIMARY KEY (mid, request_id)"
     ");"
-    "ALTER TABLE payment_intents ADD COLUMN IF NOT EXISTS gateway_order_id TEXT NOT NULL DEFAULT '';"
+    "ALTER TABLE payment_intents ADD COLUMN IF NOT EXISTS gateway_order_id TEXT        NOT NULL DEFAULT '';"
+    "ALTER TABLE payment_intents ADD COLUMN IF NOT EXISTS update_time      TIMESTAMPTZ NOT NULL DEFAULT NOW();"
 
     /* Merchant registry — mid mirrors the Wire account ID */
     "CREATE TABLE IF NOT EXISTS merchants ("
@@ -900,7 +902,7 @@ int db_intent_find_by_order(DB *db, uint32_t mid, uint64_t order_id, IntentInfo 
 
 int db_intent_settle(DB *db, uint32_t mid, uint64_t request_id) {
     static const char SQL[] =
-        "UPDATE payment_intents SET status = 1 "
+        "UPDATE payment_intents SET status = 1, update_time = NOW() "
         "WHERE mid = $1 AND request_id = $2 AND status = 0";
 
     uint64_t m  = pg_int8((uint64_t)mid);
