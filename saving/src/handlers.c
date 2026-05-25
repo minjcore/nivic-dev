@@ -19,7 +19,7 @@ void maintenance_set(int on)  { g_maintenance = on ? 1 : 0; }
 int  maintenance_get(void)    { return g_maintenance; }
 
 /* ─── Push helper: registry first, APNs fallback ────────────────────────── */
-static void push_or_apns(DB *db, uint32_t mid,
+void push_or_apns(DB *db, uint32_t mid,
                           const uint8_t *buf, size_t len,
                           const char *title, const char *apns_body) {
     if (registry_push(mid, buf, len) == 0) return;

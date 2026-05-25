@@ -29,3 +29,8 @@ void st_kill_mid(SessionTable *st, uint32_t mid);
  * RENEW_SESSION return ERR_SYSTEM_OFFLINE. */
 void maintenance_set(int on);
 int  maintenance_get(void);
+
+/* Push EVT frame to mid via live connection; fall back to APNs if offline. */
+void push_or_apns(DB *db, uint32_t mid,
+                  const uint8_t *buf, size_t len,
+                  const char *title, const char *apns_body);

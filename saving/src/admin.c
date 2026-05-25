@@ -12,6 +12,7 @@
  */
 
 #include "admin.h"
+#include "apns.h"
 #include "db.h"
 #include "handlers.h"
 #include "registry.h"
@@ -299,7 +300,12 @@ static void h_cashin(int fd, const char *body, const char *actor) {
     pb[12]=(bal64>>24)&0xFF;pb[13]=(bal64>>16)&0xFF;
     pb[14]=(bal64>> 8)&0xFF;pb[15]=(bal64    )&0xFF;
     size_t n = wire_frame_encode(WIRE_EVT_CASH_IN, 0, pb, 16, evt, sizeof(evt));
-    if (n > 0) registry_push(uid, evt, n);
+    if (n > 0) {
+        char ab[64];
+        snprintf(ab, sizeof(ab), "+%llu \xe2\x82\xab v\xc3\xa0o t\xc3\xa0i kho\xe1\xba\xa3n",
+                 (unsigned long long)amount);
+        push_or_apns(g.db, uid, evt, n, "N\xe1\xba\xa1p ti\xe1\xbb\x81n", ab);
+    }
 
     char b[128];
     snprintf(b, sizeof(b), "{\"ok\":true,\"after_balance\":%lld}", (long long)after);
@@ -404,7 +410,12 @@ static void h_cashout(int fd, const char *body, const char *actor) {
     pb[16]=(bal64>>24)&0xFF; pb[17]=(bal64>>16)&0xFF;
     pb[18]=(bal64>> 8)&0xFF; pb[19]=(bal64    )&0xFF;
     size_t pn = wire_frame_encode(WIRE_EVT_CASH_OUT, 0, pb, 20, evt, sizeof(evt));
-    if (pn > 0) registry_push(uid, evt, pn);
+    if (pn > 0) {
+        char ab[64];
+        snprintf(ab, sizeof(ab), "-%llu \xe2\x82\xab r\xc3\xbat t\xc3\xa0i kho\xe1\xba\xa3n",
+                 (unsigned long long)amount);
+        push_or_apns(g.db, uid, evt, pn, "R\xc3\xbat ti\xe1\xbb\x81n", ab);
+    }
 
     char b[128];
     snprintf(b, sizeof(b), "{\"ok\":true,\"after_balance\":%lld}", (long long)after);

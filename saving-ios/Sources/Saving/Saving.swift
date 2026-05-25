@@ -378,8 +378,24 @@ public final class SavingClient: ObservableObject {
     @Published public var isConnected    = false
     @Published public var lastTransferIn: SavingTransfer?
 
+    private var pendingDeviceToken: String?
+#if os(iOS)
+    private var _tokenObserver: NSObjectProtocol?
+#endif
+
     public init(host: String = "127.0.0.1", port: UInt16 = 7474, secret: String) {
         net = SavingNetwork(host: host, port: port, secret: secret)
+#if os(iOS)
+        _tokenObserver = NotificationCenter.default.addObserver(
+            forName: .savingDeviceToken, object: nil, queue: nil
+        ) { [weak self] note in
+            guard let self, let tok = note.userInfo?["token"] as? String else { return }
+            Task { @MainActor in
+                self.pendingDeviceToken = tok
+                if self.uid != nil { try? await self.net.registerPushToken(tok) }
+            }
+        }
+#endif
     }
 
     // ─── Connection ──────────────────────────────────────────────────────────
@@ -406,6 +422,7 @@ public final class SavingClient: ObservableObject {
     public func login(id: UInt32, password: String) async throws {
         try await net.login(id: id, password: password)
         uid = id
+        if let tok = pendingDeviceToken { try? await net.registerPushToken(tok) }
     }
 
     public func logout() async throws {
