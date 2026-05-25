@@ -264,6 +264,41 @@ static void h_cashin(int fd, const char *body) {
     json_ok(fd, b);
 }
 
+static void h_admin_users_list(int fd) {
+    char buf[4096];
+    if (db_admin_user_list(g.db, buf, sizeof(buf)) != 0) {
+        json_err(fd, 500, "db error"); return;
+    }
+    char out[4160];
+    snprintf(out, sizeof(out), "{\"admins\":%s}", buf);
+    json_ok(fd, out);
+}
+
+static void h_admin_users_create(int fd, const char *body) {
+    char username[64] = "", password[256] = "";
+    jgetstr(body, "username", username, sizeof(username));
+    jgetstr(body, "password", password, sizeof(password));
+    if (!username[0] || !password[0]) {
+        json_err(fd, 400, "missing username or password"); return;
+    }
+    uint8_t pw_hash[32];
+    saving_sha256(password, strlen(password), pw_hash);
+    if (db_admin_user_upsert(g.db, username, pw_hash) != 0) {
+        json_err(fd, 500, "db error"); return;
+    }
+    json_ok(fd, "{\"ok\":true}");
+}
+
+static void h_admin_users_delete(int fd, const char *body) {
+    char username[64] = "";
+    jgetstr(body, "username", username, sizeof(username));
+    if (!username[0]) { json_err(fd, 400, "missing username"); return; }
+    if (db_admin_user_delete(g.db, username) != 0) {
+        json_err(fd, 500, "db error"); return;
+    }
+    json_ok(fd, "{\"ok\":true}");
+}
+
 static void h_export(int fd, const char *query) {
     char from_date[16] = "", to_date[16] = "";
 
@@ -367,6 +402,7 @@ static const char ADMIN_HTML[] =
 "<div class='tab' id='t2'>Account</div>"
 "<div class='tab' id='t3'>Cash Ops</div>"
 "<div class='tab' id='t4'>Export</div>"
+"<div class='tab' id='t5'>Admins</div>"
 "</div>"
 "<div id='pg-dash' class='pg on'>"
 "<div class='grid'>"
@@ -415,6 +451,19 @@ static const char ADMIN_HTML[] =
 "<button id='dlb' style='width:100%'>Download CSV</button>"
 "<div id='einfo' style='margin-top:12px;font-size:12px;color:#555'></div>"
 "</div></div>"
+"<div id='pg-adm' class='pg'>"
+"<div class='sec' style='max-width:480px'>"
+"<h2>Create Admin User</h2>"
+"<div id='admr'></div>"
+"<div class='fg'><label>Username</label><input id='anu' type='text' style='width:100%' autocomplete='off'></div>"
+"<div class='fg'><label>Password</label><input id='anp' type='password' style='width:100%' autocomplete='new-password'></div>"
+"<button id='anb' style='width:100%'>Create / Update</button>"
+"</div>"
+"<div class='sec' style='margin-top:16px'>"
+"<h2>Admin Users <button id='arb' style='font-size:11px;padding:3px 8px;margin-left:6px'>Refresh</button></h2>"
+"<table><thead><tr><th>Username</th><th>Created</th><th></th></tr></thead>"
+"<tbody id='atb'></tbody></table>"
+"</div></div>"
 "<script>"
 "var P='',ar=null;"
 "var fmt=function(n){return Number(n).toLocaleString('vi-VN');};"
@@ -455,13 +504,14 @@ static const char ADMIN_HTML[] =
 "    document.getElementById('s3').textContent=fmt(d.total_volume);"
 "  });"
 "}"
-"var TABS=['dash','sess','acct','cash','exp'];"
+"var TABS=['dash','sess','acct','cash','exp','adm'];"
 "function tab(n){"
 "  TABS.forEach(function(t,i){"
 "    document.getElementById('pg-'+t).className='pg'+(t===n?' on':'');"
 "    document.getElementById('t'+i).className='tab'+(t===n?' on':'');"
 "  });"
 "  if(n==='sess')loadSess();"
+"  if(n==='adm')loadAdmins();"
 "}"
 "function loadSess(){"
 "  api('/sessions').then(function(d){"
@@ -523,6 +573,36 @@ static const char ADMIN_HTML[] =
 "document.getElementById('t2').onclick=function(){tab('acct');};"
 "document.getElementById('t3').onclick=function(){tab('cash');};"
 "document.getElementById('t4').onclick=function(){tab('exp');};"
+"document.getElementById('t5').onclick=function(){tab('adm');};"
+"document.getElementById('arb').onclick=loadAdmins;"
+"document.getElementById('anb').onclick=function(){"
+"  var u=document.getElementById('anu').value.trim();"
+"  var p=document.getElementById('anp').value;"
+"  var r=document.getElementById('admr');"
+"  if(!u||!p){r.innerHTML='<div class=\"er\">Fill username and password</div>';return;}"
+"  api('/admins',{method:'POST',body:JSON.stringify({username:u,password:p})})"
+"    .then(function(){"
+"      r.innerHTML='<div class=\"ok\">User saved.</div>';"
+"      document.getElementById('anu').value='';"
+"      document.getElementById('anp').value='';"
+"      loadAdmins();"
+"    }).catch(function(e){"
+"      r.innerHTML='<div class=\"er\">Error: '+e.message+'</div>';"
+"    });"
+"};"
+"function loadAdmins(){"
+"  api('/admins').then(function(d){"
+"    document.getElementById('atb').innerHTML=d.admins.map(function(a){"
+"      return '<tr><td>'+a.username+'</td><td>'+a.create_time+'</td>'"
+"            +'<td><button class=\"kb\" onclick=\"delAdmin(\\'' +a.username+ '\\')\">Delete</button></td></tr>';"
+"    }).join('');"
+"  });"
+"}"
+"function delAdmin(u){"
+"  if(!confirm('Delete admin \\'' +u+ '\\'?'))return;"
+"  api('/admins/delete',{method:'POST',body:JSON.stringify({username:u})})"
+"    .then(function(){loadAdmins();});"
+"}"
 "document.getElementById('dlb').onclick=function(){"
 "  var from=document.getElementById('ef').value;"
 "  var to=document.getElementById('et').value;"
@@ -638,6 +718,11 @@ static void dispatch(int fd) {
     else if (strcmp(path, "/api/cashin")        == 0) h_cashin(fd, body);
     else if (strcmp(path, "/api/cashout")       == 0) h_cashout(fd, body);
     else if (strcmp(path, "/api/export")        == 0) h_export(fd, query);
+    else if (strcmp(path, "/api/admins")        == 0 &&
+             strcmp(method, "GET")              == 0) h_admin_users_list(fd);
+    else if (strcmp(path, "/api/admins")        == 0 &&
+             strcmp(method, "POST")             == 0) h_admin_users_create(fd, body);
+    else if (strcmp(path, "/api/admins/delete") == 0) h_admin_users_delete(fd, body);
     else json_err(fd, 404, "not found");
 }
 
