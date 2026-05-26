@@ -7,8 +7,9 @@ Test RENEW_SESSION (0x04):
 """
 import socket, struct, hmac, hashlib, random, os
 
-HOST   = "127.0.0.1"
-PORT   = 7474
+import os
+HOST   = os.getenv("WIRE_HOST", "127.0.0.1")
+PORT   = int(os.getenv("WIRE_PORT", "7474"))
 SECRET = b"saving_wire_secret_changeme"
 RUN_ID = random.randint(100_000, 999_999)
 

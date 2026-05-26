@@ -9,8 +9,9 @@ one dedicated to collecting push events (registry_push goes to all sessions).
 """
 import socket, struct, hmac, hashlib, random, threading
 
-HOST   = "127.0.0.1"
-PORT   = 7474
+import os
+HOST   = os.getenv("WIRE_HOST", "127.0.0.1")
+PORT   = int(os.getenv("WIRE_PORT", "7474"))
 SECRET = b"saving_wire_secret_changeme"
 RUN_ID = random.randint(100_000, 999_999)
 

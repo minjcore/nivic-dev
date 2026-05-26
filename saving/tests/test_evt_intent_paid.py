@@ -6,8 +6,9 @@ Push body: [request_id 8B][customer_id 4B][amount 8B]
 """
 import socket, struct, hmac, hashlib, random, threading, time
 
-HOST   = "127.0.0.1"
-PORT   = 7474
+import os
+HOST   = os.getenv("WIRE_HOST", "127.0.0.1")
+PORT   = int(os.getenv("WIRE_PORT", "7474"))
 SECRET = b"saving_wire_secret_changeme"
 RUN_ID = random.randint(100_000, 999_999)
 

@@ -3,7 +3,7 @@
 Test CONFIRM_INTENT (0x29):
   body: [customer_token 32B][merchant_id 4B][request_id 8B]
   Customer-initiated: scan merchant QR → confirm → pay. No TOTP required.
-  ACK extra: [after_balance 8B]
+  ACK extra: [txn_id 8B][after_balance 8B]
   - Normal confirm
   - Already settled   → ERR_INTENT_SETTLED (0x0D)
   - Low balance       → ERR_LOW_BALANCE    (0x08)
@@ -12,8 +12,9 @@ Test CONFIRM_INTENT (0x29):
 """
 import socket, struct, hmac, hashlib, random, time
 
-HOST   = "127.0.0.1"
-PORT   = 7474
+import os
+HOST   = os.getenv("WIRE_HOST", "127.0.0.1")
+PORT   = int(os.getenv("WIRE_PORT", "7474"))
 SECRET = b"saving_wire_secret_changeme"
 RUN_ID = random.randint(100_000, 999_999)
 
@@ -102,15 +103,19 @@ print(f"    balances: customer={bal_c_before:,}  merchant={bal_m_before:,}")
 rc, extra = confirm_intent(cc, ct, seq=4, merchant_id=MERCH, request_id=REQ)
 print(f"\n[Test 1] CONFIRM_INTENT {AMT:,} → code=0x{rc:02X} (expect 0x00)")
 assert rc == 0, f"FAIL: 0x{rc:02X}"
-after_bal = struct.unpack(">Q", extra[:8])[0] if len(extra) >= 8 else -1
+# ACK extra: [txn_id 8B][after_balance 8B]
+assert len(extra) >= 16, f"FAIL: ACK too short ({len(extra)} bytes, expect ≥16)"
+txn_id    = struct.unpack(">Q", extra[0:8])[0]
+after_bal = struct.unpack(">Q", extra[8:16])[0]
 bal_c = get_balance(cc, ct, seq=5)
 bal_m = get_balance(mc, mt, seq=6)
-print(f"    customer: {bal_c_before:,} → {bal_c:,}  (ACK after_balance={after_bal:,})")
+print(f"    customer: {bal_c_before:,} → {bal_c:,}  (ACK txn_id={txn_id} after_balance={after_bal:,})")
 print(f"    merchant: {bal_m_before:,} → {bal_m:,}")
+assert txn_id > 0,                  "FAIL txn_id must be positive"
 assert bal_c == bal_c_before - AMT, "FAIL customer balance"
 assert bal_m == bal_m_before + AMT, "FAIL merchant balance"
 assert after_bal == bal_c,          "FAIL ACK after_balance mismatch"
-print(f"    ✓ debit customer  credit merchant  ACK balance correct")
+print(f"    ✓ debit customer  credit merchant  txn_id={txn_id}  ACK balance correct")
 
 # ── Test 2: already settled ───────────────────────────────────────────────────
 rc2, _ = confirm_intent(cc, ct, seq=6, merchant_id=MERCH, request_id=REQ)

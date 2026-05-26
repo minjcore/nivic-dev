@@ -2,8 +2,9 @@
 """Test PING (0x01) → PONG (0x80), no auth required, seq mirrored."""
 import socket, struct, hmac, hashlib, random
 
-HOST   = "127.0.0.1"
-PORT   = 7474
+import os
+HOST   = os.getenv("WIRE_HOST", "127.0.0.1")
+PORT   = int(os.getenv("WIRE_PORT", "7474"))
 SECRET = b"saving_wire_secret_changeme"
 
 def sign(p):   return hmac.new(SECRET, p, hashlib.sha256).digest()

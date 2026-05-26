@@ -1,0 +1,35 @@
+services:
+
+  pg:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB:       saving_test
+      POSTGRES_USER:     saving
+      POSTGRES_PASSWORD: saving
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saving -d saving_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    networks: [ci]
+
+  wire:
+    build:
+      context: .
+      dockerfile: saving/Dockerfile
+    environment:
+      SAVING_DB:      "host=pg dbname=saving_test user=saving password=saving sslmode=disable"
+      ADMIN_USER:     admin
+      ADMIN_PASSWORD: test123
+      WIRE_M2M_TOKEN: ci-test-token
+    ports:
+      - "17474:7474"
+      - "17475:7475"
+    depends_on:
+      pg:
+        condition: service_healthy
+    networks: [ci]
+
+networks:
+  ci:
+    driver: bridge
