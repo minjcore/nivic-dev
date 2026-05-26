@@ -46,11 +46,15 @@ fun PaymentConfirmSheet(
     val scope     = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
-        balance = runCatching { client.balance() }.getOrNull()
+        try {
+            balance = client.balance()
+        } catch (e: Exception) {
+            error = "Không lấy được số dư: ${e.message}"
+        }
     }
 
-    val after     = balance?.minus(intentPayload.amount)
-    val canPay    = after != null && after >= 0
+    val after  = balance?.minus(intentPayload.amount)
+    val canPay = balance != null && after != null && after >= 0
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

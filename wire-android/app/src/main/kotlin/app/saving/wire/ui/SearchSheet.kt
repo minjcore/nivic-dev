@@ -325,11 +325,21 @@ fun FrontStoreSheet(
     var mcName    by remember { mutableStateOf("") }
     var mcAddress by remember { mutableStateOf("") }
     var menu      by remember { mutableStateOf<List<MenuItem>>(emptyList()) }
+    var loadError by remember { mutableStateOf<String?>(null) }
     var showPay   by remember { mutableStateOf(intentPayload != null) }
 
     LaunchedEffect(mid) {
-        runCatching { val m = merchantsClient.getMerchant(mid); mcName = m.name; mcAddress = m.address }
-        runCatching { menu = merchantsClient.listMenu(mid) }
+        try {
+            val m = merchantsClient.getMerchant(mid)
+            mcName = m.name; mcAddress = m.address
+        } catch (e: Exception) {
+            loadError = e.message
+        }
+        try {
+            menu = merchantsClient.listMenu(mid)
+        } catch (e: Exception) {
+            if (loadError == null) loadError = e.message
+        }
     }
 
     ModalBottomSheet(
@@ -342,6 +352,14 @@ fun FrontStoreSheet(
             contentPadding      = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            // ── Load error ────────────────────────────────────────────────
+            loadError?.let { err ->
+                item {
+                    Text(err, color = Color(0xFFFF5252), fontSize = 13.sp,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp))
+                }
+            }
+
             // ── Store header ──────────────────────────────────────────────
             item {
                 Column(horizontalAlignment = Alignment.CenterHorizontally,

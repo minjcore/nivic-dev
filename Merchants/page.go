@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -147,19 +148,18 @@ async function createOrder() {
     const data = await res.json();
     if (!res.ok) { alert(data.error || 'Lỗi tạo đơn'); return; }
 
-    const payUrl = data.pay_url;
+    const wireUrl = data.intent_url || data.wire_url || data.pay_url;
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
     if (isMobile) {
-      // Mobile: mở Wire app luôn qua pay_url
-      window.location.href = payUrl;
+      window.location.href = wireUrl;
     } else {
       // PC: show QR để user scan bằng điện thoại
       document.getElementById('qr-amount-text').textContent = fmtVND(amount);
       document.getElementById('qr-note-text').textContent = note || '';
       document.getElementById('qr-canvas').innerHTML = '';
       new QRCode(document.getElementById('qr-canvas'), {
-        text: payUrl, width: 220, height: 220,
+        text: data.qr_url || wireUrl, width: 220, height: 220,
         colorDark: '#4f46e5', colorLight: '#fff',
         correctLevel: QRCode.CorrectLevel.M
       });
@@ -204,10 +204,12 @@ async function checkPoints() {
 
 func renderMerchantPage(w http.ResponseWriter, m *Merchant, items []MenuItem) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = merchantPageTmpl.Execute(w, struct {
+	if err := merchantPageTmpl.Execute(w, struct {
 		Merchant  *Merchant
 		MenuItems []MenuItem
-	}{m, items})
+	}{m, items}); err != nil {
+		log.Printf("merchantPageTmpl.Execute mid=%d: %v", m.MID, err)
+	}
 }
 
 // ─── Universal pay page ───────────────────────────────────────────────────────
@@ -217,7 +219,8 @@ type payPageData struct {
 	MerchantName string
 	Amount       uint64
 	Note         string
-	DeepLink     string
+	DeepLink     string // saving://intent — open Wire mini-app
+	QrLink       string // saving://pay?pr — legacy counter QR
 	Status       string
 }
 
@@ -313,7 +316,7 @@ function showQR() {
   if (wrap.style.display === 'block') return;
   wrap.style.display = 'block';
   new QRCode(document.getElementById('qr-canvas'), {
-    text: DEEPLINK, width: 220, height: 220,
+    text: {{.QrLink | js}}, width: 220, height: 220,
     colorDark: '#000', colorLight: '#fff',
     correctLevel: QRCode.CorrectLevel.M
   });
@@ -339,5 +342,7 @@ if (!paid) {
 
 func renderPayPage(w http.ResponseWriter, d payPageData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = payPageTmpl.Execute(w, d)
+	if err := payPageTmpl.Execute(w, d); err != nil {
+		log.Printf("payPageTmpl.Execute order=%s: %v", d.OrderID, err)
+	}
 }
