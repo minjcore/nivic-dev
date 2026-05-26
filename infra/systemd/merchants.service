@@ -11,6 +11,8 @@ RestartSec=5
 
 Environment=MERCHANTS_DB=/var/lib/docker/volumes/app_merchants_data/_data/merchants.db
 Environment=MERCHANTS_ADDR=:8090
+Environment=WIRE_ADMIN_URL=http://localhost:7475
+Environment=WIRE_M2M_TOKEN=REPLACE_WITH_SECRET
 
 WorkingDirectory=/root/app
 StandardOutput=append:/var/log/merchants.log

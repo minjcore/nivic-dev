@@ -6,8 +6,10 @@ services:
       dockerfile: saving/Dockerfile
     environment:
       SAVING_DB: ${SAVING_DB}
+      WIRE_M2M_TOKEN: ${WIRE_M2M_TOKEN}
     ports:
       - "7474:7474"
+      - "127.0.0.1:7475:7475"
     restart: unless-stopped
     networks: [app]
 
