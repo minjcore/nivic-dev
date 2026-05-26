@@ -80,7 +80,7 @@ type handler struct {
 func (h *handler) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health",                                  h.handleHealth)
-	mux.HandleFunc("GET /merchants",                               h.handleSearch)
+	mux.HandleFunc("GET /merchants",                               h.handleSearch) // ?q=name OR ?slug=bmap
 	mux.HandleFunc("GET /merchants/{mid}",                         h.handleGet)
 	mux.HandleFunc("POST /merchants",                              h.handleRegister)
 	mux.HandleFunc("POST /merchants/onboard",                      h.handleOnboard)
@@ -118,6 +118,7 @@ func (h *handler) routes() http.Handler {
 	mux.HandleFunc("POST /public/{mid}/order",                     h.handlePublicCreateOrder)
 	// Universal pay page — Shopify model: one URL, all platforms
 	mux.HandleFunc("GET /pay/{order_id}",                          h.handlePayPage)
+	mux.HandleFunc("GET /pay/{order_id}/wire",                   h.handlePayOrderWire)
 	mux.HandleFunc("GET /pay/{order_id}/status",                   h.handlePayStatus)
 
 	// Middleware: merchant public page for *.nivic.dev subdomains and custom domains
@@ -161,6 +162,18 @@ func (h *handler) handleHealth(w http.ResponseWriter, _ *http.Request) {
 // Public — search merchants by name.
 
 func (h *handler) handleSearch(w http.ResponseWriter, r *http.Request) {
+	// ?slug=bmap → single merchant lookup by slug
+	if slug := r.URL.Query().Get("slug"); slug != "" {
+		m, err := h.store.GetBySlug(slug)
+		if err != nil {
+			jsonErr(w, 500, err.Error()); return
+		}
+		if m == nil {
+			jsonErr(w, 404, "merchant not found"); return
+		}
+		jsonOK(w, m); return
+	}
+	// ?q=name → full-text search
 	q := r.URL.Query().Get("q")
 	results, err := h.store.SearchMerchants(q)
 	if err != nil {
@@ -191,6 +204,31 @@ func (h *handler) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOK(w, m) // PrivkeyB64 / Token are tagged json:"-" so never exposed
+}
+
+// GET /merchants/by-slug/{slug} — public lookup for Wire app (slug from *.nivic.dev).
+
+func (h *handler) handleGetBySlug(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	if slug == "" {
+		jsonErr(w, 400, "slug required")
+		return
+	}
+	m, err := h.store.GetBySlug(slug)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if m == nil {
+		jsonErr(w, 404, "merchant not found")
+		return
+	}
+	jsonOK(w, map[string]any{
+		"mid":    m.MID,
+		"name":   m.Name,
+		"slug":   m.Slug,
+		"address": m.Address,
+	})
 }
 
 // POST /merchants
@@ -324,10 +362,14 @@ func (h *handler) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rid := uint64(time.Now().UnixMilli())
 	jsonOK(w, map[string]any{
-		"order_id": orderID,
-		"pr":       prB64,
-		"qr_url":   "saving://pay?pr=" + prB64,
+		"order_id":   orderID,
+		"pr":         prB64,
+		"qr_url":     "saving://pay?pr=" + prB64,
+		"intent_url": wireIntentURL(mid, rid, finalAmount, orderID),
+		"store_url":  wireStoreURL(mid),
+		"request_id": rid,
 	})
 }
 
@@ -1052,10 +1094,15 @@ func (h *handler) handlePublicCreateOrder(w http.ResponseWriter, r *http.Request
 		scheme = "http"
 	}
 	payURL := scheme + "://" + r.Host + "/pay/" + orderID
+	rid := uint64(time.Now().UnixMilli())
 	jsonOK(w, map[string]any{
-		"order_id": orderID,
-		"qr_url":   "saving://pay?pr=" + prB64,
-		"pay_url":  payURL,
+		"order_id":   orderID,
+		"pr":         prB64,
+		"qr_url":     "saving://pay?pr=" + prB64,
+		"pay_url":    payURL,
+		"wire_url":   wireStoreURL(mid),
+		"intent_url": wireIntentURL(mid, rid, req.Amount, orderID),
+		"request_id": rid,
 	})
 }
 
@@ -1211,14 +1258,34 @@ func (h *handler) handlePayPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prB64, _ := prToBase64URL(pr)
-	deepLink := "saving://pay?pr=" + prB64
 	renderPayPage(w, payPageData{
 		OrderID:      orderID,
 		MerchantName: m.Name,
 		Amount:       o.Amount,
 		Note:         o.Note,
-		DeepLink:     deepLink,
+		DeepLink:     wireIntentURL(o.MID, uint64(o.CreatedAt), o.Amount, orderID),
+		QrLink:       "saving://pay?pr=" + prB64,
 		Status:       o.Status,
+	})
+}
+
+// GET /pay/{order_id}/wire — JSON deeplinks for Wire app (https pay page / app links).
+
+func (h *handler) handlePayOrderWire(w http.ResponseWriter, r *http.Request) {
+	orderID := r.PathValue("order_id")
+	o, err := h.store.GetOrder(orderID)
+	if err != nil || o == nil {
+		jsonErr(w, 404, "not found")
+		return
+	}
+	jsonOK(w, map[string]any{
+		"order_id":   orderID,
+		"mid":        o.MID,
+		"amount":     o.Amount,
+		"status":     o.Status,
+		"request_id": o.CreatedAt,
+		"intent_url": wireIntentURL(o.MID, uint64(o.CreatedAt), o.Amount, orderID),
+		"store_url":  wireStoreURL(o.MID),
 	})
 }
 
