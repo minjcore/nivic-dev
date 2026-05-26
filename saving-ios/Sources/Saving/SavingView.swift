@@ -1133,7 +1133,7 @@ struct QRScanSheet: View {
         case ready(MerchantPayload)
         case totpEnroll(uid: UInt32, secretB32: String)
         case totpPay(uid: UInt32, token: String, isValid: Bool)
-        case intentPay(mid: UInt32, requestID: UInt64, amount: UInt64)
+        case intentPay(mid: UInt32, requestID: UInt64, amount: UInt64, orderID: String?)
         case failed(String)
     }
 
@@ -1156,8 +1156,9 @@ struct QRScanSheet: View {
                     totpEnrollSuccessView(uid: uid)
                 case .totpPay(let uid, let token, let isValid):
                     totpPayResultView(uid: uid, token: token, isValid: isValid)
-                case .intentPay(let mid, let requestID, let amount):
-                    IntentPaySheet(client: client, mid: mid, requestID: requestID, amount: amount) {
+                case .intentPay(let mid, let requestID, let amount, let orderID):
+                    IntentPaySheet(client: client, merchantsClient: merchantsClient,
+                                   mid: mid, requestID: requestID, amount: amount, orderID: orderID) {
                         Task { await onDone() }
                         dismiss()
                     }
@@ -1212,7 +1213,8 @@ struct QRScanSheet: View {
                           let ridStr = comps.queryItems?.first(where: { $0.name == "rid" })?.value,
                           let amtStr = comps.queryItems?.first(where: { $0.name == "amount" })?.value,
                           let mid = UInt32(midStr), let rid = UInt64(ridStr), let amt = UInt64(amtStr) {
-                    state = .intentPay(mid: mid, requestID: rid, amount: amt)
+                    let oid = comps.queryItems?.first(where: { $0.name == "oid" })?.value
+                    state = .intentPay(mid: mid, requestID: rid, amount: amt, orderID: oid)
                 } else if let payload = MerchantPayload.parse(raw) {
                     if payload.paymentReq != nil {
                         state = .verifying(payload)
@@ -1340,11 +1342,13 @@ struct QRScanSheet: View {
 // MARK: - Wire Intent Pay
 
 struct IntentPaySheet: View {
-    let client:    SavingClient
-    let mid:       UInt32
-    let requestID: UInt64
-    let amount:    UInt64
-    let onDone:    () -> Void
+    let client:          SavingClient
+    let merchantsClient: MerchantsClient
+    let mid:             UInt32
+    let requestID:       UInt64
+    let amount:          UInt64
+    let orderID:         String?
+    let onDone:          () -> Void
 
     @State private var error:   String?
     @State private var loading  = false
@@ -1373,20 +1377,22 @@ struct IntentPaySheet: View {
             } else {
                 Button {
                     Task {
-                        let secret = TOTPManager.shared.secret
                         loading = true; error = nil
                         do {
-                            let code = TOTP.generateCode(secret: secret)
-                            try await client.payIntent(merchantID: mid, requestID: requestID, totpCode: code)
+                            let result = try await client.confirmIntent(merchantID: mid, requestID: requestID)
+                            if let oid = orderID, let uid = client.uid {
+                                try await merchantsClient.wireConfirmPaid(orderID: oid,
+                                                                          txnId: result.txnId,
+                                                                          paidBy: UInt64(uid))
+                            }
                             success = true
                             try? await Task.sleep(nanoseconds: 1_500_000_000)
                             onDone()
                         } catch WireError.serverError(let c) {
                             switch c {
                             case .errLowBalance:    error = "Không đủ số dư"
-                            case .errTotpInvalid:   error = "Mã TOTP không hợp lệ — cần đăng ký TOTP trước"
                             case .errIntentSettled: error = "Đơn đã thanh toán rồi"
-                            case .errNotFound:      error = "Chưa đăng ký TOTP với shop này"
+                            case .errNotFound:      error = "Không tìm thấy đơn hàng"
                             default:                error = "Lỗi: \(c)"
                             }
                         } catch { self.error = error.localizedDescription }

@@ -215,6 +215,22 @@ public struct MerchantsClient {
         _ = try? await URLSession.shared.data(for: req)
         // Fire-and-forget: payment already succeeded in Wire; order confirmation is best-effort.
     }
+
+    /** Wire app relays txn_id from CONFIRM_INTENT ACK — Merchants pull-verifies against Wire admin. */
+    public func wireConfirmPaid(orderID: String, txnId: UInt64, paidBy: UInt64) async throws {
+        guard let url = URL(string: "\(baseURL)/orders/\(orderID)/wire_confirm") else {
+            throw URLError(.badURL)
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONEncoder().encode(["txn_id": txnId, "paid_by": paidBy])
+        req.timeoutInterval = 10
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+    }
 }
 
 public struct LoyaltyBalance: Codable {

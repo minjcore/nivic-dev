@@ -43,6 +43,11 @@ public struct PendingIntent {
     public let amount:    UInt64
 }
 
+public struct ConfirmIntentResult {
+    public let txnId:        UInt64
+    public let afterBalance: UInt64
+}
+
 public struct MerchantTransaction: Identifiable {
     public let id = UUID()
     public let customerID:   UInt32
@@ -276,13 +281,17 @@ private actor SavingNetwork {
         }
     }
 
-    func confirmIntent(merchantID: UInt32, requestID: UInt64) async throws -> UInt64 {
+    func confirmIntent(merchantID: UInt32, requestID: UInt64) async throws -> ConfirmIntentResult {
         let token = try requireToken()
         let ack = try await conn.send(WireFrame.confirmIntent(token: token, merchantID: merchantID,
                                                                requestID: requestID,
                                                                seq: nextSeq())).parseAck()
         guard ack.code == .ok else { throw WireError.serverError(ack.code) }
-        return ack.data.count >= 8 ? ack.data.readBigEndianUInt64(at: 0) : 0
+        // ACK extra: [txn_id 8B][after_balance 8B]
+        return ConfirmIntentResult(
+            txnId:        ack.data.count >= 8  ? ack.data.readBigEndianUInt64(at: 0) : 0,
+            afterBalance: ack.data.count >= 16 ? ack.data.readBigEndianUInt64(at: 8) : 0
+        )
     }
 
     func getMerchantInfo(merchantID: UInt32) async throws -> String {
@@ -491,7 +500,7 @@ public final class SavingClient: ObservableObject {
         try await net.listIntents()
     }
 
-    public func confirmIntent(merchantID: UInt32, requestID: UInt64) async throws -> UInt64 {
+    public func confirmIntent(merchantID: UInt32, requestID: UInt64) async throws -> ConfirmIntentResult {
         try await net.confirmIntent(merchantID: merchantID, requestID: requestID)
     }
 
