@@ -73,8 +73,10 @@ func prToBase64URL(pr *PaymentRequest) (string, error) {
 // ─── Handler context ────────────────────────────────────────────────────────
 
 type handler struct {
-	store      *Store
-	adminToken string
+	store        *Store
+	adminToken   string
+	wireAdminURL string
+	wireM2MToken string
 }
 
 func (h *handler) routes() http.Handler {
@@ -116,6 +118,8 @@ func (h *handler) routes() http.Handler {
 	mux.HandleFunc("POST /admin/migrate-slugs",                    h.handleMigrateSlugs)
 	// Public pay endpoint (no merchant token needed — QR is Ed25519-signed)
 	mux.HandleFunc("POST /public/{mid}/order",                     h.handlePublicCreateOrder)
+	// App relay: Wire app POSTs txn_id after CONFIRM_INTENT ACK; Merchants pull-verifies with Wire admin.
+	mux.HandleFunc("POST /orders/{oid}/wire_confirm",              h.handleWireConfirm)
 	// Universal pay page — Shopify model: one URL, all platforms
 	mux.HandleFunc("GET /pay/{order_id}",                          h.handlePayPage)
 	mux.HandleFunc("GET /pay/{order_id}/wire",                   h.handlePayOrderWire)
@@ -433,6 +437,110 @@ func (h *handler) handleConfirmOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOK(w, map[string]any{"status": "paid", "points_awarded": pts})
+}
+
+// POST /orders/{oid}/wire_confirm
+// Called by the Wire Android app after it receives CONFIRM_INTENT ACK from Wire TCP.
+// Body: { "txn_id": 12345, "paid_by": 16777216 }
+// No auth — legitimacy is proven by pull-verifying txn_id against Wire admin API.
+
+func (h *handler) handleWireConfirm(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		TxnID  int64  `json:"txn_id"`
+		PaidBy uint32 `json:"paid_by"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonErr(w, 400, "bad json"); return
+	}
+	if body.TxnID <= 0 {
+		jsonErr(w, 400, "txn_id required"); return
+	}
+
+	oid := r.PathValue("oid")
+	o, err := h.store.GetOrder(oid)
+	if err != nil || o == nil {
+		jsonErr(w, 404, "order not found"); return
+	}
+	if o.Status != StatusPending {
+		jsonErr(w, 409, "order already settled"); return
+	}
+
+	// Pull-verify: ask Wire admin whether this txn actually happened
+	txn, err := h.verifyWireTxn(body.TxnID)
+	if err != nil {
+		jsonErr(w, 502, "wire verify failed: "+err.Error()); return
+	}
+	if uint32(txn.ToID) != o.MID {
+		jsonErr(w, 400, "txn recipient mismatch"); return
+	}
+	if txn.Amount != o.Amount {
+		jsonErr(w, 400, "txn amount mismatch"); return
+	}
+
+	paidBy := body.PaidBy
+	if paidBy == 0 {
+		paidBy = uint32(txn.FromID)
+	}
+
+	pts, err := h.store.MarkPaid(oid, paidBy)
+	if err != nil {
+		jsonErr(w, 400, err.Error()); return
+	}
+
+	if paidBy != 0 {
+		go func() {
+			msg := fmt.Sprintf("✅ Đơn hàng %s đã được thanh toán!\nSố tiền: %s₫", oid[max(0, len(oid)-8):], formatVND(int64(o.Amount)))
+			if pts > 0 {
+				msg += fmt.Sprintf("\n🌟 Bạn được cộng %d điểm tích luỹ.", pts)
+			}
+			_, _ = h.store.SendChatMessage(o.MID, paidBy, true, msg)
+		}()
+	}
+
+	jsonOK(w, map[string]any{"status": "paid", "points_awarded": pts})
+}
+
+type wireTxnInfo struct {
+	TxnID  int64  `json:"txn_id"`
+	FromID int64  `json:"from_id"`
+	ToID   int64  `json:"to_id"`
+	Amount uint64 `json:"amount"`
+	Type   int    `json:"type"`
+}
+
+func (h *handler) verifyWireTxn(txnID int64) (*wireTxnInfo, error) {
+	if h.wireAdminURL == "" {
+		return nil, fmt.Errorf("WIRE_ADMIN_URL not configured")
+	}
+	url := fmt.Sprintf("%s/api/txn?id=%d", h.wireAdminURL, txnID)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	if h.wireM2MToken != "" {
+		req.Header.Set("X-M2M-Token", h.wireM2MToken)
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("wire returned %d", resp.StatusCode)
+	}
+	var info wireTxnInfo
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return nil, err
+	}
+	return &info, nil
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // POST /merchants/{mid}/orders/{oid}/confirm

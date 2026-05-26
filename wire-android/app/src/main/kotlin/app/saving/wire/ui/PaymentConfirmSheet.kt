@@ -208,9 +208,9 @@ fun PaymentConfirmSheet(
                             scope.launch {
                                 loading = true; error = null
                                 try {
-                                    client.confirmIntent(intentPayload.mid, intentPayload.requestId)
+                                    val result = client.confirmIntent(intentPayload.mid, intentPayload.requestId)
                                     intentPayload.orderID?.let { oid ->
-                                        merchantsClient.confirmPaid(oid, accountId.toInt())
+                                        merchantsClient.wireConfirmPaid(oid, result.txnId, accountId)
                                     }
                                     success = true
                                 } catch (e: Exception) {

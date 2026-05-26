@@ -38,6 +38,7 @@ typedef struct {
 } ACtx;
 
 static ACtx g;
+static char g_m2m_token[129];  /* WIRE_M2M_TOKEN env var; empty = disabled */
 
 /* ─── Admin sessions (in-memory, TTL 1h) ────────────────────────────────── */
 
@@ -139,6 +140,18 @@ static void json_err(int fd, int status, const char *msg) {
 }
 
 /* ─── Auth check ─────────────────────────────────────────────────────────── */
+
+static int m2m_authed(const char *req) {
+    if (!g_m2m_token[0]) return 0;
+    const char *p = strstr(req, "\r\nX-M2M-Token: ");
+    if (!p) return 0;
+    p += 15;
+    const char *e = strpbrk(p, "\r\n");
+    if (!e) return 0;
+    int len = (int)(e - p);
+    if (len != (int)strlen(g_m2m_token)) return 0;
+    return memcmp(p, g_m2m_token, len) == 0;
+}
 
 static int authed(const char *req) {
     const char *p = strstr(req, "\r\nAuthorization: Bearer ");
@@ -798,6 +811,27 @@ static void dispatch(int fd) {
         return;
     }
 
+    /* Txn lookup — accepts session OR M2M token (no UI login required for M2M) */
+    if (strcmp(path, "/api/txn") == 0 && strcmp(method, "GET") == 0) {
+        if (!authed(buf) && !m2m_authed(buf)) {
+            json_err(fd, 401, "unauthorized"); return;
+        }
+        const char *qid = query[0] ? strstr(query, "id=") : NULL;
+        if (!qid) { json_err(fd, 400, "id required"); return; }
+        int64_t tid = (int64_t)strtoll(qid + 3, NULL, 10);
+        if (tid <= 0) { json_err(fd, 400, "bad id"); return; }
+        TxnDetail d;
+        if (db_txn_get(g.db, tid, &d) != 0) {
+            json_err(fd, 404, "not found"); return;
+        }
+        char resp[256];
+        int n = snprintf(resp, sizeof(resp),
+            "{\"txn_id\":%lld,\"from_id\":%u,\"to_id\":%u,\"amount\":%llu,\"type\":%d}",
+            (long long)d.txn_id, d.from_id, d.to_id,
+            (unsigned long long)d.amount, d.type);
+        json_ok(fd, resp); (void)n; return;
+    }
+
     /* Login endpoint — no auth required */
     if (strcmp(path, "/api/login") == 0 && strcmp(method, "POST") == 0) {
         /* Read POST body inline (before auth check) */
@@ -910,6 +944,13 @@ void admin_request_stop(void) {
 int admin_start(DB *db, SessionTable *st, uint16_t port, const char *password) {
     g.db = db;
     g.st = st;
+
+    /* M2M token for machine-to-machine calls (Merchants pull-verify) */
+    const char *m2m = getenv("WIRE_M2M_TOKEN");
+    if (m2m && m2m[0]) {
+        strncpy(g_m2m_token, m2m, sizeof(g_m2m_token) - 1);
+        g_m2m_token[sizeof(g_m2m_token) - 1] = '\0';
+    }
 
     /* Seed default admin from env (or legacy password param) */
     const char *user = getenv("ADMIN_USER");

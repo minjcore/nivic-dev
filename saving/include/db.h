@@ -133,6 +133,19 @@ typedef struct {
     int64_t  after_balance;
 } MerchantTxEntry;
 
+/* ─── Single txn lookup ──────────────────────────────────────────────────── */
+
+typedef struct {
+    int64_t  txn_id;
+    uint32_t from_id;
+    uint32_t to_id;
+    uint64_t amount;
+    int      type;    /* 0=C2C, 1=C2M, 2=M2C(cash-in), 3=C2B(cash-out) */
+} TxnDetail;
+
+/* Fill *out by primary key. Returns 0 on success, -1 if not found / error. */
+int db_txn_get(DB *db, int64_t txn_id, TxnDetail *out);
+
 /* Fill out[0..max_count-1] with C2M payments received by mid, newest-first.
  * before_id: return only rows with id < before_id (0 = no cursor, start from newest).
  * Returns count or -1 on error. */

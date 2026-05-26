@@ -1454,3 +1454,28 @@ int db_push_token_get(DB *db, uint32_t mid, char *out, size_t outlen) {
     PQclear(r);
     return 0;
 }
+
+/* ─── Single txn lookup ──────────────────────────────────────────────────── */
+
+int db_txn_get(DB *db, int64_t txn_id, TxnDetail *out) {
+    static const char SQL[] =
+        "SELECT from_id, to_id, amount, type FROM transfers WHERE id = $1";
+    uint64_t id_be = pg_int8((uint64_t)txn_id);
+    const char *pvals[1] = { (char *)&id_be };
+    const int   plens[1] = { 8 };
+    const int   pfmts[1] = { 1 };
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, pvals, plens, pfmts, 1);
+    DB_UNLOCK(db);
+    if (PQresultStatus(r) != PGRES_TUPLES_OK || PQntuples(r) == 0) {
+        PQclear(r); return -1;
+    }
+    out->txn_id  = txn_id;
+    out->from_id = (uint32_t)from_be64((const uint8_t *)PQgetvalue(r, 0, 0));
+    out->to_id   = (uint32_t)from_be64((const uint8_t *)PQgetvalue(r, 0, 1));
+    out->amount  = from_be64((const uint8_t *)PQgetvalue(r, 0, 2));
+    const uint8_t *tp = (const uint8_t *)PQgetvalue(r, 0, 3);
+    out->type    = (int)((tp[0] << 8) | tp[1]);
+    PQclear(r);
+    return 0;
+}

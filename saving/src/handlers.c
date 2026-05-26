@@ -702,8 +702,8 @@ static void handle_confirm_intent(DB *db, SessionTable *st, int fd, const WireFr
         send_ack(fd, f->seq, WIRE_ERR_INTENT_SETTLED, NULL, 0); return;
     }
 
-    int64_t after_cust = 0;
-    int rc = db_transfer(db, customer_id, merchant_id, intent.amount, 1, &after_cust, NULL);
+    int64_t after_cust = 0, txn_id = 0;
+    int rc = db_transfer(db, customer_id, merchant_id, intent.amount, 1, &after_cust, &txn_id);
     if (rc == -1) { send_ack(fd, f->seq, WIRE_ERR_LOW_BALANCE, NULL, 0); return; }
     if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
     if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
@@ -756,10 +756,11 @@ static void handle_confirm_intent(DB *db, SessionTable *st, int fd, const WireFr
         if (n > 0) registry_push(customer_id, evt, n);
     }
 
-    /* ACK extra: [after_balance 8B] so customer app can update display */
-    uint8_t extra[8];
-    wr64(extra, (uint64_t)after_cust);
-    send_ack(fd, f->seq, WIRE_OK, extra, 8);
+    /* ACK extra: [txn_id 8B][after_balance 8B] — app relays txn_id to Merchants for pull-verify */
+    uint8_t extra[16];
+    wr64(extra,     (uint64_t)txn_id);
+    wr64(extra + 8, (uint64_t)after_cust);
+    send_ack(fd, f->seq, WIRE_OK, extra, 16);
 }
 
 /* GET_MERCHANT_HISTORY  body: [merchant_token 32B]

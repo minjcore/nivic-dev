@@ -24,6 +24,15 @@ data class MerchantOrder(
 
 data class CreateOrderResult(val orderID: String, val pr: String, val qrURL: String)
 
+/** Mcs `/pay/{order_id}/wire` — open Wire mini-app with intent. */
+data class OrderWireDeeplink(
+    val orderId: String,
+    val mid: Long,
+    val amount: Long,
+    val requestId: Long,
+    val intentUrl: String,
+)
+
 data class ChatMessage(
     val id: Long,
     val fromMerchant: Boolean,
@@ -177,6 +186,13 @@ class MerchantsClient(private val baseURL: String = "https://saving.nivic.dev") 
         // fire-and-forget: called by Wire server after Wire payment
     }
 
+    /** Wire app relays txn_id from Wire TCP ACK — Merchants pull-verifies against Wire admin. */
+    suspend fun wireConfirmPaid(orderID: String, txnId: Long, paidBy: Long) = withContext(Dispatchers.IO) {
+        val body = JSONObject().apply { put("txn_id", txnId); put("paid_by", paidBy) }.toString()
+        val conn = post("$baseURL/orders/$orderID/wire_confirm", body)
+        readResponse(conn)
+    }
+
     suspend fun merchantConfirmPaid(mid: Long, token: String, orderID: String, paidBy: Int): Int =
         withContext(Dispatchers.IO) {
             val body = JSONObject().apply { put("paid_by", paidBy) }.toString()
@@ -188,6 +204,24 @@ class MerchantsClient(private val baseURL: String = "https://saving.nivic.dev") 
     suspend fun getMerchant(mid: Long): MerchantInfo = withContext(Dispatchers.IO) {
         val j = JSONObject(readResponse(get("$baseURL/merchants/$mid")))
         MerchantInfo(j.getLong("mid"), j.getString("name"), j.optString("address", ""))
+    }
+
+    suspend fun getMerchantBySlug(slug: String): MerchantInfo = withContext(Dispatchers.IO) {
+        val enc = java.net.URLEncoder.encode(slug, "UTF-8")
+        val j = JSONObject(readResponse(get("$baseURL/merchants/by-slug/$enc")))
+        MerchantInfo(j.getLong("mid"), j.getString("name"), j.optString("address", ""))
+    }
+
+    suspend fun fetchOrderWire(orderId: String): OrderWireDeeplink = withContext(Dispatchers.IO) {
+        val enc = java.net.URLEncoder.encode(orderId, "UTF-8")
+        val j = JSONObject(readResponse(get("$baseURL/pay/$enc/wire")))
+        OrderWireDeeplink(
+            orderId    = j.getString("order_id"),
+            mid        = j.getLong("mid"),
+            amount     = j.getLong("amount"),
+            requestId  = j.getLong("request_id"),
+            intentUrl  = j.getString("intent_url"),
+        )
     }
 
     suspend fun listMenu(mid: Long): List<MenuItem> = withContext(Dispatchers.IO) {

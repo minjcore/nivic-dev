@@ -113,6 +113,7 @@ class SavingClient(
     }
 
     data class IntentResult(val mid: Long, val requestId: Long, val amount: Long)
+    data class ConfirmIntentResult(val txnId: Long, val afterBalance: Long)
 
     suspend fun createIntent(amount: Long, orderId: Long = System.currentTimeMillis()): IntentResult {
         val requestId = System.currentTimeMillis()
@@ -135,13 +136,17 @@ class SavingClient(
         if (ack.code != WireCode.OK) throw WireError(ack.code)
     }
 
-    suspend fun confirmIntent(merchantId: Long, requestId: Long): Long {
+    suspend fun confirmIntent(merchantId: Long, requestId: Long): ConfirmIntentResult {
         val ack = conn.send(
             WireFrame.confirmIntent(requireToken(), merchantId, requestId, conn.nextSeq())
         ).parseAck()
         if (ack.code != WireCode.OK) throw WireError(ack.code)
         val d = ack.data
-        return if (d.size >= 16) d.getLong(8) else 0L   // after_balance at offset 8
+        // ACK extra: [txn_id 8B][after_balance 8B]
+        return ConfirmIntentResult(
+            txnId        = if (d.size >= 8)  d.getLong(0) else 0L,
+            afterBalance = if (d.size >= 16) d.getLong(8) else 0L
+        )
     }
 
     // ─── History ─────────────────────────────────────────────────────────────
