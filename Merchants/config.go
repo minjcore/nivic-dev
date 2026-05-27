@@ -15,6 +15,7 @@ type Config struct {
 	DB           string // PostgreSQL DSN
 	WireAdminURL string // Wire admin HTTP base URL
 	WireM2MToken string // M2M bearer token for Wire admin calls
+	OpsToken     string // Bearer token for /ops/* control-plane routes
 	WireAddr     string // Wire TCP address for CREATE_INTENT, e.g. "localhost:7474"
 	SMTP         SMTPConfig
 }
@@ -60,6 +61,7 @@ func loadConfig() Config {
 	cfg.Addr         = kson.GetString(m, "addr", cfg.Addr)
 	cfg.AdminToken   = kson.GetString(m, "token", cfg.AdminToken)
 	cfg.DB           = kson.GetString(m, "db.dsn", cfg.DB)
+	cfg.OpsToken     = kson.GetString(m, "ops.token", cfg.OpsToken)
 	cfg.WireAdminURL = kson.GetString(m, "wire.admin-url", cfg.WireAdminURL)
 	cfg.WireM2MToken = kson.GetString(m, "wire.m2m-token", cfg.WireM2MToken)
 	cfg.WireAddr     = kson.GetString(m, "wire.addr", cfg.WireAddr)
@@ -86,6 +88,9 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("MERCHANTS_TOKEN"); v != "" {
 		cfg.AdminToken = v
+	}
+	if v := os.Getenv("OPS_TOKEN"); v != "" {
+		cfg.OpsToken = v
 	}
 	if v := os.Getenv("WIRE_ADMIN_URL"); v != "" {
 		cfg.WireAdminURL = v
@@ -122,6 +127,7 @@ func defaultConfig() Config {
 	return Config{
 		Addr:         ":8090",
 		AdminToken:   "change-me-in-production",
+		OpsToken:     "change-me-in-production",
 		DB:           "postgres://postgres:postgres@localhost/merchants?sslmode=disable",
 		WireAdminURL: "http://localhost:7475",
 		WireAddr:     "localhost:7474",

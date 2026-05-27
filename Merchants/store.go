@@ -110,9 +110,11 @@ func migrate(db *sql.DB) error {
 			website       TEXT    NOT NULL DEFAULT '',
 			custom_domain TEXT    NOT NULL DEFAULT '',
 			password_hash TEXT    NOT NULL DEFAULT '',
+			status        TEXT    NOT NULL DEFAULT 'active',
 			created_at    BIGINT  NOT NULL
 		)`,
-		`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS email  TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`,
 
 		`CREATE TABLE IF NOT EXISTS menu_items (
 			id          BIGSERIAL PRIMARY KEY,
@@ -817,4 +819,122 @@ func (s *Store) GenerateSlug(mid uint32, name string) (string, error) {
 		return base, nil
 	}
 	return fmt.Sprintf("%s-%d", base, mid), nil
+}
+
+// ─── Control Plane / Ops ─────────────────────────────────────────────────────
+
+type OpsOverview struct {
+	TotalMerchants  int    `json:"total_merchants"`
+	ActiveMerchants int    `json:"active_merchants"`
+	TotalOrders     int    `json:"total_orders"`
+	TotalVolume     uint64 `json:"total_volume"`
+	TodayOrders     int    `json:"today_orders"`
+	TodayVolume     uint64 `json:"today_volume"`
+}
+
+type MerchantOpsRow struct {
+	MID         uint32 `json:"mid"`
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	Status      string `json:"status"`
+	OrderCount  int    `json:"order_count"`
+	TotalVolume uint64 `json:"total_volume"`
+	CreatedAt   int64  `json:"created_at"`
+}
+
+type SettlementRow struct {
+	MID        uint32 `json:"mid"`
+	Name       string `json:"name"`
+	OrderCount int    `json:"order_count"`
+	Volume     uint64 `json:"volume"`
+	AvgOrder   uint64 `json:"avg_order"`
+}
+
+func (s *Store) SetMerchantStatus(mid uint32, status string) error {
+	_, err := s.db.Exec(`UPDATE merchants SET status=$1 WHERE mid=$2`, status, mid)
+	return err
+}
+
+func (s *Store) OpsOverview() (*OpsOverview, error) {
+	ov := &OpsOverview{}
+
+	err := s.db.QueryRow(`
+		SELECT COUNT(*),
+		       SUM(CASE WHEN status='active' THEN 1 ELSE 0 END)
+		FROM merchants`).Scan(&ov.TotalMerchants, &ov.ActiveMerchants)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.db.QueryRow(`
+		SELECT COUNT(*), COALESCE(SUM(CASE WHEN status='paid' THEN amount ELSE 0 END),0)
+		FROM orders`).Scan(&ov.TotalOrders, &ov.TotalVolume)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).UnixMilli()
+	err = s.db.QueryRow(`
+		SELECT COUNT(*), COALESCE(SUM(amount),0)
+		FROM orders WHERE status='paid' AND paid_at >= $1`, todayStart).
+		Scan(&ov.TodayOrders, &ov.TodayVolume)
+	if err != nil {
+		return nil, err
+	}
+
+	return ov, nil
+}
+
+func (s *Store) ListAllMerchantsOps() ([]MerchantOpsRow, error) {
+	rows, err := s.db.Query(`
+		SELECT m.mid, m.name, m.slug, m.status, m.created_at,
+		       COUNT(o.id) AS order_count,
+		       COALESCE(SUM(CASE WHEN o.status='paid' THEN o.amount ELSE 0 END),0) AS total_volume
+		FROM merchants m
+		LEFT JOIN orders o ON o.mid = m.mid
+		GROUP BY m.mid, m.name, m.slug, m.status, m.created_at
+		ORDER BY total_volume DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MerchantOpsRow
+	for rows.Next() {
+		var r MerchantOpsRow
+		if err := rows.Scan(&r.MID, &r.Name, &r.Slug, &r.Status, &r.CreatedAt,
+			&r.OrderCount, &r.TotalVolume); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+func (s *Store) SettlementReport(fromMs, toMs int64) ([]SettlementRow, error) {
+	rows, err := s.db.Query(`
+		SELECT m.mid, m.name,
+		       COUNT(o.id) AS order_count,
+		       COALESCE(SUM(o.amount),0) AS volume
+		FROM orders o
+		JOIN merchants m ON m.mid = o.mid
+		WHERE o.status='paid' AND o.paid_at >= $1 AND o.paid_at < $2
+		GROUP BY m.mid, m.name
+		ORDER BY volume DESC`, fromMs, toMs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []SettlementRow
+	for rows.Next() {
+		var r SettlementRow
+		if err := rows.Scan(&r.MID, &r.Name, &r.OrderCount, &r.Volume); err != nil {
+			return nil, err
+		}
+		if r.OrderCount > 0 {
+			r.AvgOrder = r.Volume / uint64(r.OrderCount)
+		}
+		out = append(out, r)
+	}
+	return out, nil
 }

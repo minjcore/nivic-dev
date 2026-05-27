@@ -30,6 +30,7 @@ func main() {
 	h := &handler{
 		store:        store,
 		adminToken:   cfg.AdminToken,
+		opsToken:     cfg.OpsToken,
 		wireAdminURL: cfg.WireAdminURL,
 		wireM2MToken: cfg.WireM2MToken,
 		wireAddr:     cfg.WireAddr,

@@ -4,6 +4,7 @@ set -euo pipefail
 SERVER="root@5.104.83.76"
 REMOTE_DIR="/root/nivic-dev"
 M2M_TOKEN="03a37ed9ebc2ad037781d40833da5d1b761988813d7068358525e7e1e0c41b90"
+OPS_TOKEN="${OPS_TOKEN:-ops-$(echo -n "$M2M_TOKEN" | sha256sum | cut -c1-32)}"
 SMTP_PASS="${SMTP_PASS:-EmailPassword10}"
 
 echo "==> Building Merchants (linux/amd64)..."
@@ -29,6 +30,7 @@ set -euo pipefail
 
 # ── Merchants service ────────────────────────────────────────────────────────
 sed -e 's/__M2M_TOKEN__/${M2M_TOKEN}/g' \
+    -e 's/__OPS_TOKEN__/${OPS_TOKEN}/g' \
     -e 's/__SMTP_PASS__/${SMTP_PASS}/g' \
     /tmp/merchants.service \
   > /etc/systemd/system/merchants.service
@@ -73,3 +75,5 @@ ENDSSH
 echo ""
 echo "==> Deploy xong!"
 echo "    M2M token: ${M2M_TOKEN}"
+echo "    OPS token: ${OPS_TOKEN}"
+echo "    Control plane: http://5.104.83.76:8090/ops/"
