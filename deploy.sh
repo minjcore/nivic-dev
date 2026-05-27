@@ -4,6 +4,7 @@ set -euo pipefail
 SERVER="root@5.104.83.76"
 REMOTE_DIR="/root/nivic-dev"
 M2M_TOKEN="03a37ed9ebc2ad037781d40833da5d1b761988813d7068358525e7e1e0c41b90"
+SMTP_PASS="${SMTP_PASS:-EmailPassword10}"
 
 echo "==> Building Merchants (linux/amd64)..."
 cd "$(dirname "$0")/Merchants"
@@ -17,8 +18,9 @@ rsync -az \
   docker-compose.prod.yml \
   "$SERVER:$REMOTE_DIR/docker-compose.prod.yml"
 
-echo "==> Uploading Merchants binary + service file..."
+echo "==> Uploading Merchants binary + config + service file..."
 scp Merchants/merchants-linux          "$SERVER:/root/app/merchants-new"
+scp Merchants/merchants.kson           "$SERVER:/root/app/merchants.kson"
 scp infra/systemd/merchants.service    "$SERVER:/tmp/merchants.service"
 
 echo "==> Deploying on server..."
@@ -26,7 +28,9 @@ ssh "$SERVER" bash <<ENDSSH
 set -euo pipefail
 
 # ── Merchants service ────────────────────────────────────────────────────────
-sed 's/REPLACE_WITH_SECRET/${M2M_TOKEN}/' /tmp/merchants.service \
+sed -e 's/__M2M_TOKEN__/${M2M_TOKEN}/g' \
+    -e 's/__SMTP_PASS__/${SMTP_PASS}/g' \
+    /tmp/merchants.service \
   > /etc/systemd/system/merchants.service
 
 mv /root/app/merchants-new /root/app/merchants
