@@ -18,7 +18,7 @@ func main() {
 	fmt.Println("Merchant public-key registry • :8090")
 	fmt.Println("──────────────────────────────────────────")
 
-	dbPath       := envOr("MERCHANTS_DB",      "merchants.db")
+	dbPath       := envOr("MERCHANTS_DB",      "postgres://postgres:postgres@localhost/merchants?sslmode=disable")
 	addr         := envOr("MERCHANTS_ADDR",    ":8090")
 	adminToken   := envOr("MERCHANTS_TOKEN",   "change-me-in-production")
 	wireAdminURL := envOr("WIRE_ADMIN_URL",    "http://localhost:7475")
@@ -36,6 +36,7 @@ func main() {
 		adminToken:   adminToken,
 		wireAdminURL: wireAdminURL,
 		wireM2MToken: wireM2MToken,
+		mailer:       mailerFromEnv(),
 	}
 
 	slog.Info("merchants-host ready", "addr", addr, "db", dbPath)

@@ -7,7 +7,7 @@ import (
 	"time"
 	"unicode"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/lib/pq"
 )
 
 // ─── Domain types ────────────────────────────────────────────────────────────
@@ -15,6 +15,7 @@ import (
 type Merchant struct {
 	MID          uint32 `json:"mid"`
 	Name         string `json:"name"`
+	Email        string `json:"email,omitempty"`
 	Address      string `json:"address,omitempty"`
 	Website      string `json:"website,omitempty"`
 	Slug         string `json:"slug,omitempty"`
@@ -22,6 +23,7 @@ type Merchant struct {
 	PubkeyB64    string `json:"pubkey_b64"`
 	PrivkeyB64   string `json:"-"`
 	Token        string `json:"-"`
+	PasswordHash string `json:"-"`
 	CreatedAt    int64  `json:"created_at"`
 }
 
@@ -62,9 +64,9 @@ type LoyaltyEntry struct {
 
 // UserLoyaltyEntry is one merchant's points from a user's perspective.
 type UserLoyaltyEntry struct {
-	MID        uint32 `json:"mid"`
+	MID          uint32 `json:"mid"`
 	MerchantName string `json:"merchant_name"`
-	Points     int64  `json:"points"`
+	Points       int64  `json:"points"`
 }
 
 // PointsPerVND: 1 point per 1,000 VND spent.
@@ -76,10 +78,14 @@ type Store struct {
 	db *sql.DB
 }
 
-func OpenStore(path string) (*Store, error) {
-	db, err := sql.Open("sqlite", path)
+// OpenStore connects to a Postgres DSN (e.g. "postgres://user:pass@host/db?sslmode=disable").
+func OpenStore(dsn string) (*Store, error) {
+	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
+	}
+	if err := db.Ping(); err != nil {
+		return nil, fmt.Errorf("ping db: %w", err)
 	}
 	if err := migrate(db); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
@@ -88,107 +94,129 @@ func OpenStore(path string) (*Store, error) {
 }
 
 func migrate(db *sql.DB) error {
-	_, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS merchants (
-			mid          INTEGER PRIMARY KEY,
-			name         TEXT    NOT NULL,
-			pubkey_b64   TEXT    NOT NULL,
-			privkey_b64  TEXT    NOT NULL DEFAULT '',
-			token        TEXT    NOT NULL DEFAULT '',
-			created_at   INTEGER NOT NULL
-		);
-		CREATE TABLE IF NOT EXISTS menu_items (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			mid         INTEGER NOT NULL REFERENCES merchants(mid),
+	stmts := []string{
+		`CREATE EXTENSION IF NOT EXISTS pg_trgm`,
+
+		`CREATE TABLE IF NOT EXISTS merchants (
+			mid           BIGINT  PRIMARY KEY,
+			name          TEXT    NOT NULL,
+			email         TEXT    NOT NULL DEFAULT '',
+			pubkey_b64    TEXT    NOT NULL DEFAULT '',
+			privkey_b64   TEXT    NOT NULL DEFAULT '',
+			token         TEXT    NOT NULL DEFAULT '',
+			address       TEXT    NOT NULL DEFAULT '',
+			slug          TEXT    NOT NULL DEFAULT '',
+			website       TEXT    NOT NULL DEFAULT '',
+			custom_domain TEXT    NOT NULL DEFAULT '',
+			password_hash TEXT    NOT NULL DEFAULT '',
+			created_at    BIGINT  NOT NULL
+		)`,
+		`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''`,
+
+		`CREATE TABLE IF NOT EXISTS menu_items (
+			id          BIGSERIAL PRIMARY KEY,
+			mid         BIGINT  NOT NULL REFERENCES merchants(mid),
 			name        TEXT    NOT NULL,
-			price       INTEGER NOT NULL DEFAULT 0,
+			price       BIGINT  NOT NULL DEFAULT 0,
 			description TEXT    NOT NULL DEFAULT '',
 			sort_order  INTEGER NOT NULL DEFAULT 0
-		);
-		CREATE INDEX IF NOT EXISTS idx_menu_items_mid ON menu_items(mid, sort_order);
-		CREATE TABLE IF NOT EXISTS orders (
-			id              TEXT    PRIMARY KEY,
-			mid             INTEGER NOT NULL REFERENCES merchants(mid),
-			amount          INTEGER NOT NULL,
-			note            TEXT    NOT NULL DEFAULT '',
-			status          TEXT    NOT NULL DEFAULT 'pending',
-			created_at      INTEGER NOT NULL,
-			paid_at         INTEGER,
-			paid_by         INTEGER,
-			discount_points INTEGER NOT NULL DEFAULT 0,
-			points_awarded  INTEGER NOT NULL DEFAULT 0
-		);
-		CREATE INDEX IF NOT EXISTS idx_orders_mid ON orders(mid);
-		CREATE TABLE IF NOT EXISTS loyalty_points (
-			uid    INTEGER NOT NULL,
-			mid    INTEGER NOT NULL REFERENCES merchants(mid),
-			points INTEGER NOT NULL DEFAULT 0,
+		)`,
+
+		`CREATE INDEX IF NOT EXISTS idx_menu_items_mid ON menu_items(mid, sort_order)`,
+
+		`CREATE TABLE IF NOT EXISTS orders (
+			id              TEXT   PRIMARY KEY,
+			mid             BIGINT NOT NULL REFERENCES merchants(mid),
+			amount          BIGINT NOT NULL,
+			note            TEXT   NOT NULL DEFAULT '',
+			status          TEXT   NOT NULL DEFAULT 'pending',
+			created_at      BIGINT NOT NULL,
+			paid_at         BIGINT,
+			paid_by         BIGINT,
+			discount_points BIGINT NOT NULL DEFAULT 0,
+			points_awarded  BIGINT NOT NULL DEFAULT 0
+		)`,
+
+		`CREATE INDEX IF NOT EXISTS idx_orders_mid ON orders(mid)`,
+
+		`CREATE TABLE IF NOT EXISTS loyalty_points (
+			uid    BIGINT NOT NULL,
+			mid    BIGINT NOT NULL REFERENCES merchants(mid),
+			points BIGINT NOT NULL DEFAULT 0,
 			PRIMARY KEY (uid, mid)
-		);
-		CREATE INDEX IF NOT EXISTS idx_loyalty_uid ON loyalty_points(uid);
-		CREATE TABLE IF NOT EXISTS chat_messages (
-			id            INTEGER PRIMARY KEY AUTOINCREMENT,
-			mid           INTEGER NOT NULL,
-			uid           INTEGER NOT NULL,
-			from_merchant INTEGER NOT NULL DEFAULT 0,
+		)`,
+
+		`CREATE INDEX IF NOT EXISTS idx_loyalty_uid ON loyalty_points(uid)`,
+
+		`CREATE TABLE IF NOT EXISTS chat_messages (
+			id            BIGSERIAL PRIMARY KEY,
+			mid           BIGINT  NOT NULL,
+			uid           BIGINT  NOT NULL,
+			from_merchant BOOLEAN NOT NULL DEFAULT false,
 			body          TEXT    NOT NULL,
-			created_at    INTEGER NOT NULL
-		);
-		CREATE INDEX IF NOT EXISTS idx_chat_mid_uid ON chat_messages(mid, uid, created_at);
-	`)
-	db.Exec(`ALTER TABLE merchants ADD COLUMN privkey_b64 TEXT NOT NULL DEFAULT ''`)
-	db.Exec(`ALTER TABLE merchants ADD COLUMN token       TEXT NOT NULL DEFAULT ''`)
-	db.Exec(`ALTER TABLE merchants ADD COLUMN address     TEXT NOT NULL DEFAULT ''`)
-	db.Exec(`ALTER TABLE merchants ADD COLUMN slug          TEXT NOT NULL DEFAULT ''`)
-	db.Exec(`ALTER TABLE merchants ADD COLUMN website       TEXT NOT NULL DEFAULT ''`)
-	db.Exec(`ALTER TABLE merchants ADD COLUMN custom_domain TEXT NOT NULL DEFAULT ''`)
-	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_merchants_slug   ON merchants(slug)          WHERE slug != ''`)
-	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_merchants_domain ON merchants(custom_domain) WHERE custom_domain != ''`)
-	db.Exec(`ALTER TABLE orders ADD COLUMN discount_points INTEGER NOT NULL DEFAULT 0`)
-	db.Exec(`ALTER TABLE orders ADD COLUMN points_awarded  INTEGER NOT NULL DEFAULT 0`)
+			created_at    BIGINT  NOT NULL
+		)`,
 
-	// FTS5: name (weight 10) + address (weight 1), unicode61 handles Vietnamese
-	db.Exec(`DROP TABLE IF EXISTS merchants_fts`)
-	db.Exec(`DROP TRIGGER IF EXISTS merchants_ai`)
-	db.Exec(`DROP TRIGGER IF EXISTS merchants_ad`)
-	db.Exec(`DROP TRIGGER IF EXISTS merchants_au`)
-	db.Exec(`CREATE VIRTUAL TABLE IF NOT EXISTS merchants_fts USING fts5(
-		name, address, content='merchants', content_rowid='mid', tokenize='unicode61'
-	)`)
-	db.Exec(`CREATE TRIGGER IF NOT EXISTS merchants_ai AFTER INSERT ON merchants BEGIN
-		INSERT INTO merchants_fts(rowid, name, address) VALUES (new.mid, new.name, new.address);
-	END`)
-	db.Exec(`CREATE TRIGGER IF NOT EXISTS merchants_ad AFTER DELETE ON merchants BEGIN
-		INSERT INTO merchants_fts(merchants_fts, rowid, name, address) VALUES ('delete', old.mid, old.name, old.address);
-	END`)
-	db.Exec(`CREATE TRIGGER IF NOT EXISTS merchants_au AFTER UPDATE ON merchants BEGIN
-		INSERT INTO merchants_fts(merchants_fts, rowid, name, address) VALUES ('delete', old.mid, old.name, old.address);
-		INSERT INTO merchants_fts(rowid, name, address) VALUES (new.mid, new.name, new.address);
-	END`)
-	db.Exec(`INSERT INTO merchants_fts(merchants_fts) VALUES('rebuild')`)
+		`CREATE INDEX IF NOT EXISTS idx_chat_mid_uid ON chat_messages(mid, uid, created_at)`,
 
-	return err
+		// Unique indexes — partial to allow empty string default
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_merchants_slug   ON merchants(slug)          WHERE slug <> ''`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_merchants_domain ON merchants(custom_domain) WHERE custom_domain <> ''`,
+
+		// GIN trigram indexes for fast ILIKE search on Vietnamese text
+		`CREATE INDEX IF NOT EXISTS idx_merchants_name_trgm ON merchants USING gin (name gin_trgm_ops)`,
+		`CREATE INDEX IF NOT EXISTS idx_merchants_addr_trgm ON merchants USING gin (address gin_trgm_ops)`,
+	}
+
+	for _, s := range stmts {
+		if _, err := db.Exec(s); err != nil {
+			return fmt.Errorf("migrate stmt failed: %w\nSQL: %s", err, s)
+		}
+	}
+	return nil
 }
 
 func (s *Store) Close() { s.db.Close() }
 
 // ─── Merchants ────────────────────────────────────────────────────────────────
 
-func (s *Store) Register(mid uint32, name, address, website, pubkeyB64, privkeyB64, token string) error {
+func (s *Store) Register(mid uint32, name, email, address, website, pubkeyB64, privkeyB64, token, passwordHash string) error {
 	_, err := s.db.Exec(
-		`INSERT OR REPLACE INTO merchants (mid, name, address, website, pubkey_b64, privkey_b64, token, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		mid, name, address, website, pubkeyB64, privkeyB64, token, time.Now().Unix(),
+		`INSERT INTO merchants (mid, name, email, address, website, pubkey_b64, privkey_b64, token, password_hash, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		 ON CONFLICT (mid) DO UPDATE SET
+		     name=EXCLUDED.name, email=EXCLUDED.email, address=EXCLUDED.address, website=EXCLUDED.website,
+		     pubkey_b64=EXCLUDED.pubkey_b64, privkey_b64=EXCLUDED.privkey_b64,
+		     token=EXCLUDED.token, password_hash=EXCLUDED.password_hash`,
+		mid, name, email, address, website, pubkeyB64, privkeyB64, token, passwordHash, time.Now().Unix(),
 	)
 	return err
 }
 
-const merchantCols = `mid, name, address, website, slug, custom_domain, pubkey_b64, privkey_b64, token, created_at`
+// SetPassword updates the merchant's login password (SHA-256 hex).
+func (s *Store) SetPassword(mid uint32, passwordHash string) error {
+	_, err := s.db.Exec(`UPDATE merchants SET password_hash=$1 WHERE mid=$2`, passwordHash, mid)
+	return err
+}
+
+// Login returns the merchant if mid + passwordHash match, nil if not found/wrong.
+func (s *Store) Login(mid uint32, passwordHash string) (*Merchant, error) {
+	m, err := s.Get(mid)
+	if err != nil || m == nil {
+		return nil, err
+	}
+	if m.PasswordHash == "" || m.PasswordHash != passwordHash {
+		return nil, nil
+	}
+	return m, nil
+}
+
+const merchantCols = `mid, name, email, address, website, slug, custom_domain, pubkey_b64, privkey_b64, token, password_hash, created_at`
 
 func scanMerchant(row *sql.Row) (*Merchant, error) {
 	var m Merchant
-	if err := row.Scan(&m.MID, &m.Name, &m.Address, &m.Website, &m.Slug, &m.CustomDomain,
-		&m.PubkeyB64, &m.PrivkeyB64, &m.Token, &m.CreatedAt); err != nil {
+	if err := row.Scan(&m.MID, &m.Name, &m.Email, &m.Address, &m.Website, &m.Slug, &m.CustomDomain,
+		&m.PubkeyB64, &m.PrivkeyB64, &m.Token, &m.PasswordHash, &m.CreatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -198,44 +226,44 @@ func scanMerchant(row *sql.Row) (*Merchant, error) {
 }
 
 func (s *Store) Get(mid uint32) (*Merchant, error) {
-	return scanMerchant(s.db.QueryRow(`SELECT `+merchantCols+` FROM merchants WHERE mid = ?`, mid))
+	return scanMerchant(s.db.QueryRow(`SELECT `+merchantCols+` FROM merchants WHERE mid = $1`, mid))
 }
 
 func (s *Store) GetBySlug(slug string) (*Merchant, error) {
-	return scanMerchant(s.db.QueryRow(`SELECT `+merchantCols+` FROM merchants WHERE slug = ?`, slug))
+	return scanMerchant(s.db.QueryRow(`SELECT `+merchantCols+` FROM merchants WHERE slug = $1`, slug))
 }
 
 func (s *Store) GetByDomain(domain string) (*Merchant, error) {
-	return scanMerchant(s.db.QueryRow(`SELECT `+merchantCols+` FROM merchants WHERE custom_domain = ?`, domain))
+	return scanMerchant(s.db.QueryRow(`SELECT `+merchantCols+` FROM merchants WHERE custom_domain = $1`, domain))
 }
 
 func (s *Store) DomainExists(domain string) (bool, error) {
 	var n int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM merchants WHERE custom_domain=?`, domain).Scan(&n)
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM merchants WHERE custom_domain=$1`, domain).Scan(&n)
 	return n > 0, err
 }
 
 func (s *Store) SetCustomDomain(mid uint32, domain string) error {
-	_, err := s.db.Exec(`UPDATE merchants SET custom_domain=? WHERE mid=?`, domain, mid)
+	_, err := s.db.Exec(`UPDATE merchants SET custom_domain=$1 WHERE mid=$2`, domain, mid)
 	return err
 }
 
 func (s *Store) UpdateProfile(mid uint32, name, address, website string) error {
 	_, err := s.db.Exec(
-		`UPDATE merchants SET name=?, address=?, website=? WHERE mid=?`,
+		`UPDATE merchants SET name=$1, address=$2, website=$3 WHERE mid=$4`,
 		name, address, website, mid,
 	)
 	return err
 }
 
 func (s *Store) SetSlug(mid uint32, slug string) error {
-	_, err := s.db.Exec(`UPDATE merchants SET slug=? WHERE mid=?`, slug, mid)
+	_, err := s.db.Exec(`UPDATE merchants SET slug=$1 WHERE mid=$2`, slug, mid)
 	return err
 }
 
 func (s *Store) SlugExists(slug string) (bool, error) {
 	var n int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM merchants WHERE slug=?`, slug).Scan(&n)
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM merchants WHERE slug=$1`, slug).Scan(&n)
 	return n > 0, err
 }
 
@@ -244,7 +272,7 @@ func (s *Store) SlugExists(slug string) (bool, error) {
 func (s *Store) CreateOrder(id string, mid uint32, amount uint64, note string, discountPoints int64) error {
 	_, err := s.db.Exec(
 		`INSERT INTO orders (id, mid, amount, note, status, created_at, discount_points)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		id, mid, amount, note, StatusPending, time.Now().UnixMilli(), discountPoints,
 	)
 	return err
@@ -253,10 +281,10 @@ func (s *Store) CreateOrder(id string, mid uint32, amount uint64, note string, d
 func (s *Store) GetOrder(id string) (*Order, error) {
 	row := s.db.QueryRow(
 		`SELECT id, mid, amount, note, status, created_at, paid_at, paid_by,
-		        discount_points, points_awarded FROM orders WHERE id = ?`, id)
+		        discount_points, points_awarded FROM orders WHERE id = $1`, id)
 	var o Order
 	var paidAt sql.NullInt64
-	var paidBy sql.NullInt32
+	var paidBy sql.NullInt64
 	if err := row.Scan(&o.ID, &o.MID, &o.Amount, &o.Note, &o.Status,
 		&o.CreatedAt, &paidAt, &paidBy, &o.DiscountPoints, &o.PointsAwarded); err != nil {
 		if err == sql.ErrNoRows {
@@ -265,7 +293,7 @@ func (s *Store) GetOrder(id string) (*Order, error) {
 		return nil, err
 	}
 	if paidAt.Valid { v := paidAt.Int64; o.PaidAt = &v }
-	if paidBy.Valid { v := uint32(paidBy.Int32); o.PaidBy = &v }
+	if paidBy.Valid { v := uint32(paidBy.Int64); o.PaidBy = &v }
 	return &o, nil
 }
 
@@ -273,7 +301,7 @@ func (s *Store) ListOrders(mid uint32, limit int) ([]Order, error) {
 	rows, err := s.db.Query(
 		`SELECT id, mid, amount, note, status, created_at, paid_at, paid_by,
 		        discount_points, points_awarded
-		 FROM orders WHERE mid = ? ORDER BY created_at DESC LIMIT ?`, mid, limit)
+		 FROM orders WHERE mid = $1 ORDER BY created_at DESC LIMIT $2`, mid, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -282,13 +310,13 @@ func (s *Store) ListOrders(mid uint32, limit int) ([]Order, error) {
 	for rows.Next() {
 		var o Order
 		var paidAt sql.NullInt64
-		var paidBy sql.NullInt32
+		var paidBy sql.NullInt64
 		if err := rows.Scan(&o.ID, &o.MID, &o.Amount, &o.Note, &o.Status,
 			&o.CreatedAt, &paidAt, &paidBy, &o.DiscountPoints, &o.PointsAwarded); err != nil {
 			return nil, err
 		}
 		if paidAt.Valid { v := paidAt.Int64; o.PaidAt = &v }
-		if paidBy.Valid { v := uint32(paidBy.Int32); o.PaidBy = &v }
+		if paidBy.Valid { v := uint32(paidBy.Int64); o.PaidBy = &v }
 		out = append(out, o)
 	}
 	return out, nil
@@ -296,15 +324,13 @@ func (s *Store) ListOrders(mid uint32, limit int) ([]Order, error) {
 
 func (s *Store) Stats(mid uint32) (totalEarned uint64, orderCount int, err error) {
 	row := s.db.QueryRow(
-		`SELECT COALESCE(SUM(amount),0), COUNT(*) FROM orders WHERE mid=? AND status='paid'`, mid)
+		`SELECT COALESCE(SUM(amount),0), COUNT(*) FROM orders WHERE mid=$1 AND status='paid'`, mid)
 	err = row.Scan(&totalEarned, &orderCount)
 	return
 }
 
 // MarkPaid marks an order as paid, deducts used points, and awards new points.
-// Returns points awarded so callers can include it in responses.
 func (s *Store) MarkPaid(orderID string, paidBy uint32) (pointsAwarded int64, err error) {
-	// Load order to get amount and discount_points
 	o, err := s.GetOrder(orderID)
 	if err != nil || o == nil {
 		return 0, fmt.Errorf("order not found or already processed")
@@ -313,7 +339,6 @@ func (s *Store) MarkPaid(orderID string, paidBy uint32) (pointsAwarded int64, er
 		return 0, fmt.Errorf("order not found or already processed")
 	}
 
-	// Points to award = floor(amount / PointsPerVND)
 	pointsAwarded = int64(o.Amount / PointsPerVND)
 
 	tx, err := s.db.Begin()
@@ -323,8 +348,8 @@ func (s *Store) MarkPaid(orderID string, paidBy uint32) (pointsAwarded int64, er
 	defer tx.Rollback()
 
 	res, err := tx.Exec(
-		`UPDATE orders SET status=?, paid_at=?, paid_by=?, points_awarded=?
-		 WHERE id=? AND status=?`,
+		`UPDATE orders SET status=$1, paid_at=$2, paid_by=$3, points_awarded=$4
+		 WHERE id=$5 AND status=$6`,
 		StatusPaid, time.Now().UnixMilli(), paidBy, pointsAwarded, orderID, StatusPending,
 	)
 	if err != nil {
@@ -334,22 +359,20 @@ func (s *Store) MarkPaid(orderID string, paidBy uint32) (pointsAwarded int64, er
 		return 0, fmt.Errorf("order not found or already processed")
 	}
 
-	// Deduct used points (if any)
 	if o.DiscountPoints > 0 {
 		if _, err := tx.Exec(
-			`UPDATE loyalty_points SET points = MAX(0, points - ?)
-			 WHERE uid=? AND mid=?`,
+			`UPDATE loyalty_points SET points = GREATEST(0, points - $1)
+			 WHERE uid=$2 AND mid=$3`,
 			o.DiscountPoints, paidBy, o.MID,
 		); err != nil {
 			return 0, err
 		}
 	}
 
-	// Award earned points
 	if pointsAwarded > 0 {
 		if _, err := tx.Exec(
-			`INSERT INTO loyalty_points (uid, mid, points) VALUES (?, ?, ?)
-			 ON CONFLICT(uid, mid) DO UPDATE SET points = points + excluded.points`,
+			`INSERT INTO loyalty_points (uid, mid, points) VALUES ($1, $2, $3)
+			 ON CONFLICT (uid, mid) DO UPDATE SET points = loyalty_points.points + EXCLUDED.points`,
 			paidBy, o.MID, pointsAwarded,
 		); err != nil {
 			return 0, err
@@ -362,7 +385,7 @@ func (s *Store) MarkPaid(orderID string, paidBy uint32) (pointsAwarded int64, er
 // ─── Loyalty ──────────────────────────────────────────────────────────────────
 
 func (s *Store) GetPoints(mid, uid uint32) (int64, error) {
-	row := s.db.QueryRow(`SELECT points FROM loyalty_points WHERE uid=? AND mid=?`, uid, mid)
+	row := s.db.QueryRow(`SELECT points FROM loyalty_points WHERE uid=$1 AND mid=$2`, uid, mid)
 	var pts int64
 	if err := row.Scan(&pts); err == sql.ErrNoRows {
 		return 0, nil
@@ -372,10 +395,126 @@ func (s *Store) GetPoints(mid, uid uint32) (int64, error) {
 	return pts, nil
 }
 
+// ─── CRM ──────────────────────────────────────────────────────────────────────
+
+const (
+	SegmentNew     = "new"
+	SegmentRegular = "regular"
+	SegmentAtRisk  = "at_risk"
+	SegmentChurned = "churned"
+	SegmentVIP     = "vip"
+)
+
+type CustomerInsight struct {
+	UID           uint32 `json:"uid"`
+	TotalVisits   int    `json:"total_visits"`
+	TotalSpend    uint64 `json:"total_spend"`
+	AvgOrder      uint64 `json:"avg_order"`
+	FirstVisitMs  int64  `json:"first_visit_ms"`
+	LastVisitMs   int64  `json:"last_visit_ms"`
+	DaysSinceLast int    `json:"days_since_last"`
+	LoyaltyPoints int64  `json:"loyalty_points"`
+	Segment       string `json:"segment"`
+}
+
+type CRMSummary struct {
+	TotalCustomers  int               `json:"total_customers"`
+	NewThisMonth    int               `json:"new_this_month"`
+	ActiveThisMonth int               `json:"active_this_month"`
+	AtRiskCount     int               `json:"at_risk_count"`
+	ChurnedCount    int               `json:"churned_count"`
+	VIPCount        int               `json:"vip_count"`
+	AvgCLV          uint64            `json:"avg_clv"`
+	Customers       []CustomerInsight `json:"customers"`
+}
+
+func (s *Store) CRMInsights(mid uint32) (*CRMSummary, error) {
+	nowMs := time.Now().UnixMilli()
+	day30Ms := int64(30 * 24 * 60 * 60 * 1000)
+	day14Ms := int64(14 * 24 * 60 * 60 * 1000)
+	monthMs := nowMs - day30Ms
+
+	rows, err := s.db.Query(`
+		SELECT
+			o.paid_by,
+			COUNT(*)               AS visits,
+			SUM(o.amount)          AS total_spend,
+			MIN(o.paid_at)         AS first_visit,
+			MAX(o.paid_at)         AS last_visit,
+			COALESCE(lp.points, 0) AS loyalty_points
+		FROM orders o
+		LEFT JOIN loyalty_points lp ON lp.uid = o.paid_by AND lp.mid = o.mid
+		WHERE o.mid = $1 AND o.status = 'paid' AND o.paid_by IS NOT NULL
+		GROUP BY o.paid_by, lp.points
+		ORDER BY total_spend DESC`,
+		mid,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var customers []CustomerInsight
+	var totalSpend uint64
+	for rows.Next() {
+		var c CustomerInsight
+		if err := rows.Scan(&c.UID, &c.TotalVisits, &c.TotalSpend,
+			&c.FirstVisitMs, &c.LastVisitMs, &c.LoyaltyPoints); err != nil {
+			return nil, err
+		}
+		if c.TotalVisits > 0 {
+			c.AvgOrder = c.TotalSpend / uint64(c.TotalVisits)
+		}
+		c.DaysSinceLast = int((nowMs - c.LastVisitMs) / (24 * 60 * 60 * 1000))
+		customers = append(customers, c)
+		totalSpend += c.TotalSpend
+	}
+
+	vipThreshold := len(customers) / 10
+	if vipThreshold < 1 {
+		vipThreshold = 1
+	}
+
+	sum := &CRMSummary{TotalCustomers: len(customers)}
+	if len(customers) > 0 {
+		sum.AvgCLV = totalSpend / uint64(len(customers))
+	}
+
+	for i := range customers {
+		c := &customers[i]
+		isVIP := i < vipThreshold
+		recentVisits := 0
+		if c.LastVisitMs >= monthMs {
+			recentVisits = c.TotalVisits
+		}
+
+		switch {
+		case isVIP:
+			c.Segment = SegmentVIP
+			sum.VIPCount++
+		case c.TotalVisits == 1 && c.FirstVisitMs >= monthMs:
+			c.Segment = SegmentNew
+			sum.NewThisMonth++
+		case recentVisits >= 3:
+			c.Segment = SegmentRegular
+			sum.ActiveThisMonth++
+		case c.LastVisitMs >= monthMs-day14Ms:
+			c.Segment = SegmentAtRisk
+			sum.AtRiskCount++
+		default:
+			c.Segment = SegmentChurned
+			sum.ChurnedCount++
+		}
+	}
+
+	sum.Customers = customers
+	return sum, nil
+}
+
 func (s *Store) AwardPoints(mid, uid uint32, points int64) error {
 	_, err := s.db.Exec(
-		`INSERT INTO loyalty_points (uid, mid, points) VALUES (?, ?, ?)
-		 ON CONFLICT(uid, mid) DO UPDATE SET points = points + excluded.points`,
+		`INSERT INTO loyalty_points (uid, mid, points) VALUES ($1, $2, $3)
+		 ON CONFLICT (uid, mid) DO UPDATE SET points = loyalty_points.points + EXCLUDED.points`,
 		uid, mid, points,
 	)
 	return err
@@ -383,7 +522,7 @@ func (s *Store) AwardPoints(mid, uid uint32, points int64) error {
 
 func (s *Store) ListLoyaltyMembers(mid uint32) ([]LoyaltyEntry, error) {
 	rows, err := s.db.Query(
-		`SELECT uid, points FROM loyalty_points WHERE mid=? ORDER BY points DESC`, mid)
+		`SELECT uid, points FROM loyalty_points WHERE mid=$1 ORDER BY points DESC`, mid)
 	if err != nil {
 		return nil, err
 	}
@@ -411,15 +550,11 @@ func (s *Store) SearchMerchants(query string) ([]MerchantSearchResult, error) {
 	if query == "" {
 		rows, err = s.db.Query(`SELECT mid, name, address FROM merchants ORDER BY name LIMIT 50`)
 	} else {
-		// FTS5 prefix search, name weighted 10x over address via bm25 column weights
-		ftsQuery := query + "*"
+		pattern := "%" + query + "%"
 		rows, err = s.db.Query(`
-			SELECT m.mid, m.name, m.address
-			FROM merchants_fts f
-			JOIN merchants m ON m.mid = f.rowid
-			WHERE merchants_fts MATCH ?
-			ORDER BY bm25(merchants_fts, 10.0, 1.0)
-			LIMIT 20`, ftsQuery)
+			SELECT mid, name, address FROM merchants
+			WHERE name ILIKE $1 OR address ILIKE $1
+			ORDER BY name LIMIT 20`, pattern)
 	}
 	if err != nil {
 		return nil, err
@@ -444,29 +579,24 @@ type ChatMessage struct {
 	UID          uint32 `json:"uid"`
 	FromMerchant bool   `json:"from_merchant"`
 	Body         string `json:"body"`
-	CreatedAt    int64  `json:"created_at"` // unix millis
+	CreatedAt    int64  `json:"created_at"`
 }
 
 func (s *Store) SendChatMessage(mid, uid uint32, fromMerchant bool, body string) (int64, error) {
-	fm := 0
-	if fromMerchant {
-		fm = 1
-	}
-	res, err := s.db.Exec(
-		`INSERT INTO chat_messages (mid, uid, from_merchant, body, created_at) VALUES (?, ?, ?, ?, ?)`,
-		mid, uid, fm, body, time.Now().UnixMilli(),
-	)
-	if err != nil {
-		return 0, err
-	}
-	return res.LastInsertId()
+	var id int64
+	err := s.db.QueryRow(
+		`INSERT INTO chat_messages (mid, uid, from_merchant, body, created_at)
+		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+		mid, uid, fromMerchant, body, time.Now().UnixMilli(),
+	).Scan(&id)
+	return id, err
 }
 
 type ChatInboxItem struct {
 	UID         uint32 `json:"uid"`
 	LastMessage string `json:"last_message"`
 	LastAt      int64  `json:"last_at"`
-	Unread      int    `json:"unread"` // customer messages without a subsequent merchant reply
+	Unread      int    `json:"unread"`
 }
 
 func (s *Store) GetChatInbox(mid uint32) ([]ChatInboxItem, error) {
@@ -476,12 +606,12 @@ func (s *Store) GetChatInbox(mid uint32) ([]ChatInboxItem, error) {
 		        WHERE m2.mid=cm.mid AND m2.uid=cm.uid
 		        ORDER BY created_at DESC LIMIT 1) AS last_message,
 		       MAX(created_at) AS last_at,
-		       SUM(CASE WHEN from_merchant=0 AND created_at > COALESCE(
+		       SUM(CASE WHEN from_merchant=false AND created_at > COALESCE(
 		               (SELECT MAX(created_at) FROM chat_messages m3
-		                WHERE m3.mid=cm.mid AND m3.uid=cm.uid AND m3.from_merchant=1), 0)
+		                WHERE m3.mid=cm.mid AND m3.uid=cm.uid AND m3.from_merchant=true), 0)
 		           THEN 1 ELSE 0 END) AS unread
 		FROM chat_messages cm
-		WHERE mid=?
+		WHERE mid=$1
 		GROUP BY uid
 		ORDER BY last_at DESC
 		LIMIT 50`, mid)
@@ -503,7 +633,7 @@ func (s *Store) GetChatInbox(mid uint32) ([]ChatInboxItem, error) {
 func (s *Store) GetChatThread(mid, uid uint32, since int64) ([]ChatMessage, error) {
 	rows, err := s.db.Query(
 		`SELECT id, mid, uid, from_merchant, body, created_at
-		 FROM chat_messages WHERE mid=? AND uid=? AND created_at > ?
+		 FROM chat_messages WHERE mid=$1 AND uid=$2 AND created_at > $3
 		 ORDER BY created_at ASC LIMIT 100`,
 		mid, uid, since,
 	)
@@ -514,11 +644,9 @@ func (s *Store) GetChatThread(mid, uid uint32, since int64) ([]ChatMessage, erro
 	var out []ChatMessage
 	for rows.Next() {
 		var m ChatMessage
-		var fm int
-		if err := rows.Scan(&m.ID, &m.MID, &m.UID, &fm, &m.Body, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.MID, &m.UID, &m.FromMerchant, &m.Body, &m.CreatedAt); err != nil {
 			return nil, err
 		}
-		m.FromMerchant = fm == 1
 		out = append(out, m)
 	}
 	return out, nil
@@ -529,7 +657,7 @@ func (s *Store) UserLoyalty(uid uint32) ([]UserLoyaltyEntry, error) {
 		`SELECT lp.mid, m.name, lp.points
 		 FROM loyalty_points lp
 		 JOIN merchants m ON m.mid = lp.mid
-		 WHERE lp.uid=? AND lp.points > 0
+		 WHERE lp.uid=$1 AND lp.points > 0
 		 ORDER BY lp.points DESC`, uid)
 	if err != nil {
 		return nil, err
@@ -550,7 +678,7 @@ func (s *Store) UserLoyalty(uid uint32) ([]UserLoyaltyEntry, error) {
 
 func (s *Store) ListMenuItems(mid uint32) ([]MenuItem, error) {
 	rows, err := s.db.Query(
-		`SELECT id, mid, name, price, description, sort_order FROM menu_items WHERE mid=? ORDER BY sort_order, id`, mid)
+		`SELECT id, mid, name, price, description, sort_order FROM menu_items WHERE mid=$1 ORDER BY sort_order, id`, mid)
 	if err != nil {
 		return nil, err
 	}
@@ -567,18 +695,17 @@ func (s *Store) ListMenuItems(mid uint32) ([]MenuItem, error) {
 }
 
 func (s *Store) AddMenuItem(mid uint32, name string, price uint64, desc string, sortOrder int) (int64, error) {
-	res, err := s.db.Exec(
-		`INSERT INTO menu_items (mid, name, price, description, sort_order) VALUES (?, ?, ?, ?, ?)`,
+	var id int64
+	err := s.db.QueryRow(
+		`INSERT INTO menu_items (mid, name, price, description, sort_order)
+		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
 		mid, name, price, desc, sortOrder,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return res.LastInsertId()
+	).Scan(&id)
+	return id, err
 }
 
 func (s *Store) DeleteMenuItem(id int64, mid uint32) error {
-	res, err := s.db.Exec(`DELETE FROM menu_items WHERE id=? AND mid=?`, id, mid)
+	res, err := s.db.Exec(`DELETE FROM menu_items WHERE id=$1 AND mid=$2`, id, mid)
 	if err != nil {
 		return err
 	}
@@ -622,7 +749,7 @@ var viMap = strings.NewReplacer(
 func slugify(name string) string {
 	s := strings.ToLower(viMap.Replace(name))
 	var b strings.Builder
-	prevHyphen := true // start true to trim leading hyphens
+	prevHyphen := true
 	for _, r := range s {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
 			b.WriteRune(r)
@@ -681,7 +808,5 @@ func (s *Store) GenerateSlug(mid uint32, name string) (string, error) {
 	if !exists {
 		return base, nil
 	}
-	// Append MID to make unique
-	candidate := fmt.Sprintf("%s-%d", base, mid)
-	return candidate, nil
+	return fmt.Sprintf("%s-%d", base, mid), nil
 }

@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,6 +15,11 @@ import (
 	"strings"
 	"time"
 )
+
+func sha256Hex(s string) string {
+	h := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(h[:])
+}
 
 // ─── Payment request ────────────────────────────────────────────────────────
 //
@@ -77,6 +85,7 @@ type handler struct {
 	adminToken   string
 	wireAdminURL string
 	wireM2MToken string
+	mailer       *mailer
 }
 
 func (h *handler) routes() http.Handler {
@@ -86,10 +95,12 @@ func (h *handler) routes() http.Handler {
 	mux.HandleFunc("GET /merchants/{mid}",                         h.handleGet)
 	mux.HandleFunc("POST /merchants",                              h.handleRegister)
 	mux.HandleFunc("POST /merchants/onboard",                      h.handleOnboard)
+	mux.HandleFunc("POST /merchants/login",                        h.handleMerchantLogin)
 	mux.HandleFunc("POST /merchants/{mid}/orders",                 h.handleCreateOrder)
 	mux.HandleFunc("GET /merchants/{mid}/orders",                  h.handleListOrders)
 	mux.HandleFunc("GET /merchants/{mid}/orders/{oid}",            h.handleGetOrder)
 	mux.HandleFunc("GET /merchants/{mid}/stats",                   h.handleStats)
+	mux.HandleFunc("GET /merchants/{mid}/crm",                    h.handleCRM)
 	mux.HandleFunc("GET /merchants/{mid}/loyalty",                 h.handleLoyaltyMembers)
 	mux.HandleFunc("GET /merchants/{mid}/loyalty/{uid}",           h.handleLoyaltyGet)
 	mux.HandleFunc("POST /merchants/{mid}/loyalty/{uid}/award",    h.handleLoyaltyAward)
@@ -248,6 +259,7 @@ func (h *handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		MID     uint32 `json:"mid"`
 		Name    string `json:"name"`
+		Email   string `json:"email"`
 		Address string `json:"address"`
 		Website string `json:"website"`
 	}
@@ -278,7 +290,7 @@ func (h *handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	pubB64  := base64.StdEncoding.EncodeToString(pub)
 	privB64 := base64.StdEncoding.EncodeToString(priv)
 
-	if err := h.store.Register(req.MID, req.Name, req.Address, req.Website, pubB64, privB64, token); err != nil {
+	if err := h.store.Register(req.MID, req.Name, req.Email, req.Address, req.Website, pubB64, privB64, token, ""); err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
@@ -487,6 +499,19 @@ func (h *handler) handleWireConfirm(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, err.Error()); return
 	}
 
+	// Notify merchant via email (non-blocking)
+	go func() {
+		m, err := h.store.Get(o.MID)
+		if err == nil && m != nil && m.Email != "" {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			_ = h.mailer.send(ctx, m.Email,
+				fmt.Sprintf("✅ Đơn hàng %s đã được thanh toán", oid[max(0, len(oid)-8):]),
+				emailOrderPaid(m.Name, oid, o.Amount, pts),
+			)
+		}
+	}()
+
 	if paidBy != 0 {
 		go func() {
 			msg := fmt.Sprintf("✅ Đơn hàng %s đã được thanh toán!\nSố tiền: %s₫", oid[max(0, len(oid)-8):], formatVND(int64(o.Amount)))
@@ -655,17 +680,19 @@ func (h *handler) handleVerify(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) handleOnboard(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		UID     uint32 `json:"uid"`
-		Name    string `json:"name"`
-		Address string `json:"address"`
-		Website string `json:"website"`
+		UID      uint32 `json:"uid"`
+		Name     string `json:"name"`
+		Email    string `json:"email"`
+		Address  string `json:"address"`
+		Website  string `json:"website"`
+		Password string `json:"password"` // plain-text; stored as SHA-256 hex
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, 400, "bad json")
 		return
 	}
-	if req.UID == 0 || req.Name == "" {
-		jsonErr(w, 400, "uid and name required")
+	if req.UID == 0 || req.Name == "" || req.Password == "" {
+		jsonErr(w, 400, "uid, name and password required")
 		return
 	}
 	if len(req.Name) > 64 {
@@ -694,16 +721,32 @@ func (h *handler) handleOnboard(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 500, "token gen failed")
 		return
 	}
-	token   := base64.URLEncoding.EncodeToString(tokenBytes)
-	pubB64  := base64.StdEncoding.EncodeToString(pub)
-	privB64 := base64.StdEncoding.EncodeToString(priv)
+	token    := base64.URLEncoding.EncodeToString(tokenBytes)
+	pubB64   := base64.StdEncoding.EncodeToString(pub)
+	privB64  := base64.StdEncoding.EncodeToString(priv)
+	pwHash   := sha256Hex(req.Password)
 
-	if err := h.store.Register(req.UID, req.Name, req.Address, req.Website, pubB64, privB64, token); err != nil {
+	if err := h.store.Register(req.UID, req.Name, req.Email, req.Address, req.Website, pubB64, privB64, token, pwHash); err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
 	slug, _ := h.store.GenerateSlug(req.UID, req.Name)
 	_ = h.store.SetSlug(req.UID, slug)
+
+	// Register Ed25519 pubkey with Wire admin so signed QR payments work.
+	// Non-fatal: merchant is created; Wire registration is best-effort.
+	if h.wireAdminURL != "" {
+		go h.registerPubkeyWithWire(req.UID, []byte(pub))
+	}
+
+	if req.Email != "" {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			_ = h.mailer.send(ctx, req.Email, "Chào mừng bạn đến với Nivic Pay!", emailWelcome(req.Name))
+		}()
+	}
+
 	jsonOK(w, map[string]any{
 		"mid":   req.UID,
 		"name":  req.Name,
@@ -711,6 +754,55 @@ func (h *handler) handleOnboard(w http.ResponseWriter, r *http.Request) {
 		"slug":  slug,
 		"url":   "https://" + slug + ".nivic.dev",
 	})
+}
+
+// POST /merchants/login
+// Body: { "uid": 16777216, "password": "plaintext" }
+// Returns: { "mid", "name", "token", "slug" }
+
+func (h *handler) handleMerchantLogin(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		UID      uint32 `json:"uid"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "bad json"); return
+	}
+	if req.UID == 0 || req.Password == "" {
+		jsonErr(w, 400, "uid and password required"); return
+	}
+	m, err := h.store.Login(req.UID, sha256Hex(req.Password))
+	if err != nil {
+		jsonErr(w, 500, err.Error()); return
+	}
+	if m == nil {
+		jsonErr(w, 401, "invalid credentials"); return
+	}
+	jsonOK(w, map[string]any{
+		"mid":   m.MID,
+		"name":  m.Name,
+		"token": m.Token,
+		"slug":  m.Slug,
+	})
+}
+
+// registerPubkeyWithWire posts [mid 4B][pubkey 32B] to Wire admin /api/merchant_pubkey.
+func (h *handler) registerPubkeyWithWire(mid uint32, pubkey []byte) {
+	body := make([]byte, 36)
+	binary.BigEndian.PutUint32(body[:4], mid)
+	copy(body[4:], pubkey)
+	req, err := http.NewRequest("POST", h.wireAdminURL+"/api/merchant_pubkey", strings.NewReader(string(body)))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/octet-stream")
+	if h.wireM2MToken != "" {
+		req.Header.Set("X-M2M-Token", h.wireM2MToken)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err == nil {
+		resp.Body.Close()
+	}
 }
 
 // GET /merchants/{mid}/orders
@@ -777,6 +869,29 @@ func (h *handler) handleStats(w http.ResponseWriter, r *http.Request) {
 		"total_earned": earned,
 		"order_count":  count,
 	})
+}
+
+// GET /merchants/{mid}/crm
+// Header: X-Merchant-Token
+// Returns customer segments, spend, visit frequency, churn risk.
+
+func (h *handler) handleCRM(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid"); return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil || m == nil {
+		jsonErr(w, 404, "merchant not found"); return
+	}
+	if r.Header.Get("X-Merchant-Token") != m.Token {
+		jsonErr(w, 401, "unauthorized"); return
+	}
+	crm, err := h.store.CRMInsights(mid)
+	if err != nil {
+		jsonErr(w, 500, err.Error()); return
+	}
+	jsonOK(w, crm)
 }
 
 // GET /merchants/{mid}/loyalty
