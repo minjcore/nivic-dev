@@ -1,8 +1,10 @@
 package main
 
 import (
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -52,22 +54,32 @@ func (h *handler) handleHealth(w http.ResponseWriter, _ *http.Request) {
 
 func (h *handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		UID    uint32 `json:"uid"`
-		PWHash string `json:"pw_hash"`
+		UID      uint32 `json:"uid"`
+		PWHash   string `json:"pw_hash"`   // pre-hashed SHA-256 hex (Merchants flow)
+		Password string `json:"password"`  // raw password (Tomcats / authservice flow)
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UID == 0 || req.PWHash == "" {
-		jsonErr(w, 400, "uid and pw_hash required")
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UID == 0 {
+		jsonErr(w, 400, "uid required")
+		return
+	}
+	// Accept raw password — hash it like authservice did
+	if req.PWHash == "" && req.Password != "" {
+		h := sha256.Sum256([]byte(req.Password))
+		req.PWHash = fmt.Sprintf("%x", h)
+	}
+	if req.PWHash == "" {
+		jsonErr(w, 400, "password or pw_hash required")
 		return
 	}
 
-	_, err := wireLogin(h.cfg.WireAddr, req.UID, req.PWHash, []byte(h.cfg.WireSecret))
+	wireToken, err := wireLogin(h.cfg.WireAddr, req.UID, req.PWHash, []byte(h.cfg.WireSecret))
 	if err != nil {
 		auditLog(h.db, "auth.login", req.UID, clientIP(r), false)
 		jsonErr(w, 401, "invalid credentials")
 		return
 	}
 
-	accessToken, exp, err := issueJWT(req.UID, h.cfg.JWTSecret, h.cfg.AccessTTL)
+	accessToken, exp, err := issueJWT(req.UID, wireToken[:], h.cfg.JWTSecret, h.cfg.AccessTTL)
 	if err != nil {
 		jsonErr(w, 500, "token error")
 		return
@@ -108,7 +120,7 @@ func (h *handler) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, exp, err := issueJWT(uid, h.cfg.JWTSecret, h.cfg.AccessTTL)
+	accessToken, exp, err := issueJWT(uid, nil, h.cfg.JWTSecret, h.cfg.AccessTTL)
 	if err != nil {
 		jsonErr(w, 500, "token error")
 		return

@@ -10,20 +10,26 @@ import (
 	"time"
 )
 
-func issueJWT(uid uint32, secret string, ttl time.Duration) (string, int64, error) {
+// issueJWT signs a HS256 JWT. wireToken (32B) is embedded as base64url "wt" claim
+// so downstream services (Tomcats, saving-gateway) can make Wire calls on behalf of the user.
+func issueJWT(uid uint32, wireToken []byte, secret string, ttl time.Duration) (string, int64, error) {
 	if secret == "" {
 		return "", 0, errors.New("jwt secret not configured")
 	}
 	now := time.Now()
 	exp := now.Add(ttl)
 	hdr := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
-	claimsJSON, _ := json.Marshal(map[string]any{
+	claims := map[string]any{
 		"iss": "iam.nivic.dev",
 		"sub": uid,
 		"aud": "saving",
 		"iat": now.Unix(),
 		"exp": exp.Unix(),
-	})
+	}
+	if len(wireToken) == 32 {
+		claims["wt"] = base64.RawURLEncoding.EncodeToString(wireToken)
+	}
+	claimsJSON, _ := json.Marshal(claims)
 	payload := base64.RawURLEncoding.EncodeToString(claimsJSON)
 	msg := hdr + "." + payload
 	sig := jwtSign(msg, secret)
