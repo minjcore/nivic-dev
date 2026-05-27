@@ -95,9 +95,10 @@ type handler struct {
 func (h *handler) routes() http.Handler {
 	mux := http.NewServeMux()
 	// ── Customer auth (BFF JWT) ────────────────────────────────────────────
-	mux.HandleFunc("POST /auth/login",      h.handleCustomerLogin)
-	mux.HandleFunc("GET /auth/me",          h.withCustomerAuth(h.handleCustomerMe))
+	mux.HandleFunc("POST /auth/login",        h.handleCustomerLogin)
+	mux.HandleFunc("GET /auth/me",            h.withCustomerAuth(h.handleCustomerMe))
 	mux.HandleFunc("GET /loyalty/user/{uid}", h.withCustomerAuth(h.handleUserLoyalty))
+	mux.HandleFunc("POST /pay",               h.withCustomerAuth(h.handleCustomerPay))
 
 	mux.HandleFunc("GET /health",                                  h.handleHealth)
 	mux.HandleFunc("GET /merchants",                               h.handleSearch) // ?q=name OR ?slug=bmap
@@ -1678,4 +1679,73 @@ func (h *handler) handleCustomerMe(w http.ResponseWriter, r *http.Request) {
 	uid, _ := customerUIDFromCtx(r)
 	slug := slugFromHost(r.Host)
 	jsonOK(w, map[string]any{"uid": uid, "merchant": slug})
+}
+
+// POST /pay (customer-protected)
+// Body: {"amount": 50000, "note": "Coffee", "use_points": true}
+// Merchant resolved from JWT aud (subdomain slug). Customer uid from JWT sub.
+// Applies loyalty discount when use_points=true, creates Wire payment intent.
+func (h *handler) handleCustomerPay(w http.ResponseWriter, r *http.Request) {
+	uid, _ := customerUIDFromCtx(r)
+
+	slug := slugFromHost(r.Host)
+	if slug == "" {
+		jsonErr(w, 400, "no merchant context")
+		return
+	}
+	m, err := h.store.GetBySlug(slug)
+	if err != nil || m == nil {
+		jsonErr(w, 404, "merchant not found")
+		return
+	}
+
+	var req struct {
+		Amount    uint64 `json:"amount"`
+		Note      string `json:"note"`
+		UsePoints bool   `json:"use_points"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Amount == 0 {
+		jsonErr(w, 400, "amount required")
+		return
+	}
+
+	// Apply loyalty discount if requested.
+	var pointsUsed int64
+	finalAmount := req.Amount
+	if req.UsePoints {
+		pts, _ := h.store.GetPoints(m.MID, uid)
+		if pts > 0 {
+			// 1 point = 1 VND discount, capped at the order amount.
+			discount := uint64(pts)
+			if discount > req.Amount {
+				discount = req.Amount
+			}
+			finalAmount = req.Amount - discount
+			pointsUsed = int64(discount)
+		}
+	}
+
+	orderID := fmt.Sprintf("pay-%d-%d-%d", m.MID, uid, time.Now().UnixMilli())
+	if err := h.store.CreateOrder(orderID, m.MID, req.Amount, req.Note, pointsUsed); err != nil {
+		jsonErr(w, 500, "create order failed")
+		return
+	}
+
+	rid := h.wireCreateIntent(m.MID, m.PasswordHash, finalAmount, orderID)
+
+	scheme := "https"
+	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
+		scheme = "http"
+	}
+	jsonOK(w, map[string]any{
+		"order_id":     orderID,
+		"uid":          uid,
+		"amount":       req.Amount,
+		"discount":     pointsUsed,
+		"final_amount": finalAmount,
+		"pay_url":      scheme + "://" + r.Host + "/pay/" + orderID,
+		"intent_url":   wireIntentURL(m.MID, rid, finalAmount, orderID),
+		"qr_url":       "saving://pay?pr=" + func() string { p, _ := buildPaymentRequest(m, orderID, finalAmount); b, _ := prToBase64URL(p); return b }(),
+		"request_id":   rid,
+	})
 }
