@@ -13,14 +13,15 @@ import (
 )
 
 const (
-	wireSecret          = "saving_wire_secret_changeme"
-	wireTypeLogin       = 0x02
+	wireSecret           = "saving_wire_secret_changeme"
+	wireTypeLogin        = 0x02
 	wireTypeCreateIntent = 0x20
-	wireTypeLoginACK    = 0x81
-	wireTypeACK         = 0x82
-	wireFrameOverhead   = 41
-	wireMaxFrame        = 4096
-	wireCodeOK          = 0x00
+	wireTypeTOTPCharge   = 0x25
+	wireTypeLoginACK     = 0x81
+	wireTypeACK          = 0x82
+	wireFrameOverhead    = 41
+	wireMaxFrame         = 4096
+	wireCodeOK           = 0x00
 )
 
 func wireSig(data []byte) [32]byte {
@@ -106,6 +107,73 @@ func WireLogin(addr string, uid uint32, pwHashHex string) ([32]byte, error) {
 	var token [32]byte
 	copy(token[:], resp[1:33])
 	return token, nil
+}
+
+// WireTOTPCharge logs in as the merchant and submits a TOTP charge against a customer.
+// totpCode is the raw 6-digit RFC 6238 integer. Wire debits customerUID and credits mid.
+// Returns the error codes from Wire: TOTP_INVALID, LOW_BALANCE, NOT_FOUND, etc.
+func WireTOTPCharge(addr string, mid uint32, pwHashHex string, customerUID uint32, totpCode uint32, amount uint64) error {
+	pwRaw, err := hex.DecodeString(pwHashHex)
+	if err != nil || len(pwRaw) != 32 {
+		return fmt.Errorf("invalid pw_hash")
+	}
+	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	if err != nil {
+		return fmt.Errorf("dial wire: %w", err)
+	}
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(10 * time.Second))
+
+	// LOGIN
+	loginBody := make([]byte, 36)
+	binary.BigEndian.PutUint32(loginBody, mid)
+	copy(loginBody[4:], pwRaw)
+	if _, err = conn.Write(wireEncode(wireTypeLogin, 1, loginBody)); err != nil {
+		return fmt.Errorf("send LOGIN: %w", err)
+	}
+	typ, body, err := wireRecv(conn)
+	if err != nil {
+		return fmt.Errorf("recv LOGIN_ACK: %w", err)
+	}
+	if typ != wireTypeLoginACK || len(body) < 33 || body[0] != wireCodeOK {
+		code := byte(0xFF)
+		if len(body) > 0 {
+			code = body[0]
+		}
+		return fmt.Errorf("login rejected: 0x%02X", code)
+	}
+	token := body[1:33]
+
+	// TOTP_CHARGE: [merchant_token 32B][customer_uid 4B][totp_code 4B][amount 8B]
+	chargeBody := make([]byte, 48)
+	copy(chargeBody[0:], token)
+	binary.BigEndian.PutUint32(chargeBody[32:], customerUID)
+	binary.BigEndian.PutUint32(chargeBody[36:], totpCode)
+	binary.BigEndian.PutUint64(chargeBody[40:], amount)
+	if _, err = conn.Write(wireEncode(wireTypeTOTPCharge, 2, chargeBody)); err != nil {
+		return fmt.Errorf("send TOTP_CHARGE: %w", err)
+	}
+	typ, body, err = wireRecv(conn)
+	if err != nil {
+		return fmt.Errorf("recv ACK: %w", err)
+	}
+	if typ != wireTypeACK || len(body) < 1 || body[0] != wireCodeOK {
+		code := byte(0xFF)
+		if len(body) > 0 {
+			code = body[0]
+		}
+		switch code {
+		case 0x0C:
+			return fmt.Errorf("invalid TOTP code")
+		case 0x08:
+			return fmt.Errorf("insufficient balance")
+		case 0x05:
+			return fmt.Errorf("customer not found or TOTP not enrolled")
+		default:
+			return fmt.Errorf("charge rejected: 0x%02X", code)
+		}
+	}
+	return nil
 }
 
 // WireCreateIntent dials Wire TCP, logs in as the merchant, and registers a payment intent.

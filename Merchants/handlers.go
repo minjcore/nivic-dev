@@ -99,6 +99,7 @@ func (h *handler) routes() http.Handler {
 	mux.HandleFunc("GET /auth/me",            h.withCustomerAuth(h.handleCustomerMe))
 	mux.HandleFunc("GET /loyalty/user/{uid}", h.withCustomerAuth(h.handleUserLoyalty))
 	mux.HandleFunc("POST /pay",               h.withCustomerAuth(h.handleCustomerPay))
+	mux.HandleFunc("POST /pay/confirm",       h.withCustomerAuth(h.handleCustomerPayConfirm))
 
 	mux.HandleFunc("GET /health",                                  h.handleHealth)
 	mux.HandleFunc("GET /merchants",                               h.handleSearch) // ?q=name OR ?slug=bmap
@@ -1747,5 +1748,87 @@ func (h *handler) handleCustomerPay(w http.ResponseWriter, r *http.Request) {
 		"intent_url":   wireIntentURL(m.MID, rid, finalAmount, orderID),
 		"qr_url":       "saving://pay?pr=" + func() string { p, _ := buildPaymentRequest(m, orderID, finalAmount); b, _ := prToBase64URL(p); return b }(),
 		"request_id":   rid,
+	})
+}
+
+// POST /pay/confirm (customer-protected)
+// Body: {"order_id": "pay-...", "totp_code": 123456}
+// Submits TOTP_CHARGE on Wire (merchant debits customer), then marks order paid.
+func (h *handler) handleCustomerPayConfirm(w http.ResponseWriter, r *http.Request) {
+	uid, _ := customerUIDFromCtx(r)
+
+	slug := slugFromHost(r.Host)
+	if slug == "" {
+		jsonErr(w, 400, "no merchant context")
+		return
+	}
+	m, err := h.store.GetBySlug(slug)
+	if err != nil || m == nil {
+		jsonErr(w, 404, "merchant not found")
+		return
+	}
+
+	var req struct {
+		OrderID  string `json:"order_id"`
+		TOTPCode uint32 `json:"totp_code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.OrderID == "" || req.TOTPCode == 0 {
+		jsonErr(w, 400, "order_id and totp_code required")
+		return
+	}
+
+	o, err := h.store.GetOrder(req.OrderID)
+	if err != nil || o == nil {
+		jsonErr(w, 404, "order not found")
+		return
+	}
+	if o.MID != m.MID {
+		jsonErr(w, 403, "order does not belong to this merchant")
+		return
+	}
+	if o.Status != StatusPending {
+		jsonErr(w, 409, "order already settled")
+		return
+	}
+
+	// Charge via Wire: merchant session debits customer, credits merchant.
+	chargeAmount := o.Amount
+	if o.DiscountPoints > 0 && uint64(o.DiscountPoints) <= o.Amount {
+		chargeAmount = o.Amount - uint64(o.DiscountPoints)
+	}
+	if err := WireTOTPCharge(h.wireAddr, m.MID, m.PasswordHash, uid, req.TOTPCode, chargeAmount); err != nil {
+		slog.Warn("TOTP_CHARGE failed", "uid", uid, "mid", m.MID, "order", req.OrderID, "err", err)
+		jsonErr(w, 402, err.Error())
+		return
+	}
+
+	pts, err := h.store.MarkPaid(req.OrderID, uid)
+	if err != nil {
+		jsonErr(w, 500, "mark paid failed")
+		return
+	}
+
+	// Notify merchant (non-blocking)
+	go func() {
+		if m.Email != "" {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			_ = h.mailer.send(ctx, m.Email,
+				fmt.Sprintf("✅ Đơn hàng %s đã được thanh toán", req.OrderID[max(0, len(req.OrderID)-8):]),
+				emailOrderPaid(m.Name, req.OrderID, o.Amount, pts),
+			)
+		}
+		msg := fmt.Sprintf("✅ Đơn hàng %s đã được thanh toán!\nSố tiền: %s₫", req.OrderID[max(0, len(req.OrderID)-8):], formatVND(int64(o.Amount)))
+		if pts > 0 {
+			msg += fmt.Sprintf("\n🌟 Bạn được cộng %d điểm tích luỹ.", pts)
+		}
+		_, _ = h.store.SendChatMessage(m.MID, uid, true, msg)
+	}()
+
+	jsonOK(w, map[string]any{
+		"status":         "paid",
+		"order_id":       req.OrderID,
+		"amount_charged": chargeAmount,
+		"points_awarded": pts,
 	})
 }
