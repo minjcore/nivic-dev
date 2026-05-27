@@ -29,9 +29,15 @@ services:
       context: .
       dockerfile: Merchants/Dockerfile
     environment:
-      MERCHANTS_DB: /data/merchants.db
-    volumes:
-      - merchants_data:/data
+      MERCHANTS_DB:   postgres://merchants:merchants123@172.18.0.1/merchants?sslmode=disable
+      MERCHANTS_ADDR: :8090
+      WIRE_ADMIN_URL: http://wire:7475
+      WIRE_M2M_TOKEN: ${WIRE_M2M_TOKEN}
+      SMTP_HOST:      ${SMTP_HOST:-}
+      SMTP_PORT:      ${SMTP_PORT:-465}
+      SMTP_USER:      ${SMTP_USER:-}
+      SMTP_PASS:      ${SMTP_PASS:-}
+      SMTP_FROM:      ${SMTP_FROM:-}
     restart: unless-stopped
     networks: [app]
 

@@ -8,9 +8,7 @@ import (
 )
 
 const banner = `
-╔═╗┌─┐┬  ┬┬┌┐┌┌─┐  ╔═╗┌─┐┌┬┐┌─┐┬ ┬┌─┐┬ ┬
-╚═╗├─┤└┐┌┘│││││ ┬  ║ ╦├─┤ │ ├┤ │││├─┤└┬┘
-╚═╝┴ ┴ └┘ ┴┘└┘└─┘  ╚═╝┴ ┴ ┴ └─┘└┴┘┴ ┴ ┴
+
 `
 
 func main() {
@@ -29,7 +27,7 @@ func main() {
 		log.Fatalf("deploy wire: %v", err)
 	}
 
-	if _, err = app.DeployVerticle(NewGatewayVerticle()); err != nil {
+	if _, err = app.DeployVerticle(NewGatewayVerticle()); err != nil {sưa
 		log.Fatalf("deploy gateway: %v", err)
 	}
 
