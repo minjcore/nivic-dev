@@ -1,0 +1,17 @@
+[Unit]
+Description=go.nivic.dev — Go module proxy & registry
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/root/app/goproxy
+Environment=GOPROXY_CONFIG=/root/app/goproxy.json
+Restart=on-failure
+RestartSec=5
+
+WorkingDirectory=/root/app
+StandardOutput=append:/var/log/goproxy.log
+StandardError=append:/var/log/goproxy.log
+
+[Install]
+WantedBy=multi-user.target

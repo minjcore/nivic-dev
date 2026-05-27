@@ -1,0 +1,17 @@
+{
+  "server": {
+    "address": "127.0.0.1:8087",
+    "readTimeout": "60s",
+    "writeTimeout": "120s",
+    "maxQueue": 1000,
+    "workers": 20
+  },
+  "storage": {
+    "type": "filesystem",
+    "basePath": "/var/lib/goproxy"
+  },
+  "auth": {
+    "enabled": false,
+    "users": []
+  }
+}

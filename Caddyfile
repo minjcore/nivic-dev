@@ -8,6 +8,10 @@ saving.nivic.dev {
     reverse_proxy localhost:8093
 }
 
+go.nivic.dev {
+    reverse_proxy localhost:8087
+}
+
 :443 {
     tls {
         on_demand

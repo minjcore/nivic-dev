@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVER="root@5.104.83.76"
 REMOTE_DIR="/root/nivic-dev"
 M2M_TOKEN="03a37ed9ebc2ad037781d40833da5d1b761988813d7068358525e7e1e0c41b90"
@@ -9,19 +10,25 @@ SMTP_PASS="${SMTP_PASS:-EmailPassword10}"
 JWT_SECRET="${JWT_SECRET:-$(echo -n "jwt-${M2M_TOKEN}" | sha256sum | cut -c1-64)}"
 
 echo "==> Building Merchants (linux/amd64)..."
-cd "$(dirname "$0")/Merchants"
+cd "$SCRIPT_DIR/Merchants"
 GOOS=linux GOARCH=amd64 go build -o merchants-linux .
 cd ..
 
 echo "==> Building Ops (linux/amd64)..."
-cd "$(dirname "$0")/Ops"
+cd "$SCRIPT_DIR/Ops"
 GOOS=linux GOARCH=amd64 go build -o ops-linux .
 cd ..
 
 echo "==> Building IAM (linux/amd64)..."
-cd "$(dirname "$0")/IAM"
+cd "$SCRIPT_DIR/IAM"
 GOOS=linux GOARCH=amd64 go build -o iam-linux .
 cd ..
+
+echo "==> Building GoProxy (linux/amd64)..."
+cd "$HOME/fluxor-runtime/apps/go-proxy"
+GOOS=linux GOARCH=amd64 go build -o goproxy-linux .
+cd "$SCRIPT_DIR"
+
 
 echo "==> Syncing source to server..."
 rsync -az --exclude '.build' --exclude '*.db' \
@@ -36,8 +43,12 @@ scp Merchants/merchants.kson           "$SERVER:/root/app/merchants.kson"
 scp infra/systemd/merchants.service    "$SERVER:/tmp/merchants.service"
 scp Ops/ops-linux                      "$SERVER:/root/app/ops-new"
 scp infra/systemd/ops.service          "$SERVER:/tmp/ops.service"
-scp IAM/iam-linux                      "$SERVER:/root/app/iam-new"
-scp infra/systemd/iam.service          "$SERVER:/tmp/iam.service"
+scp IAM/iam-linux                                         "$SERVER:/root/app/iam-new"
+scp infra/systemd/iam.service                             "$SERVER:/tmp/iam.service"
+scp "$HOME/fluxor-runtime/apps/go-proxy/goproxy-linux"    "$SERVER:/root/app/goproxy-new"
+scp GoProxy/goproxy.json                                  "$SERVER:/root/app/goproxy.json"
+scp infra/systemd/goproxy.service                         "$SERVER:/etc/systemd/system/goproxy.service"
+scp Caddyfile                                             "$SERVER:/etc/caddy/Caddyfile"
 
 echo "==> Deploying on server..."
 ssh "$SERVER" bash <<ENDSSH
@@ -69,15 +80,23 @@ sed -e 's/__JWT_SECRET__/${JWT_SECRET}/g' \
 mv /root/app/iam-new /root/app/iam
 chmod +x /root/app/iam
 
+mv /root/app/goproxy-new /root/app/goproxy
+chmod +x /root/app/goproxy
+mkdir -p /var/lib/goproxy
+
 systemctl daemon-reload
 systemctl restart merchants
 systemctl enable ops
 systemctl restart ops
 systemctl enable iam
 systemctl restart iam
+systemctl enable goproxy
+systemctl restart goproxy
+caddy reload --config /etc/caddy/Caddyfile
 echo "merchants status: \$(systemctl is-active merchants)"
 echo "ops status:       \$(systemctl is-active ops)"
 echo "iam status:       \$(systemctl is-active iam)"
+echo "goproxy status:   \$(systemctl is-active goproxy)"
 
 # ── Wire .env ────────────────────────────────────────────────────────────────
 cd $REMOTE_DIR
