@@ -18,6 +18,11 @@ cd "$(dirname "$0")/Ops"
 GOOS=linux GOARCH=amd64 go build -o ops-linux .
 cd ..
 
+echo "==> Building IAM (linux/amd64)..."
+cd "$(dirname "$0")/IAM"
+GOOS=linux GOARCH=amd64 go build -o iam-linux .
+cd ..
+
 echo "==> Syncing source to server..."
 rsync -az --exclude '.build' --exclude '*.db' \
   saving/         "$SERVER:$REMOTE_DIR/saving/"
@@ -31,6 +36,8 @@ scp Merchants/merchants.kson           "$SERVER:/root/app/merchants.kson"
 scp infra/systemd/merchants.service    "$SERVER:/tmp/merchants.service"
 scp Ops/ops-linux                      "$SERVER:/root/app/ops-new"
 scp infra/systemd/ops.service          "$SERVER:/tmp/ops.service"
+scp IAM/iam-linux                      "$SERVER:/root/app/iam-new"
+scp infra/systemd/iam.service          "$SERVER:/tmp/iam.service"
 
 echo "==> Deploying on server..."
 ssh "$SERVER" bash <<ENDSSH
@@ -55,12 +62,22 @@ sed -e 's/__M2M_TOKEN__/${M2M_TOKEN}/g' \
 mv /root/app/ops-new /root/app/ops
 chmod +x /root/app/ops
 
+sed -e 's/__JWT_SECRET__/${JWT_SECRET}/g' \
+    /tmp/iam.service \
+  > /etc/systemd/system/iam.service
+
+mv /root/app/iam-new /root/app/iam
+chmod +x /root/app/iam
+
 systemctl daemon-reload
 systemctl restart merchants
 systemctl enable ops
 systemctl restart ops
+systemctl enable iam
+systemctl restart iam
 echo "merchants status: \$(systemctl is-active merchants)"
 echo "ops status:       \$(systemctl is-active ops)"
+echo "iam status:       \$(systemctl is-active iam)"
 
 # ── Wire .env ────────────────────────────────────────────────────────────────
 cd $REMOTE_DIR

@@ -1,0 +1,22 @@
+[Unit]
+Description=IAM — Saving platform identity service (internal)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/root/app/iam
+Restart=on-failure
+RestartSec=5
+
+Environment=IAM_ADDR=127.0.0.1:8085
+Environment=IAM_DB=postgres://merchants:merchants123@localhost:5432/merchants?sslmode=disable
+Environment=WIRE_ADDR=127.0.0.1:7474
+Environment=WIRE_SECRET=saving_wire_secret_changeme
+Environment=JWT_SECRET=__JWT_SECRET__
+
+WorkingDirectory=/root/app
+StandardOutput=append:/var/log/iam.log
+StandardError=append:/var/log/iam.log
+
+[Install]
+WantedBy=multi-user.target
