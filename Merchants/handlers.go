@@ -95,8 +95,9 @@ type handler struct {
 func (h *handler) routes() http.Handler {
 	mux := http.NewServeMux()
 	// ── Customer auth (BFF JWT) ────────────────────────────────────────────
-	mux.HandleFunc("POST /auth/login", h.handleCustomerLogin)
-	mux.HandleFunc("GET /auth/me",     h.handleCustomerMe)
+	mux.HandleFunc("POST /auth/login",      h.handleCustomerLogin)
+	mux.HandleFunc("GET /auth/me",          h.withCustomerAuth(h.handleCustomerMe))
+	mux.HandleFunc("GET /loyalty/user/{uid}", h.withCustomerAuth(h.handleUserLoyalty))
 
 	mux.HandleFunc("GET /health",                                  h.handleHealth)
 	mux.HandleFunc("GET /merchants",                               h.handleSearch) // ?q=name OR ?slug=bmap
@@ -112,7 +113,7 @@ func (h *handler) routes() http.Handler {
 	mux.HandleFunc("GET /merchants/{mid}/loyalty",                 h.handleLoyaltyMembers)
 	mux.HandleFunc("GET /merchants/{mid}/loyalty/{uid}",           h.handleLoyaltyGet)
 	mux.HandleFunc("POST /merchants/{mid}/loyalty/{uid}/award",    h.handleLoyaltyAward)
-	mux.HandleFunc("GET /loyalty/user/{uid}",                      h.handleUserLoyalty)
+
 	mux.HandleFunc("POST /orders/{oid}/confirm",                   h.handleConfirmOrder)
 	mux.HandleFunc("POST /merchants/{mid}/orders/{oid}/confirm",   h.handleMerchantConfirmOrder)
 	mux.HandleFunc("POST /payment_request/verify",                 h.handleVerify)
@@ -1009,6 +1010,10 @@ func (h *handler) handleUserLoyalty(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		jsonErr(w, 400, "invalid uid"); return
 	}
+	// Enforce: customer may only read their own loyalty (jwt sub == path uid).
+	if jwtUID, ok := customerUIDFromCtx(r); ok && jwtUID != uid {
+		jsonErr(w, 403, "forbidden"); return
+	}
 	entries, err := h.store.UserLoyalty(uid)
 	if err != nil {
 		jsonErr(w, 500, err.Error()); return
@@ -1584,7 +1589,19 @@ func slugFromHost(host string) string {
 	return ""
 }
 
+// ctxKey is a private context key type for customer auth values.
+type ctxKey int
+
+const ctxCustomerUID ctxKey = 1
+
+// customerUIDFromCtx returns the customer uid injected by withCustomerAuth.
+func customerUIDFromCtx(r *http.Request) (uint32, bool) {
+	uid, ok := r.Context().Value(ctxCustomerUID).(uint32)
+	return uid, ok
+}
+
 // requireCustomerAuth extracts and verifies the BFF JWT.
+// Enforces aud == merchant slug from Host header (when on a merchant subdomain).
 // Returns (uid, slug) on success.
 func (h *handler) requireCustomerAuth(r *http.Request) (uint32, string, error) {
 	if h.jwtSecret == "" {
@@ -1595,7 +1612,28 @@ func (h *handler) requireCustomerAuth(r *http.Request) (uint32, string, error) {
 	if token == "" || token == auth {
 		return 0, "", errors.New("missing token")
 	}
-	return jwtVerify(token, h.jwtSecret)
+	uid, aud, err := jwtVerify(token, h.jwtSecret)
+	if err != nil {
+		return 0, "", err
+	}
+	// Enforce aud == merchant slug so a token from shop-a cannot be used on shop-b.
+	if slug := slugFromHost(r.Host); slug != "" && aud != slug {
+		return 0, "", errors.New("token not valid for this merchant")
+	}
+	return uid, aud, nil
+}
+
+// withCustomerAuth is middleware: verifies JWT + aud==slug, injects uid into context.
+func (h *handler) withCustomerAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		uid, _, err := h.requireCustomerAuth(r)
+		if err != nil {
+			jsonErr(w, 401, err.Error())
+			return
+		}
+		r = r.WithContext(context.WithValue(r.Context(), ctxCustomerUID, uid))
+		next(w, r)
+	}
 }
 
 // POST /auth/login
@@ -1635,13 +1673,9 @@ func (h *handler) handleCustomerLogin(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{"token": token})
 }
 
-// GET /auth/me
-// Returns the authenticated customer's uid and merchant context.
+// GET /auth/me — uid + merchant injected by withCustomerAuth middleware.
 func (h *handler) handleCustomerMe(w http.ResponseWriter, r *http.Request) {
-	uid, slug, err := h.requireCustomerAuth(r)
-	if err != nil {
-		jsonErr(w, 401, err.Error())
-		return
-	}
+	uid, _ := customerUIDFromCtx(r)
+	slug := slugFromHost(r.Host)
 	jsonOK(w, map[string]any{"uid": uid, "merchant": slug})
 }
