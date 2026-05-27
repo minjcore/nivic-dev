@@ -10,7 +10,7 @@ RestartSec=5
 
 Environment=OPS_ADDR=:9000
 Environment=MERCHANTS_DB=postgres://merchants:merchants123@localhost:5432/merchants?sslmode=disable
-Environment=WIRE_ADMIN_URL=http://localhost:7475
+Environment=WIRE_ADMIN_URL=http://127.0.0.1:7475
 Environment=WIRE_M2M_TOKEN=__M2M_TOKEN__
 Environment=OPS_TOKEN=__OPS_TOKEN__
 

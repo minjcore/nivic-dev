@@ -3,7 +3,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential libpq-dev libssl-dev libcurl4-openssl-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 COPY saving/ .
-RUN make
+RUN make clean && make
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \

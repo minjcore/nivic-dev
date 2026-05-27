@@ -832,6 +832,33 @@ static void dispatch(int fd) {
         json_ok(fd, resp); (void)n; return;
     }
 
+    /* POST /api/merchant_pubkey — M2M only: register Ed25519 pubkey for a merchant.
+     * Body (binary): [mid 4B][pubkey 32B] = 36 bytes */
+    if (strcmp(path, "/api/merchant_pubkey") == 0 && strcmp(method, "POST") == 0) {
+        if (!m2m_authed(buf)) { json_err(fd, 401, "unauthorized"); return; }
+        const char *cl = strstr(buf, "Content-Length: ");
+        int clen = cl ? (int)atol(cl + 16) : 0;
+        if (clen != 36) { json_err(fd, 400, "body must be 36 bytes"); return; }
+        uint8_t pbody[36];
+        const char *hend = strstr(buf, "\r\n\r\n");
+        if (!hend) { json_err(fd, 400, "bad request"); return; }
+        hend += 4;
+        int have = (int)(buf + total - hend);
+        if (have > 36) have = 36;
+        memcpy(pbody, hend, have);
+        int rem = 36 - have;
+        while (rem > 0) {
+            int n = (int)read(fd, pbody + 36 - rem, rem);
+            if (n <= 0) break; rem -= n;
+        }
+        uint32_t mid = ((uint32_t)pbody[0] << 24) | ((uint32_t)pbody[1] << 16) |
+                       ((uint32_t)pbody[2] << 8)  |  (uint32_t)pbody[3];
+        if (db_merchant_pubkey_set(g.db, mid, pbody + 4) != 0) {
+            json_err(fd, 404, "merchant not found"); return;
+        }
+        json_ok(fd, "{\"ok\":true}"); return;
+    }
+
     /* Login endpoint — no auth required */
     if (strcmp(path, "/api/login") == 0 && strcmp(method, "POST") == 0) {
         /* Read POST body inline (before auth check) */
@@ -858,8 +885,13 @@ static void dispatch(int fd) {
         return;
     }
 
-    /* All /api/... require auth */
-    if (!authed(buf)) { json_err(fd, 401, "unauthorized"); return; }
+    /* All /api/... require session auth; GET stats/sessions also accept M2M */
+    int is_m2m_get = m2m_authed(buf) && strcmp(method, "GET") == 0;
+    int is_stats_or_sess = strcmp(path, "/api/stats") == 0 ||
+                           strcmp(path, "/api/sessions") == 0;
+    if (!authed(buf) && !(is_m2m_get && is_stats_or_sess)) {
+        json_err(fd, 401, "unauthorized"); return;
+    }
 
     char actor[64] = "";
     admin_sess_get_username(buf, actor, sizeof(actor));

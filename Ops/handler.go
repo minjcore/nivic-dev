@@ -173,7 +173,7 @@ func (h *opsHandler) proxyWire(w http.ResponseWriter, r *http.Request, rest stri
 		return
 	}
 	if h.wireM2M != "" {
-		req.Header.Set("X-M2M-Token", h.wireM2M)
+		req.Header["X-M2M-Token"] = []string{h.wireM2M} // bypass canonicalization (Wire C server is case-sensitive)
 	}
 	if r.Method == http.MethodPost {
 		req.Header.Set("Content-Type", "application/json")
