@@ -329,11 +329,30 @@ func (p *parser) quoted(delim byte) (string, error) {
 }
 
 // scalar reads an unquoted value until EOL, '#', ',', '}', or ']'.
+// Inside ${...} env-var braces, stop chars are suppressed so the full
+// ${VAR} token is captured before expandEnv runs.
 func (p *parser) scalar() (any, error) {
 	start := p.pos
+	inBrace := 0
 	for p.pos < len(p.src) {
 		c := p.src[p.pos]
-		if c == '\n' || c == '\r' || c == '#' || c == ',' || c == '}' || c == ']' {
+		if c == '$' && p.pos+1 < len(p.src) && p.src[p.pos+1] == '{' {
+			inBrace++
+			p.pos += 2
+			continue
+		}
+		if c == '}' {
+			if inBrace > 0 {
+				inBrace--
+				p.pos++
+				continue
+			}
+			break
+		}
+		if inBrace == 0 && (c == '\n' || c == '\r' || c == '#' || c == ',' || c == ']') {
+			break
+		}
+		if c == '\n' || c == '\r' {
 			break
 		}
 		p.pos++

@@ -32,6 +32,7 @@ func main() {
 		adminToken:   cfg.AdminToken,
 		wireAdminURL: cfg.WireAdminURL,
 		wireM2MToken: cfg.WireM2MToken,
+		wireAddr:     cfg.WireAddr,
 		mailer:       mailerFromConfig(cfg.SMTP),
 	}
 

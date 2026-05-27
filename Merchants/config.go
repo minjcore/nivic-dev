@@ -15,6 +15,7 @@ type Config struct {
 	DB           string // PostgreSQL DSN
 	WireAdminURL string // Wire admin HTTP base URL
 	WireM2MToken string // M2M bearer token for Wire admin calls
+	WireAddr     string // Wire TCP address for CREATE_INTENT, e.g. "localhost:7474"
 	SMTP         SMTPConfig
 }
 
@@ -61,6 +62,7 @@ func loadConfig() Config {
 	cfg.DB           = kson.GetString(m, "db.dsn", cfg.DB)
 	cfg.WireAdminURL = kson.GetString(m, "wire.admin-url", cfg.WireAdminURL)
 	cfg.WireM2MToken = kson.GetString(m, "wire.m2m-token", cfg.WireM2MToken)
+	cfg.WireAddr     = kson.GetString(m, "wire.addr", cfg.WireAddr)
 
 	cfg.SMTP.Host     = kson.GetString(m, "smtp.host", cfg.SMTP.Host)
 	cfg.SMTP.Port     = int(kson.GetInt(m, "smtp.port", int64(cfg.SMTP.Port)))
@@ -91,6 +93,9 @@ func applyEnv(cfg *Config) {
 	if v := os.Getenv("WIRE_M2M_TOKEN"); v != "" {
 		cfg.WireM2MToken = v
 	}
+	if v := os.Getenv("WIRE_ADDR"); v != "" {
+		cfg.WireAddr = v
+	}
 	if v := os.Getenv("SMTP_HOST"); v != "" {
 		cfg.SMTP.Host = v
 	}
@@ -119,6 +124,7 @@ func defaultConfig() Config {
 		AdminToken:   "change-me-in-production",
 		DB:           "postgres://postgres:postgres@localhost/merchants?sslmode=disable",
 		WireAdminURL: "http://localhost:7475",
+		WireAddr:     "localhost:7474",
 		SMTP:         SMTPConfig{Port: 465, FromName: "Nivic Pay"},
 	}
 }

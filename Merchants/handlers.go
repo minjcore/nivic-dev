@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -85,6 +86,7 @@ type handler struct {
 	adminToken   string
 	wireAdminURL string
 	wireM2MToken string
+	wireAddr     string
 	mailer       *mailer
 }
 
@@ -378,7 +380,7 @@ func (h *handler) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rid := uint64(time.Now().UnixMilli())
+	rid := h.wireCreateIntent(mid, m.PasswordHash, finalAmount, orderID)
 	jsonOK(w, map[string]any{
 		"order_id":   orderID,
 		"pr":         prB64,
@@ -784,6 +786,21 @@ func (h *handler) handleMerchantLogin(w http.ResponseWriter, r *http.Request) {
 		"token": m.Token,
 		"slug":  m.Slug,
 	})
+}
+
+// wireCreateIntent calls Wire TCP CREATE_INTENT and stores the returned request_id on the order.
+// Falls back to a timestamp-based rid if Wire is unreachable or the merchant has no password.
+func (h *handler) wireCreateIntent(mid uint32, pwHashHex string, amount uint64, orderID string) uint64 {
+	if h.wireAddr == "" || pwHashHex == "" {
+		return uint64(time.Now().UnixMilli())
+	}
+	rid, err := WireCreateIntent(h.wireAddr, mid, pwHashHex, amount, orderID)
+	if err != nil {
+		slog.Warn("Wire CREATE_INTENT failed, using timestamp rid", "mid", mid, "err", err)
+		return uint64(time.Now().UnixMilli())
+	}
+	_ = h.store.SetOrderWireRequestID(orderID, rid)
+	return rid
 }
 
 // registerPubkeyWithWire posts [mid 4B][pubkey 32B] to Wire admin /api/merchant_pubkey.
@@ -1317,7 +1334,7 @@ func (h *handler) handlePublicCreateOrder(w http.ResponseWriter, r *http.Request
 		scheme = "http"
 	}
 	payURL := scheme + "://" + r.Host + "/pay/" + orderID
-	rid := uint64(time.Now().UnixMilli())
+	rid := h.wireCreateIntent(mid, m.PasswordHash, req.Amount, orderID)
 	jsonOK(w, map[string]any{
 		"order_id":   orderID,
 		"pr":         prB64,
@@ -1481,12 +1498,16 @@ func (h *handler) handlePayPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prB64, _ := prToBase64URL(pr)
+	rid := o.WireRequestID
+	if rid == 0 {
+		rid = uint64(o.CreatedAt)
+	}
 	renderPayPage(w, payPageData{
 		OrderID:      orderID,
 		MerchantName: m.Name,
 		Amount:       o.Amount,
 		Note:         o.Note,
-		DeepLink:     wireIntentURL(o.MID, uint64(o.CreatedAt), o.Amount, orderID),
+		DeepLink:     wireIntentURL(o.MID, rid, o.Amount, orderID),
 		QrLink:       "saving://pay?pr=" + prB64,
 		Status:       o.Status,
 	})
@@ -1501,13 +1522,17 @@ func (h *handler) handlePayOrderWire(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 404, "not found")
 		return
 	}
+	rid := o.WireRequestID
+	if rid == 0 {
+		rid = uint64(o.CreatedAt)
+	}
 	jsonOK(w, map[string]any{
 		"order_id":   orderID,
 		"mid":        o.MID,
 		"amount":     o.Amount,
 		"status":     o.Status,
-		"request_id": o.CreatedAt,
-		"intent_url": wireIntentURL(o.MID, uint64(o.CreatedAt), o.Amount, orderID),
+		"request_id": rid,
+		"intent_url": wireIntentURL(o.MID, rid, o.Amount, orderID),
 		"store_url":  wireStoreURL(o.MID),
 	})
 }

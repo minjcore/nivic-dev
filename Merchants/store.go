@@ -54,6 +54,7 @@ type Order struct {
 	PaidBy         *uint32 `json:"paid_by,omitempty"`
 	DiscountPoints int64   `json:"discount_points,omitempty"`
 	PointsAwarded  int64   `json:"points_awarded,omitempty"`
+	WireRequestID  uint64  `json:"wire_request_id,omitempty"`
 }
 
 // LoyaltyEntry is one row in the merchant's loyalty member list.
@@ -147,6 +148,8 @@ func migrate(db *sql.DB) error {
 		)`,
 
 		`CREATE INDEX IF NOT EXISTS idx_loyalty_uid ON loyalty_points(uid)`,
+
+		`ALTER TABLE orders ADD COLUMN IF NOT EXISTS wire_request_id BIGINT NOT NULL DEFAULT 0`,
 
 		`CREATE TABLE IF NOT EXISTS chat_messages (
 			id            BIGSERIAL PRIMARY KEY,
@@ -281,12 +284,12 @@ func (s *Store) CreateOrder(id string, mid uint32, amount uint64, note string, d
 func (s *Store) GetOrder(id string) (*Order, error) {
 	row := s.db.QueryRow(
 		`SELECT id, mid, amount, note, status, created_at, paid_at, paid_by,
-		        discount_points, points_awarded FROM orders WHERE id = $1`, id)
+		        discount_points, points_awarded, wire_request_id FROM orders WHERE id = $1`, id)
 	var o Order
 	var paidAt sql.NullInt64
 	var paidBy sql.NullInt64
 	if err := row.Scan(&o.ID, &o.MID, &o.Amount, &o.Note, &o.Status,
-		&o.CreatedAt, &paidAt, &paidBy, &o.DiscountPoints, &o.PointsAwarded); err != nil {
+		&o.CreatedAt, &paidAt, &paidBy, &o.DiscountPoints, &o.PointsAwarded, &o.WireRequestID); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -297,10 +300,15 @@ func (s *Store) GetOrder(id string) (*Order, error) {
 	return &o, nil
 }
 
+func (s *Store) SetOrderWireRequestID(id string, rid uint64) error {
+	_, err := s.db.Exec(`UPDATE orders SET wire_request_id=$1 WHERE id=$2`, rid, id)
+	return err
+}
+
 func (s *Store) ListOrders(mid uint32, limit int) ([]Order, error) {
 	rows, err := s.db.Query(
 		`SELECT id, mid, amount, note, status, created_at, paid_at, paid_by,
-		        discount_points, points_awarded
+		        discount_points, points_awarded, wire_request_id
 		 FROM orders WHERE mid = $1 ORDER BY created_at DESC LIMIT $2`, mid, limit)
 	if err != nil {
 		return nil, err
@@ -312,7 +320,7 @@ func (s *Store) ListOrders(mid uint32, limit int) ([]Order, error) {
 		var paidAt sql.NullInt64
 		var paidBy sql.NullInt64
 		if err := rows.Scan(&o.ID, &o.MID, &o.Amount, &o.Note, &o.Status,
-			&o.CreatedAt, &paidAt, &paidBy, &o.DiscountPoints, &o.PointsAwarded); err != nil {
+			&o.CreatedAt, &paidAt, &paidBy, &o.DiscountPoints, &o.PointsAwarded, &o.WireRequestID); err != nil {
 			return nil, err
 		}
 		if paidAt.Valid { v := paidAt.Int64; o.PaidAt = &v }

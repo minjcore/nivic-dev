@@ -12,6 +12,7 @@ db.dsn = "postgres://merchants:merchants123@localhost/merchants?sslmode=disable"
 # ── Wire integration ─────────────────────────────────────────────────────────
 wire.admin-url = http://localhost:7475
 wire.m2m-token = ${WIRE_M2M_TOKEN}   # injected at runtime
+wire.addr      = localhost:7474       # TCP address for CREATE_INTENT
 
 # ── SMTP (Aliyun DirectMail, port 465 implicit TLS) ──────────────────────────
 smtp.host      = smtpdm-ap-southeast-1.aliyuncs.com
