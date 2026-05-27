@@ -144,3 +144,37 @@ func (s *Store) SetMerchantStatus(mid uint32, status string) error {
 	_, err := s.db.Exec(`UPDATE merchants SET status=$1 WHERE mid=$2`, status, mid)
 	return err
 }
+
+type MerchantsOrderForRecon struct {
+	ID            string
+	MID           uint32
+	MerchantName  string
+	Amount        uint64
+	DiscountPts   int64
+	WireRequestID uint64
+	PaidAt        int64
+}
+
+func (s *Store) OrdersForRecon(fromMs, toMs int64) ([]MerchantsOrderForRecon, error) {
+	rows, err := s.db.Query(`
+		SELECT o.id, o.mid, m.name, o.amount, o.discount_points,
+		       o.wire_request_id, o.paid_at
+		FROM orders o
+		JOIN merchants m ON m.mid = o.mid
+		WHERE o.status = 'paid' AND o.paid_at >= $1 AND o.paid_at < $2
+		ORDER BY o.paid_at DESC`, fromMs, toMs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MerchantsOrderForRecon
+	for rows.Next() {
+		var r MerchantsOrderForRecon
+		if err := rows.Scan(&r.ID, &r.MID, &r.MerchantName, &r.Amount,
+			&r.DiscountPts, &r.WireRequestID, &r.PaidAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}

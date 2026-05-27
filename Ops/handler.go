@@ -52,6 +52,8 @@ func (h *opsHandler) dispatch(w http.ResponseWriter, r *http.Request) {
 		h.handleMerchantAction(w, r, path)
 	case path == "/api/settlement" && r.Method == http.MethodGet:
 		h.handleSettlement(w, r)
+	case path == "/api/reconcile" && r.Method == http.MethodGet:
+		h.handleReconcile(w, r)
 	case strings.HasPrefix(path, "/api/wire/"):
 		h.proxyWire(w, r, strings.TrimPrefix(path, "/api/wire"))
 	default:
@@ -152,6 +154,166 @@ func (h *opsHandler) handleSettlement(w http.ResponseWriter, r *http.Request) {
 		rows = []SettlementRow{}
 	}
 	json.NewEncoder(w).Encode(map[string]any{"rows": rows})
+}
+
+// ─── Reconciliation ───────────────────────────────────────────────────────────
+
+type WireIntentRaw struct {
+	MID            uint32 `json:"mid"`
+	RequestID      uint64 `json:"request_id"`
+	Amount         uint64 `json:"amount"`
+	Status         int    `json:"status"`
+	GatewayOrderID string `json:"gateway_order_id"`
+}
+
+type ReconRow struct {
+	OrderID       string `json:"order_id,omitempty"`
+	MID           uint32 `json:"mid"`
+	MerchantName  string `json:"merchant_name,omitempty"`
+	WireRequestID uint64 `json:"wire_request_id"`
+	OrderAmount   uint64 `json:"order_amount,omitempty"`
+	DiscountPts   int64  `json:"discount_pts,omitempty"`
+	WireAmount    uint64 `json:"wire_amount,omitempty"`
+	WireStatus    int    `json:"wire_status"`
+	Status        string `json:"status"`
+	PaidAt        int64  `json:"paid_at,omitempty"`
+}
+
+type ReconResult struct {
+	Rows        []ReconRow `json:"rows"`
+	TotalOK     int        `json:"total_ok"`
+	TotalIssues int        `json:"total_issues"`
+}
+
+func (h *opsHandler) handleReconcile(w http.ResponseWriter, r *http.Request) {
+	fromStr := r.URL.Query().Get("from")
+	toStr := r.URL.Query().Get("to")
+	if fromStr == "" || toStr == "" {
+		http.Error(w, `{"error":"from and to required"}`, 400)
+		return
+	}
+	loc := time.Now().Location()
+	fromT, err1 := time.ParseInLocation("2006-01-02", fromStr, loc)
+	toT, err2 := time.ParseInLocation("2006-01-02", toStr, loc)
+	if err1 != nil || err2 != nil {
+		http.Error(w, `{"error":"invalid date format"}`, 400)
+		return
+	}
+	toT = toT.Add(24 * time.Hour)
+
+	orders, err := h.store.OrdersForRecon(fromT.UnixMilli(), toT.UnixMilli())
+	if err != nil {
+		http.Error(w, `{"error":"db"}`, 500)
+		return
+	}
+
+	wireIntents, err := h.fetchWireIntents(fromStr, toStr)
+	if err != nil {
+		http.Error(w, `{"error":"wire unavailable"}`, 502)
+		return
+	}
+
+	result := buildReconResult(orders, wireIntents)
+	json.NewEncoder(w).Encode(result)
+}
+
+func (h *opsHandler) fetchWireIntents(from, to string) ([]WireIntentRaw, error) {
+	if h.wireURL == "" {
+		return nil, fmt.Errorf("wire not configured")
+	}
+	target := h.wireURL + "/api/intents?from=" + from + "&to=" + to
+	req, err := http.NewRequest(http.MethodGet, target, nil)
+	if err != nil {
+		return nil, err
+	}
+	if h.wireM2M != "" {
+		req.Header["X-M2M-Token"] = []string{h.wireM2M}
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var wrapper struct {
+		Intents []WireIntentRaw `json:"intents"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&wrapper); err != nil {
+		return nil, err
+	}
+	return wrapper.Intents, nil
+}
+
+func buildReconResult(orders []MerchantsOrderForRecon, wireIntents []WireIntentRaw) ReconResult {
+	type key struct{ mid, rid uint64 }
+
+	wmap := make(map[key]WireIntentRaw, len(wireIntents))
+	for _, wi := range wireIntents {
+		wmap[key{uint64(wi.MID), wi.RequestID}] = wi
+	}
+
+	var rows []ReconRow
+	seen := make(map[key]bool)
+
+	for _, o := range orders {
+		row := ReconRow{
+			OrderID:       o.ID,
+			MID:           o.MID,
+			MerchantName:  o.MerchantName,
+			WireRequestID: o.WireRequestID,
+			OrderAmount:   o.Amount,
+			DiscountPts:   o.DiscountPts,
+			PaidAt:        o.PaidAt,
+		}
+		if o.WireRequestID == 0 {
+			row.Status = "MERCHANTS_ONLY"
+		} else {
+			k := key{uint64(o.MID), o.WireRequestID}
+			wi, found := wmap[k]
+			if !found {
+				row.Status = "MERCHANTS_ONLY"
+			} else {
+				seen[k] = true
+				row.WireAmount = wi.Amount
+				row.WireStatus = wi.Status
+				expected := o.Amount - uint64(o.DiscountPts)
+				switch {
+				case wi.Status == 0:
+					row.Status = "WIRE_PENDING"
+				case wi.Amount != expected:
+					row.Status = "AMOUNT_MISMATCH"
+				default:
+					row.Status = "OK"
+				}
+			}
+		}
+		rows = append(rows, row)
+	}
+
+	for _, wi := range wireIntents {
+		k := key{uint64(wi.MID), wi.RequestID}
+		if !seen[k] {
+			rows = append(rows, ReconRow{
+				MID:           wi.MID,
+				WireRequestID: wi.RequestID,
+				WireAmount:    wi.Amount,
+				WireStatus:    wi.Status,
+				Status:        "WIRE_ONLY",
+			})
+		}
+	}
+
+	var ok, issues int
+	for _, rr := range rows {
+		if rr.Status == "OK" {
+			ok++
+		} else {
+			issues++
+		}
+	}
+	if rows == nil {
+		rows = []ReconRow{}
+	}
+	return ReconResult{Rows: rows, TotalOK: ok, TotalIssues: issues}
 }
 
 func (h *opsHandler) proxyWire(w http.ResponseWriter, r *http.Request, rest string) {
@@ -257,7 +419,8 @@ tr:hover td{background:#1c2128}
     <div class="tab on" id="t0" onclick="tab('dash')">Dashboard</div>
     <div class="tab" id="t1" onclick="tab('merch')">Merchants</div>
     <div class="tab" id="t2" onclick="tab('settle')">Settlement</div>
-    <div class="tab" id="t3" onclick="tab('wire')">Wire</div>
+    <div class="tab" id="t3" onclick="tab('recon')">Reconcile</div>
+    <div class="tab" id="t4" onclick="tab('wire')">Wire</div>
   </div>
   <div class="pg on" id="pg-dash">
     <div class="cards" id="ov"></div>
@@ -285,6 +448,21 @@ tr:hover td{background:#1c2128}
       <table><thead><tr>
         <th>MID</th><th>Merchant</th><th>Orders</th><th>Volume (VND)</th><th>Avg Order</th>
       </tr></thead><tbody id="stb"></tbody></table>
+    </div>
+  </div>
+  <div class="pg" id="pg-recon">
+    <div class="sec">
+      <h2 style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px">Reconciliation Report</h2>
+      <div class="fr">
+        <label>From</label><input id="rf" type="date" style="width:140px">
+        <label>To</label><input id="rt" type="date" style="width:140px">
+        <button class="bp" style="padding:7px 14px" onclick="loadRecon()">Reconcile</button>
+      </div>
+      <div id="rs" class="muted" style="margin-bottom:10px"></div>
+      <table><thead><tr>
+        <th>Status</th><th>Order ID</th><th>MID</th><th>Merchant</th>
+        <th>Order Amt</th><th>Wire Amt</th><th>Request ID</th><th>Paid At</th>
+      </tr></thead><tbody id="rtb"></tbody></table>
     </div>
   </div>
   <div class="pg" id="pg-wire">
@@ -324,7 +502,7 @@ document.getElementById('lgb').onclick=function(){
   T='';document.getElementById('login').style.display='flex';
   document.getElementById('main').style.display='none';
 };
-var TABS=['dash','merch','settle','wire'];
+var TABS=['dash','merch','settle','recon','wire'];
 function tab(n){
   TABS.forEach(function(t,i){
     document.getElementById('pg-'+t).className='pg'+(t===n?' on':'');
@@ -372,6 +550,8 @@ function setStatus(mid,action){
   function iso(d){return d.toISOString().slice(0,10);}
   document.getElementById('st').value=iso(now);
   document.getElementById('sf').value=iso(new Date(now-7*86400000));
+  document.getElementById('rt').value=iso(now);
+  document.getElementById('rf').value=iso(new Date(now-7*86400000));
 })();
 function loadSettle(){
   var f=document.getElementById('sf').value,t=document.getElementById('st').value;
@@ -386,6 +566,34 @@ function loadSettle(){
             +'<td>'+fmt(r.volume)+'</td><td>'+fmt(r.avg_order)+'</td></tr>';
     }).join('');
   }).catch(function(){});
+}
+var RECON_COLORS={'OK':'#3fb950','MERCHANTS_ONLY':'#e94560','WIRE_ONLY':'#e3a005','AMOUNT_MISMATCH':'#e3a005','WIRE_PENDING':'#8b949e'};
+function loadRecon(){
+  var f=document.getElementById('rf').value,t=document.getElementById('rt').value;
+  if(!f||!t)return;
+  document.getElementById('rs').textContent='Loading...';
+  api('/reconcile?from='+f+'&to='+t).then(function(d){
+    var rows=d.rows||[];
+    document.getElementById('rs').innerHTML=
+      '<span style="color:#3fb950">✓ '+d.total_ok+' matched</span>'
+      +(d.total_issues?' &nbsp; <span style="color:#e94560">⚠ '+d.total_issues+' issues</span>':'');
+    var STATUS_LABEL={'OK':'OK','MERCHANTS_ONLY':'No Wire Intent','WIRE_ONLY':'No Merchant Order','AMOUNT_MISMATCH':'Amount Mismatch','WIRE_PENDING':'Wire Pending'};
+    document.getElementById('rtb').innerHTML=rows.map(function(r){
+      var c=RECON_COLORS[r.status]||'#8b949e';
+      var lbl=STATUS_LABEL[r.status]||r.status;
+      var ts=r.paid_at?new Date(r.paid_at).toLocaleString('vi-VN'):'—';
+      return '<tr>'
+        +'<td><span class="bdg" style="background:'+c+'22;color:'+c+'">'+lbl+'</span></td>'
+        +'<td class="muted" style="font-size:10px">'+(r.order_id?r.order_id.slice(0,12)+'…':'—')+'</td>'
+        +'<td>'+r.mid+'</td>'
+        +'<td>'+(r.merchant_name||'—')+'</td>'
+        +'<td>'+fmt(r.order_amount)+'</td>'
+        +'<td>'+fmt(r.wire_amount)+'</td>'
+        +'<td class="muted" style="font-size:10px">'+r.wire_request_id+'</td>'
+        +'<td class="muted">'+ts+'</td>'
+        +'</tr>';
+    }).join('');
+  }).catch(function(e){document.getElementById('rs').textContent='Error: '+e.message;});
 }
 function loadWStats(){
   api('/wire/stats').then(function(d){

@@ -128,6 +128,7 @@ static const char SCHEMA[] =
     ");"
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS create_time TIMESTAMPTZ NOT NULL DEFAULT NOW();"
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS update_time TIMESTAMPTZ NOT NULL DEFAULT NOW();"
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pubkey      BYTEA;"
 
     /* Balance cache — separated from accounts so profile updates don't lock balance rows */
     "CREATE TABLE IF NOT EXISTS balances ("
@@ -1091,6 +1092,81 @@ int db_merchant_get_name(DB *db, uint32_t mid, char *name_out, size_t name_max) 
  *  Intent listing
  * ══════════════════════════════════════════════════════════════════════════ */
 
+char *db_intents_range(DB *db,
+                       const char *from_date, const char *to_date,
+                       int *count_out) {
+    static const char SQL[] =
+        "SELECT mid, request_id, amount, status, gateway_order_id"
+        " FROM payment_intents"
+        " WHERE (create_time AT TIME ZONE 'Asia/Ho_Chi_Minh')::DATE >= $1::DATE"
+        "   AND (create_time AT TIME ZONE 'Asia/Ho_Chi_Minh')::DATE <= $2::DATE"
+        " ORDER BY create_time DESC LIMIT 10000";
+
+    const char *vals[2] = { from_date, to_date };
+    int         lens[2] = { 0, 0 };
+    int         fmts[2] = { 0, 0 };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+
+    if (PQresultStatus(r) != PGRES_TUPLES_OK) {
+        fprintf(stderr, "[db] intents_range: %s\n", PQerrorMessage(db->conn));
+        PQclear(r);
+        return NULL;
+    }
+
+    int n = PQntuples(r);
+    if (count_out) *count_out = n;
+
+    int cap = 64 + n * 150;
+    if (cap < 4096) cap = 4096;
+    char *buf = malloc(cap);
+    if (!buf) { PQclear(r); return NULL; }
+
+    int off = 0;
+    buf[off++] = '[';
+
+    for (int i = 0; i < n; i++) {
+        if (off + 300 > cap) {
+            cap *= 2;
+            char *nb = realloc(buf, cap);
+            if (!nb) { free(buf); PQclear(r); return NULL; }
+            buf = nb;
+        }
+
+        const char *mid_s = PQgetvalue(r, i, 0);
+        const char *rid_s = PQgetvalue(r, i, 1);
+        const char *amt_s = PQgetvalue(r, i, 2);
+        const char *sts_s = PQgetvalue(r, i, 3);
+        const char *goid  = PQgetvalue(r, i, 4);
+
+        char esc[512] = "";
+        int ei = 0;
+        for (int k = 0; goid[k] && ei < 508; k++) {
+            if (goid[k] == '"' || goid[k] == '\\') esc[ei++] = '\\';
+            esc[ei++] = goid[k];
+        }
+
+        if (i > 0) buf[off++] = ',';
+        off += snprintf(buf + off, cap - off,
+            "{\"mid\":%s,\"request_id\":%s,\"amount\":%s,\"status\":%s,\"gateway_order_id\":\"%s\"}",
+            mid_s, rid_s, amt_s, sts_s, esc);
+    }
+
+    if (off + 2 > cap) {
+        cap += 4;
+        char *nb = realloc(buf, cap);
+        if (!nb) { free(buf); PQclear(r); return NULL; }
+        buf = nb;
+    }
+    buf[off++] = ']';
+    buf[off]   = '\0';
+
+    PQclear(r);
+    return buf;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
  *  Admin stats & cash ops
  * ══════════════════════════════════════════════════════════════════════════ */
@@ -1456,6 +1532,40 @@ int db_push_token_get(DB *db, uint32_t mid, char *out, size_t outlen) {
 }
 
 /* ─── Single txn lookup ──────────────────────────────────────────────────── */
+
+int db_merchant_pubkey_set(DB *db, uint32_t mid, const uint8_t pubkey[32]) {
+    static const char SQL[] =
+        "UPDATE merchants SET pubkey = $1 WHERE mid = $2";
+    uint64_t mid_be = pg_int8((uint64_t)mid);
+    const char *pvals[2] = { (char *)pubkey, (char *)&mid_be };
+    const int   plens[2] = { 32, 8 };
+    const int   pfmts[2] = { 1, 1 };
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, pvals, plens, pfmts, 1);
+    DB_UNLOCK(db);
+    int ok = (PQresultStatus(r) == PGRES_COMMAND_OK);
+    PQclear(r);
+    return ok ? 0 : -1;
+}
+
+int db_merchant_pubkey_get(DB *db, uint32_t mid, uint8_t pubkey_out[32]) {
+    static const char SQL[] =
+        "SELECT pubkey FROM merchants WHERE mid = $1 AND pubkey IS NOT NULL";
+    uint64_t mid_be = pg_int8((uint64_t)mid);
+    const char *pvals[1] = { (char *)&mid_be };
+    const int   plens[1] = { 8 };
+    const int   pfmts[1] = { 1 };
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, pvals, plens, pfmts, 1);
+    DB_UNLOCK(db);
+    if (PQresultStatus(r) != PGRES_TUPLES_OK || PQntuples(r) == 0 ||
+        PQgetlength(r, 0, 0) != 32) {
+        PQclear(r); return -1;
+    }
+    memcpy(pubkey_out, PQgetvalue(r, 0, 0), 32);
+    PQclear(r);
+    return 0;
+}
 
 int db_txn_get(DB *db, int64_t txn_id, TxnDetail *out) {
     static const char SQL[] =

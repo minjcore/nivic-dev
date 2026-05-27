@@ -360,6 +360,32 @@ static void h_admin_users_delete(int fd, const char *body) {
     json_ok(fd, "{\"ok\":true}");
 }
 
+static void h_intents(int fd, const char *query) {
+    char from_date[16] = "", to_date[16] = "";
+
+    const char *p = strstr(query, "from=");
+    if (p) { p += 5; int i=0; while(*p&&*p!='&'&&i<10) from_date[i++]=*p++; }
+    p = strstr(query, "to=");
+    if (p) { p += 3;  int i=0; while(*p&&*p!='&'&&i<10) to_date[i++]=*p++;  }
+
+    if (!from_date[0] || !to_date[0]) {
+        json_err(fd, 400, "missing from/to (YYYY-MM-DD)"); return;
+    }
+
+    int count = 0;
+    char *json = db_intents_range(g.db, from_date, to_date, &count);
+    if (!json) { json_err(fd, 500, "db error"); return; }
+
+    int jsz = (int)strlen(json);
+    int bufsz = jsz + 64;
+    char *out = malloc(bufsz);
+    if (!out) { free(json); json_err(fd, 500, "oom"); return; }
+    snprintf(out, bufsz, "{\"intents\":%s,\"count\":%d}", json, count);
+    free(json);
+    json_ok(fd, out);
+    free(out);
+}
+
 static void h_export(int fd, const char *query) {
     char from_date[16] = "", to_date[16] = "";
 
@@ -888,7 +914,8 @@ static void dispatch(int fd) {
     /* All /api/... require session auth; GET stats/sessions also accept M2M */
     int is_m2m_get = m2m_authed(buf) && strcmp(method, "GET") == 0;
     int is_stats_or_sess = strcmp(path, "/api/stats") == 0 ||
-                           strcmp(path, "/api/sessions") == 0;
+                           strcmp(path, "/api/sessions") == 0 ||
+                           strcmp(path, "/api/intents") == 0;
     if (!authed(buf) && !(is_m2m_get && is_stats_or_sess)) {
         json_err(fd, 401, "unauthorized"); return;
     }
@@ -929,6 +956,8 @@ static void dispatch(int fd) {
     else if (strcmp(path, "/api/cashin")        == 0) h_cashin(fd, body, actor);
     else if (strcmp(path, "/api/cashout")       == 0) h_cashout(fd, body, actor);
     else if (strcmp(path, "/api/export")        == 0) h_export(fd, query);
+    else if (strcmp(path, "/api/intents")       == 0 &&
+             strcmp(method, "GET")              == 0) h_intents(fd, query);
     else if (strcmp(path, "/api/admins")        == 0 &&
              strcmp(method, "GET")              == 0) h_admin_users_list(fd);
     else if (strcmp(path, "/api/admins")        == 0 &&

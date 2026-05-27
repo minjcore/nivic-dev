@@ -197,6 +197,14 @@ int db_merchant_exists(DB *db, uint32_t mid);
  * Returns 0 on success, -1 if not found / error. */
 int db_merchant_get_name(DB *db, uint32_t mid, char *name_out, size_t name_max);
 
+/* Store Ed25519 public key (32 bytes) for a merchant.
+ * Returns 0 on success, -1 on error. */
+int db_merchant_pubkey_set(DB *db, uint32_t mid, const uint8_t pubkey[32]);
+
+/* Retrieve Ed25519 public key into pubkey_out[32].
+ * Returns 0 on success, -1 if not found / no key / error. */
+int db_merchant_pubkey_get(DB *db, uint32_t mid, uint8_t pubkey_out[32]);
+
 /* ─── Intent listing ─────────────────────────────────────────────────────── */
 
 typedef struct {
@@ -218,6 +226,13 @@ int db_intent_list(DB *db, uint32_t mid, IntentSummary *out, int max_count);
 char *db_export_transfers_csv(DB *db,
                               const char *from_date, const char *to_date,
                               int *rows_out);
+
+/* Returns a malloc'd JSON array of payment_intents in date range (ICT).
+ * JSON: [{"mid":N,"request_id":N,"amount":N,"status":N,"gateway_order_id":"..."},...]
+ * *count_out: number of rows. Caller must free. NULL on DB error. */
+char *db_intents_range(DB *db,
+                       const char *from_date, const char *to_date,
+                       int *count_out);
 
 /* ─── Admin user accounts (web panel login) ─────────────────────────────── */
 
