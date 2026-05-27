@@ -8,6 +8,11 @@ M2M_TOKEN="03a37ed9ebc2ad037781d40833da5d1b761988813d7068358525e7e1e0c41b90"
 OPS_TOKEN="${OPS_TOKEN:-ops-$(echo -n "$M2M_TOKEN" | sha256sum | cut -c1-32)}"
 SMTP_PASS="${SMTP_PASS:-EmailPassword10}"
 JWT_SECRET="${JWT_SECRET:-$(echo -n "jwt-${M2M_TOKEN}" | sha256sum | cut -c1-64)}"
+OSS_ENDPOINT="${OSS_ENDPOINT:-}"
+OSS_BUCKET="${OSS_BUCKET:-}"
+OSS_REGION="${OSS_REGION:-oss-cn-hangzhou}"
+OSS_ACCESS_KEY="${OSS_ACCESS_KEY:-}"
+OSS_SECRET_KEY="${OSS_SECRET_KEY:-}"
 
 echo "==> Building Merchants (linux/amd64)..."
 cd "$SCRIPT_DIR/Merchants"
@@ -46,7 +51,13 @@ scp infra/systemd/ops.service          "$SERVER:/tmp/ops.service"
 scp IAM/iam-linux                                         "$SERVER:/root/app/iam-new"
 scp infra/systemd/iam.service                             "$SERVER:/tmp/iam.service"
 scp "$HOME/fluxor-runtime/apps/go-proxy/goproxy-linux"    "$SERVER:/root/app/goproxy-new"
-scp GoProxy/goproxy.json                                  "$SERVER:/root/app/goproxy.json"
+sed -e "s/__OSS_ENDPOINT__/${OSS_ENDPOINT}/g" \
+    -e "s/__OSS_BUCKET__/${OSS_BUCKET}/g" \
+    -e "s/__OSS_REGION__/${OSS_REGION}/g" \
+    -e "s/__OSS_ACCESS_KEY__/${OSS_ACCESS_KEY}/g" \
+    -e "s/__OSS_SECRET_KEY__/${OSS_SECRET_KEY}/g" \
+    GoProxy/goproxy.json > /tmp/goproxy-rendered.json
+scp /tmp/goproxy-rendered.json                            "$SERVER:/root/app/goproxy.json"
 scp infra/systemd/goproxy.service                         "$SERVER:/etc/systemd/system/goproxy.service"
 scp Caddyfile                                             "$SERVER:/etc/caddy/Caddyfile"
 

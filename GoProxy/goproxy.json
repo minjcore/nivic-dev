@@ -8,7 +8,18 @@
   },
   "storage": {
     "type": "filesystem",
-    "basePath": "/var/lib/goproxy"
+    "basePath": "/var/lib/goproxy",
+    "mirror": {
+      "s3": {
+        "endpoint": "https://__OSS_BUCKET__.__OSS_ENDPOINT__",
+        "bucket": "__OSS_BUCKET__",
+        "region": "__OSS_REGION__",
+        "accessKey": "__OSS_ACCESS_KEY__",
+        "secretKey": "__OSS_SECRET_KEY__",
+        "forcePathStyle": false,
+        "disableSSL": false
+      }
+    }
   },
   "auth": {
     "enabled": false,
