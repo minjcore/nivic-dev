@@ -1,0 +1,22 @@
+# Merchants Host — unified config
+# Env vars always override these values (for Docker / systemd deployments).
+# Secrets can be injected via ${ENV_VAR} or set directly in the environment.
+
+# ── Server ───────────────────────────────────────────────────────────────────
+addr  = :8090
+token = change-me-in-production     # admin Bearer token (MERCHANTS_TOKEN overrides)
+
+# ── Database ─────────────────────────────────────────────────────────────────
+db.dsn = "postgres://merchants:merchants123@localhost/merchants?sslmode=disable"
+
+# ── Wire integration ─────────────────────────────────────────────────────────
+wire.admin-url = http://localhost:7475
+wire.m2m-token = ${WIRE_M2M_TOKEN}   # injected at runtime
+
+# ── SMTP (Aliyun DirectMail, port 465 implicit TLS) ──────────────────────────
+smtp.host      = smtpdm-ap-southeast-1.aliyuncs.com
+smtp.port      = 465
+smtp.user      = otp@nivic.dev
+smtp.pass      = ${SMTP_PASS}         # injected at runtime
+smtp.from      = otp@nivic.dev
+smtp.from-name = Nivic Pay

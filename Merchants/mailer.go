@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/smtp"
-	"os"
-	"strconv"
 	"time"
 )
 
@@ -24,33 +22,26 @@ type mailer struct {
 	cfg mailerConfig
 }
 
-func mailerFromEnv() *mailer {
-	port := 465
-	if v := os.Getenv("SMTP_PORT"); v != "" {
-		if p, err := strconv.Atoi(v); err == nil {
-			port = p
-		}
+func mailerFromConfig(s SMTPConfig) *mailer {
+	if s.Host == "" {
+		return nil
 	}
-	password := os.Getenv("SMTP_PASSWORD")
-	if password == "" {
-		password = os.Getenv("SMTP_PASS")
+	port := s.Port
+	if port == 0 {
+		port = 465
 	}
-	fromName := os.Getenv("SMTP_FROM_NAME")
+	fromName := s.FromName
 	if fromName == "" {
 		fromName = "Nivic Pay"
 	}
-	cfg := mailerConfig{
-		host:     os.Getenv("SMTP_HOST"),
+	return &mailer{cfg: mailerConfig{
+		host:     s.Host,
 		port:     port,
-		user:     os.Getenv("SMTP_USER"),
-		password: password,
-		from:     os.Getenv("SMTP_FROM"),
+		user:     s.User,
+		password: s.Pass,
+		from:     s.From,
 		fromName: fromName,
-	}
-	if cfg.host == "" {
-		return nil
-	}
-	return &mailer{cfg: cfg}
+	}}
 }
 
 func (m *mailer) send(ctx context.Context, to, subject, htmlBody string) error {

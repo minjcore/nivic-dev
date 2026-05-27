@@ -18,13 +18,9 @@ func main() {
 	fmt.Println("Merchant public-key registry • :8090")
 	fmt.Println("──────────────────────────────────────────")
 
-	dbPath       := envOr("MERCHANTS_DB",      "postgres://postgres:postgres@localhost/merchants?sslmode=disable")
-	addr         := envOr("MERCHANTS_ADDR",    ":8090")
-	adminToken   := envOr("MERCHANTS_TOKEN",   "change-me-in-production")
-	wireAdminURL := envOr("WIRE_ADMIN_URL",    "http://localhost:7475")
-	wireM2MToken := envOr("WIRE_M2M_TOKEN",   "")
+	cfg := loadConfig()
 
-	store, err := OpenStore(dbPath)
+	store, err := OpenStore(cfg.DB)
 	if err != nil {
 		slog.Error("store init failed", "err", err)
 		os.Exit(1)
@@ -33,22 +29,15 @@ func main() {
 
 	h := &handler{
 		store:        store,
-		adminToken:   adminToken,
-		wireAdminURL: wireAdminURL,
-		wireM2MToken: wireM2MToken,
-		mailer:       mailerFromEnv(),
+		adminToken:   cfg.AdminToken,
+		wireAdminURL: cfg.WireAdminURL,
+		wireM2MToken: cfg.WireM2MToken,
+		mailer:       mailerFromConfig(cfg.SMTP),
 	}
 
-	slog.Info("merchants-host ready", "addr", addr, "db", dbPath)
-	if err := http.ListenAndServe(addr, h.routes()); err != nil {
+	slog.Info("merchants-host ready", "addr", cfg.Addr, "db", cfg.DB)
+	if err := http.ListenAndServe(cfg.Addr, h.routes()); err != nil {
 		slog.Error("server error", "err", err)
 		os.Exit(1)
 	}
-}
-
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
