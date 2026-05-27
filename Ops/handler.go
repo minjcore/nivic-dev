@@ -11,19 +11,20 @@ import (
 )
 
 type opsHandler struct {
-	store    *Store
-	token    string
-	wireURL  string
-	wireM2M  string
+	store   *Store
+	token   string
+	wireURL string
+	wireM2M string
 }
 
 func (h *opsHandler) register(mux *http.ServeMux) {
-	mux.HandleFunc("/ops/", h.dispatch)
+	mux.HandleFunc("/", h.dispatch)
 }
 
 func (h *opsHandler) dispatch(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/ops")
-	if path == "" || path == "/" {
+	path := r.URL.Path
+
+	if path == "/" || path == "" {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, opsHTML)
 		return
@@ -60,12 +61,14 @@ func (h *opsHandler) dispatch(w http.ResponseWriter, r *http.Request) {
 
 func (h *opsHandler) auth(r *http.Request) bool {
 	v := r.Header.Get("Authorization")
-	return strings.TrimPrefix(v, "Bearer ") == h.token && h.token != ""
+	return h.token != "" && strings.TrimPrefix(v, "Bearer ") == h.token
 }
 
 func (h *opsHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	var req struct{ Token string `json:"token"` }
+	var req struct {
+		Token string `json:"token"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Token != h.token {
 		w.WriteHeader(http.StatusUnauthorized)
 		fmt.Fprint(w, `{"ok":false}`)
@@ -75,7 +78,7 @@ func (h *opsHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *opsHandler) handleOverview(w http.ResponseWriter) {
-	ov, err := h.store.OpsOverview()
+	ov, err := h.store.Overview()
 	if err != nil {
 		http.Error(w, `{"error":"db"}`, 500)
 		return
@@ -84,7 +87,7 @@ func (h *opsHandler) handleOverview(w http.ResponseWriter) {
 }
 
 func (h *opsHandler) handleListMerchants(w http.ResponseWriter) {
-	rows, err := h.store.ListAllMerchantsOps()
+	rows, err := h.store.ListMerchants()
 	if err != nil {
 		http.Error(w, `{"error":"db"}`, 500)
 		return
@@ -96,7 +99,6 @@ func (h *opsHandler) handleListMerchants(w http.ResponseWriter) {
 }
 
 func (h *opsHandler) handleMerchantAction(w http.ResponseWriter, r *http.Request, path string) {
-	// path = /api/merchants/{mid}/suspend|activate
 	parts := strings.Split(strings.TrimPrefix(path, "/api/merchants/"), "/")
 	if len(parts) != 2 {
 		http.Error(w, `{"error":"bad path"}`, 400)
@@ -126,7 +128,7 @@ func (h *opsHandler) handleMerchantAction(w http.ResponseWriter, r *http.Request
 }
 
 func (h *opsHandler) handleSettlement(w http.ResponseWriter, r *http.Request) {
-	fromStr := r.URL.Query().Get("from") // YYYY-MM-DD
+	fromStr := r.URL.Query().Get("from")
 	toStr := r.URL.Query().Get("to")
 	if fromStr == "" || toStr == "" {
 		http.Error(w, `{"error":"from and to required"}`, 400)
@@ -139,9 +141,9 @@ func (h *opsHandler) handleSettlement(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid date format"}`, 400)
 		return
 	}
-	toT = toT.Add(24 * time.Hour) // inclusive end day
+	toT = toT.Add(24 * time.Hour)
 
-	rows, err := h.store.SettlementReport(fromT.UnixMilli(), toT.UnixMilli())
+	rows, err := h.store.Settlement(fromT.UnixMilli(), toT.UnixMilli())
 	if err != nil {
 		http.Error(w, `{"error":"db"}`, 500)
 		return
@@ -152,7 +154,6 @@ func (h *opsHandler) handleSettlement(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"rows": rows})
 }
 
-// proxyWire forwards /api/wire/{rest} → wireURL/api/{rest}
 func (h *opsHandler) proxyWire(w http.ResponseWriter, r *http.Request, rest string) {
 	if h.wireURL == "" {
 		http.Error(w, `{"error":"wire admin not configured"}`, 503)
@@ -162,12 +163,10 @@ func (h *opsHandler) proxyWire(w http.ResponseWriter, r *http.Request, rest stri
 	if r.URL.RawQuery != "" {
 		target += "?" + r.URL.RawQuery
 	}
-
 	var bodyReader io.Reader
 	if r.Method == http.MethodPost {
 		bodyReader = r.Body
 	}
-
 	req, err := http.NewRequestWithContext(r.Context(), r.Method, target, bodyReader)
 	if err != nil {
 		http.Error(w, `{"error":"proxy build failed"}`, 500)
@@ -179,7 +178,6 @@ func (h *opsHandler) proxyWire(w http.ResponseWriter, r *http.Request, rest stri
 	if r.Method == http.MethodPost {
 		req.Header.Set("Content-Type", "application/json")
 	}
-
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		http.Error(w, `{"error":"wire unreachable"}`, 502)
@@ -190,7 +188,7 @@ func (h *opsHandler) proxyWire(w http.ResponseWriter, r *http.Request, rest stri
 	io.Copy(w, resp.Body)
 }
 
-// ─── Inline SPA ───────────────────────────────────────────────────────────────
+// ─── SPA ─────────────────────────────────────────────────────────────────────
 
 const opsHTML = `<!DOCTYPE html>
 <html lang="vi">
@@ -305,16 +303,15 @@ var T='';
 var fmt=function(n){return Number(n).toLocaleString('vi-VN');};
 var fmtD=function(s){return s?new Date(s*1000).toLocaleDateString('vi-VN'):'';};
 function api(path,o){
-  return fetch('/ops/api'+path,Object.assign({
+  return fetch('/api'+path,Object.assign({
     headers:{'Authorization':'Bearer '+T,'Content-Type':'application/json'}
   },o||{})).then(function(r){if(!r.ok)throw new Error(r.status);return r.json();});
 }
-// Login
 document.getElementById('lb').onclick=login;
 document.getElementById('pw').onkeydown=function(e){if(e.key==='Enter')login();};
 function login(){
   var pw=document.getElementById('pw').value;
-  fetch('/ops/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"token":"'+pw+'"}'})
+  fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"token":"'+pw+'"}'})
   .then(function(r){return r.json();}).then(function(d){
     if(!d.ok)throw new Error();
     T=pw;
@@ -327,7 +324,6 @@ document.getElementById('lgb').onclick=function(){
   T='';document.getElementById('login').style.display='flex';
   document.getElementById('main').style.display='none';
 };
-// Tabs
 var TABS=['dash','merch','settle','wire'];
 function tab(n){
   TABS.forEach(function(t,i){
@@ -337,9 +333,8 @@ function tab(n){
   if(n==='merch')loadMerch();
   if(n==='wire'){loadWStats();loadWSess();}
 }
-// Dashboard
 function card(lbl,val,cls){
-  return '<div class="card"><div class="cl">'+lbl+'</div><div class="cv'+(cls?' '+cls:'')+'">'+(val===undefined||val===null?'—':val)+'</div></div>';
+  return '<div class="card"><div class="cl">'+lbl+'</div><div class="cv'+(cls?' '+cls:'')+'">'+(val===undefined||val===null?'0':val)+'</div></div>';
 }
 function loadDash(){
   api('/overview').then(function(d){
@@ -353,7 +348,6 @@ function loadDash(){
       card('All-time Volume',fmt(d.total_volume)+' ₫','b');
   }).catch(function(){});
 }
-// Merchants
 function loadMerch(){
   api('/merchants').then(function(d){
     document.getElementById('mtb').innerHTML=d.map(function(m){
@@ -373,7 +367,6 @@ function loadMerch(){
 function setStatus(mid,action){
   api('/merchants/'+mid+'/'+action,{method:'POST'}).then(loadMerch).catch(function(){});
 }
-// Settlement — default last 7 days
 (function(){
   var now=new Date();
   function iso(d){return d.toISOString().slice(0,10);}
@@ -394,7 +387,6 @@ function loadSettle(){
     }).join('');
   }).catch(function(){});
 }
-// Wire proxy
 function loadWStats(){
   api('/wire/stats').then(function(d){
     document.getElementById('wc').innerHTML=

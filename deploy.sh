@@ -12,6 +12,11 @@ cd "$(dirname "$0")/Merchants"
 GOOS=linux GOARCH=amd64 go build -o merchants-linux .
 cd ..
 
+echo "==> Building Ops (linux/amd64)..."
+cd "$(dirname "$0")/Ops"
+GOOS=linux GOARCH=amd64 go build -o ops-linux .
+cd ..
+
 echo "==> Syncing source to server..."
 rsync -az --exclude '.build' --exclude '*.db' \
   saving/         "$SERVER:$REMOTE_DIR/saving/"
@@ -19,10 +24,12 @@ rsync -az \
   docker-compose.prod.yml \
   "$SERVER:$REMOTE_DIR/docker-compose.prod.yml"
 
-echo "==> Uploading Merchants binary + config + service file..."
+echo "==> Uploading binaries + configs + service files..."
 scp Merchants/merchants-linux          "$SERVER:/root/app/merchants-new"
 scp Merchants/merchants.kson           "$SERVER:/root/app/merchants.kson"
 scp infra/systemd/merchants.service    "$SERVER:/tmp/merchants.service"
+scp Ops/ops-linux                      "$SERVER:/root/app/ops-new"
+scp infra/systemd/ops.service          "$SERVER:/tmp/ops.service"
 
 echo "==> Deploying on server..."
 ssh "$SERVER" bash <<ENDSSH
@@ -38,9 +45,20 @@ sed -e 's/__M2M_TOKEN__/${M2M_TOKEN}/g' \
 mv /root/app/merchants-new /root/app/merchants
 chmod +x /root/app/merchants
 
+sed -e 's/__M2M_TOKEN__/${M2M_TOKEN}/g' \
+    -e 's/__OPS_TOKEN__/${OPS_TOKEN}/g' \
+    /tmp/ops.service \
+  > /etc/systemd/system/ops.service
+
+mv /root/app/ops-new /root/app/ops
+chmod +x /root/app/ops
+
 systemctl daemon-reload
 systemctl restart merchants
+systemctl enable ops
+systemctl restart ops
 echo "merchants status: \$(systemctl is-active merchants)"
+echo "ops status:       \$(systemctl is-active ops)"
 
 # ── Wire .env ────────────────────────────────────────────────────────────────
 cd $REMOTE_DIR
@@ -76,4 +94,4 @@ echo ""
 echo "==> Deploy xong!"
 echo "    M2M token: ${M2M_TOKEN}"
 echo "    OPS token: ${OPS_TOKEN}"
-echo "    Control plane: http://5.104.83.76:8090/ops/"
+echo "    Control plane: https://ops.nivic.dev/"

@@ -84,7 +84,6 @@ func prToBase64URL(pr *PaymentRequest) (string, error) {
 type handler struct {
 	store        *Store
 	adminToken   string
-	opsToken     string
 	wireAdminURL string
 	wireM2MToken string
 	wireAddr     string
@@ -139,9 +138,6 @@ func (h *handler) routes() http.Handler {
 	mux.HandleFunc("GET /pay/{order_id}/wire",                   h.handlePayOrderWire)
 	mux.HandleFunc("GET /pay/{order_id}/status",                   h.handlePayStatus)
 
-	// Control plane
-	ops := &opsHandler{store: h.store, token: h.opsToken, wireURL: h.wireAdminURL, wireM2M: h.wireM2MToken}
-	ops.register(mux)
 
 	// Middleware: merchant public page for *.nivic.dev subdomains and custom domains
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -1,0 +1,22 @@
+[Unit]
+Description=Ops Control Plane (nivic.dev admin)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/root/app/ops
+Restart=on-failure
+RestartSec=5
+
+Environment=OPS_ADDR=:9000
+Environment=MERCHANTS_DB=postgres://merchants:merchants123@localhost:5432/merchants?sslmode=disable
+Environment=WIRE_ADMIN_URL=http://localhost:7475
+Environment=WIRE_M2M_TOKEN=__M2M_TOKEN__
+Environment=OPS_TOKEN=__OPS_TOKEN__
+
+WorkingDirectory=/root/app
+StandardOutput=append:/var/log/ops.log
+StandardError=append:/var/log/ops.log
+
+[Install]
+WantedBy=multi-user.target
