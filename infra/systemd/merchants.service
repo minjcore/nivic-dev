@@ -9,10 +9,15 @@ ExecStart=/root/app/merchants
 Restart=on-failure
 RestartSec=5
 
-Environment=MERCHANTS_DB=/var/lib/docker/volumes/app_merchants_data/_data/merchants.db
+Environment=MERCHANTS_DB=postgres://merchants:merchants123@localhost:5432/merchants?sslmode=disable
 Environment=MERCHANTS_ADDR=:8090
 Environment=WIRE_ADMIN_URL=http://localhost:7475
 Environment=WIRE_M2M_TOKEN=REPLACE_WITH_SECRET
+Environment=SMTP_HOST=smtpdm-ap-southeast-1.aliyuncs.com
+Environment=SMTP_PORT=465
+Environment=SMTP_USER=otp@nivic.dev
+Environment=SMTP_PASS=REPLACE_WITH_SECRET
+Environment=SMTP_FROM=otp@nivic.dev
 
 WorkingDirectory=/root/app
 StandardOutput=append:/var/log/merchants.log
