@@ -6,6 +6,7 @@ REMOTE_DIR="/root/nivic-dev"
 M2M_TOKEN="03a37ed9ebc2ad037781d40833da5d1b761988813d7068358525e7e1e0c41b90"
 OPS_TOKEN="${OPS_TOKEN:-ops-$(echo -n "$M2M_TOKEN" | sha256sum | cut -c1-32)}"
 SMTP_PASS="${SMTP_PASS:-EmailPassword10}"
+JWT_SECRET="${JWT_SECRET:-$(echo -n "jwt-${M2M_TOKEN}" | sha256sum | cut -c1-64)}"
 
 echo "==> Building Merchants (linux/amd64)..."
 cd "$(dirname "$0")/Merchants"
@@ -39,6 +40,7 @@ set -euo pipefail
 sed -e 's/__M2M_TOKEN__/${M2M_TOKEN}/g' \
     -e 's/__OPS_TOKEN__/${OPS_TOKEN}/g' \
     -e 's/__SMTP_PASS__/${SMTP_PASS}/g' \
+    -e 's/__JWT_SECRET__/${JWT_SECRET}/g' \
     /tmp/merchants.service \
   > /etc/systemd/system/merchants.service
 

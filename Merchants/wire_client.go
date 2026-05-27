@@ -71,6 +71,43 @@ func wireRecv(conn net.Conn) (typ uint8, body []byte, err error) {
 	return
 }
 
+// WireLogin authenticates any Wire account (user or merchant) and returns the 32-byte session token.
+// pwHashHex is the SHA-256 hex of the account password.
+func WireLogin(addr string, uid uint32, pwHashHex string) ([32]byte, error) {
+	var empty [32]byte
+	pwRaw, err := hex.DecodeString(pwHashHex)
+	if err != nil || len(pwRaw) != 32 {
+		return empty, fmt.Errorf("invalid pw_hash")
+	}
+	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	if err != nil {
+		return empty, fmt.Errorf("dial wire: %w", err)
+	}
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(10 * time.Second))
+
+	body := make([]byte, 36)
+	binary.BigEndian.PutUint32(body, uid)
+	copy(body[4:], pwRaw)
+	if _, err = conn.Write(wireEncode(wireTypeLogin, 1, body)); err != nil {
+		return empty, fmt.Errorf("send LOGIN: %w", err)
+	}
+	typ, resp, err := wireRecv(conn)
+	if err != nil {
+		return empty, fmt.Errorf("recv LOGIN_ACK: %w", err)
+	}
+	if typ != wireTypeLoginACK || len(resp) < 33 || resp[0] != wireCodeOK {
+		code := byte(0xFF)
+		if len(resp) > 0 {
+			code = resp[0]
+		}
+		return empty, fmt.Errorf("login rejected: 0x%02X", code)
+	}
+	var token [32]byte
+	copy(token[:], resp[1:33])
+	return token, nil
+}
+
 // WireCreateIntent dials Wire TCP, logs in as the merchant, and registers a payment intent.
 // pwHashHex is the merchant's SHA-256 password hex (same as password_hash in Merchants DB).
 // Returns the request_id confirmed by Wire, which is used to build the FrontStore deeplink.

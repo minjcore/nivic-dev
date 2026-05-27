@@ -15,6 +15,7 @@ Environment=WIRE_ADMIN_URL=http://localhost:7475
 Environment=WIRE_M2M_TOKEN=__M2M_TOKEN__
 Environment=OPS_TOKEN=__OPS_TOKEN__
 Environment=SMTP_PASS=__SMTP_PASS__
+Environment=JWT_SECRET=__JWT_SECRET__
 
 WorkingDirectory=/root/app
 StandardOutput=append:/var/log/merchants.log

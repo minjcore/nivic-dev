@@ -34,6 +34,7 @@ func main() {
 		wireM2MToken: cfg.WireM2MToken,
 		wireAddr:     cfg.WireAddr,
 		mailer:       mailerFromConfig(cfg.SMTP),
+		jwtSecret:    cfg.JWTSecret,
 	}
 
 	slog.Info("merchants-host ready", "addr", cfg.Addr, "db", cfg.DB)

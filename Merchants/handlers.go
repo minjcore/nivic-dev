@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -88,10 +89,15 @@ type handler struct {
 	wireM2MToken string
 	wireAddr     string
 	mailer       *mailer
+	jwtSecret    string
 }
 
 func (h *handler) routes() http.Handler {
 	mux := http.NewServeMux()
+	// ── Customer auth (BFF JWT) ────────────────────────────────────────────
+	mux.HandleFunc("POST /auth/login", h.handleCustomerLogin)
+	mux.HandleFunc("GET /auth/me",     h.handleCustomerMe)
+
 	mux.HandleFunc("GET /health",                                  h.handleHealth)
 	mux.HandleFunc("GET /merchants",                               h.handleSearch) // ?q=name OR ?slug=bmap
 	mux.HandleFunc("GET /merchants/{mid}",                         h.handleGet)
@@ -1559,4 +1565,83 @@ func formatVND(amount int64) string {
 		out = append(out, byte(c))
 	}
 	return string(out)
+}
+
+// ─── Customer Auth (BFF JWT) ─────────────────────────────────────────────────
+
+// slugFromHost extracts the merchant slug from the Host header (e.g. "bmap.nivic.dev" → "bmap").
+func slugFromHost(host string) string {
+	if i := strings.LastIndex(host, ":"); i != -1 {
+		host = host[:i]
+	}
+	const suffix = ".nivic.dev"
+	if strings.HasSuffix(host, suffix) {
+		slug := strings.TrimSuffix(host, suffix)
+		if slug != "" && slug != "saving" && slug != "www" && slug != "api" && slug != "ops" {
+			return slug
+		}
+	}
+	return ""
+}
+
+// requireCustomerAuth extracts and verifies the BFF JWT.
+// Returns (uid, slug) on success.
+func (h *handler) requireCustomerAuth(r *http.Request) (uint32, string, error) {
+	if h.jwtSecret == "" {
+		return 0, "", errors.New("auth not configured")
+	}
+	auth := r.Header.Get("Authorization")
+	token := strings.TrimPrefix(auth, "Bearer ")
+	if token == "" || token == auth {
+		return 0, "", errors.New("missing token")
+	}
+	return jwtVerify(token, h.jwtSecret)
+}
+
+// POST /auth/login
+// Body: {"uid": 16777216, "pw_hash": "<sha256hex>"}
+// Verifies against Wire core, issues BFF JWT scoped to this merchant subdomain.
+func (h *handler) handleCustomerLogin(w http.ResponseWriter, r *http.Request) {
+	if h.jwtSecret == "" {
+		jsonErr(w, 503, "auth not configured")
+		return
+	}
+	slug := slugFromHost(r.Host)
+	if slug == "" {
+		jsonErr(w, 400, "no merchant context — call from <slug>.nivic.dev")
+		return
+	}
+
+	var req struct {
+		UID    uint32 `json:"uid"`
+		PWHash string `json:"pw_hash"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UID == 0 || req.PWHash == "" {
+		jsonErr(w, 400, "uid and pw_hash required")
+		return
+	}
+
+	if _, err := WireLogin(h.wireAddr, req.UID, req.PWHash); err != nil {
+		slog.Warn("customer login failed", "uid", req.UID, "slug", slug, "err", err)
+		jsonErr(w, 401, "invalid credentials")
+		return
+	}
+
+	token, err := jwtIssue(req.UID, slug, h.jwtSecret)
+	if err != nil {
+		jsonErr(w, 500, "token error")
+		return
+	}
+	jsonOK(w, map[string]string{"token": token})
+}
+
+// GET /auth/me
+// Returns the authenticated customer's uid and merchant context.
+func (h *handler) handleCustomerMe(w http.ResponseWriter, r *http.Request) {
+	uid, slug, err := h.requireCustomerAuth(r)
+	if err != nil {
+		jsonErr(w, 401, err.Error())
+		return
+	}
+	jsonOK(w, map[string]any{"uid": uid, "merchant": slug})
 }
