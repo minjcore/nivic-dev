@@ -12,6 +12,10 @@ go.nivic.dev {
     reverse_proxy localhost:8087
 }
 
+bmap.nivic.dev {
+    redir https://bmap-workshop.nivic.dev{uri} permanent
+}
+
 :443 {
     tls {
         on_demand
