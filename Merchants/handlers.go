@@ -1584,7 +1584,7 @@ func slugFromHost(host string) string {
 	const suffix = ".nivic.dev"
 	if strings.HasSuffix(host, suffix) {
 		slug := strings.TrimSuffix(host, suffix)
-		if slug != "" && slug != "saving" && slug != "www" && slug != "api" && slug != "ops" {
+		if slug != "" && slug != "saving" && slug != "www" && slug != "api" && slug != "ops" && slug != "go" {
 			return slug
 		}
 	}
