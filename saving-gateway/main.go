@@ -16,7 +16,9 @@ func main() {
 	fmt.Println("BFF layer for saving wire server • :8080")
 	fmt.Println("──────────────────────────────────────────")
 
-	app, err := entrypoint.NewMainVerticle("")
+	app, err := entrypoint.NewMainVerticleWithOptions("", entrypoint.WithOptions(entrypoint.MainVerticleOptions{
+		AdminSocketPath: "/tmp/saving-gateway.sock",
+	}))
 	if err != nil {
 		log.Fatalf("init: %v", err)
 	}
