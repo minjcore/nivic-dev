@@ -2615,9 +2615,12 @@ struct ChatSheet: View {
     @State private var messages: [ChatMsg] = [
         ChatMsg(fromID: 0, text: "Wire chat — nhắn thẳng đến ID khác qua server relay.")
     ]
-    @State private var input   = ""
-    @State private var toIDText = ""
+    @State private var input      = ""
+    @State private var toIDText   = ""
     @State private var error: String?
+    @State private var showPay    = false
+    @State private var payAmount  = ""
+    @State private var paying     = false
     @Environment(\.dismiss) private var dismiss
 
     private var toID: UInt32? { UInt32(toIDText) }
@@ -2668,6 +2671,17 @@ struct ChatSheet: View {
 
                     // Input bar
                     HStack(spacing: 8) {
+                        // 💸 Transfer button
+                        Button {
+                            payAmount = ""
+                            showPay   = true
+                        } label: {
+                            Text("💸")
+                                .font(.system(size: 22))
+                                .opacity(toID == nil ? 0.3 : 1)
+                        }
+                        .disabled(toID == nil)
+
                         TextField("> nhắn tin...", text: $input)
                             .foregroundStyle(.white)
                             .font(.system(.body, design: .monospaced))
@@ -2695,11 +2709,41 @@ struct ChatSheet: View {
                 }
             }
         }
+        .sheet(isPresented: $showPay) {
+            PayInChatSheet(
+                toID:    toID ?? 0,
+                amount:  $payAmount,
+                paying:  $paying
+            ) { amount in
+                Task { await sendPayment(amount: amount) }
+            }
+        }
         .onReceive(client.$lastMsgIn) { msg in
             guard let m = msg else { return }
             messages.append(ChatMsg(fromID: m.fromID, text: m.text))
         }
         .preferredColorScheme(.dark)
+    }
+
+    private func sendPayment(amount: UInt64) async {
+        guard let to = toID else { return }
+        paying = true
+        error  = nil
+        defer { paying = false }
+        do {
+            try await client.transfer(to: to, amount: amount, ref: UInt64.random(in: 1...UInt64.max))
+            let fmt = NumberFormatter()
+            fmt.numberStyle = .decimal; fmt.groupingSeparator = "."
+            let amtStr = (fmt.string(from: NSNumber(value: amount)) ?? "\(amount)") + " ₫"
+            let notice = "💸 Chuyển \(amtStr)"
+            messages.append(ChatMsg(fromID: nil, text: notice))
+            try? await client.sendMsg(to: to, text: notice)
+            showPay = false
+        } catch WireError.serverError(let c) {
+            error = c == .errLowBalance ? "Không đủ số dư" : "Lỗi: \(c)"
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
     private func send() async {
@@ -2715,6 +2759,54 @@ struct ChatSheet: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+struct PayInChatSheet: View {
+    let toID:    UInt32
+    @Binding var amount:  String
+    @Binding var paying:  Bool
+    let onConfirm: (UInt64) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    private var parsed: UInt64? {
+        guard let v = UInt64(amount.replacingOccurrences(of: ".", with: "")),
+              v >= 1000 else { return nil }
+        return v
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                VStack(spacing: 24) {
+                    Text("💸")
+                        .font(.system(size: 56))
+                    Text("Chuyển tiền đến #\(toID)")
+                        .font(.system(.title3, design: .monospaced, weight: .bold))
+                        .foregroundStyle(.white)
+                    WireField("Số tiền (VND)", text: $amount)
+                        .keyboardType(.numberPad)
+                    WirePrimaryButton(
+                        title: paying ? "Đang chuyển..." : "XÁC NHẬN",
+                        loading: paying,
+                        disabled: parsed == nil
+                    ) {
+                        if let v = parsed { onConfirm(v) }
+                    }
+                }
+                .padding(32)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Huỷ") { dismiss() }.foregroundStyle(.white)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
     }
 }
 

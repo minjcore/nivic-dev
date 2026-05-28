@@ -23,9 +23,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import app.saving.wire.data.SavingEvent
+import app.saving.wire.protocol.WireCode
+import app.saving.wire.protocol.WireError
+import app.saving.wire.util.vndFormatted
 import app.saving.wire.viewmodel.ChatMsg
 import app.saving.wire.viewmodel.ChatViewModel
 import app.saving.wire.viewmodel.WireViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,9 +38,13 @@ fun ChatSheet(vm: WireViewModel, onDismiss: () -> Unit) {
     val chatVm: ChatViewModel = viewModel()
     val messages by chatVm.messages.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
-    var input   by remember { mutableStateOf("") }
-    var toIdStr by remember { mutableStateOf("") }
+    var input      by remember { mutableStateOf("") }
+    var toIdStr    by remember { mutableStateOf("") }
     val toId = toIdStr.toLongOrNull()
+    var showPay    by remember { mutableStateOf(false) }
+    var payAmount  by remember { mutableStateOf("") }
+    var paying     by remember { mutableStateOf(false) }
+    val scope      = rememberCoroutineScope()
 
     // Wire incoming messages → ChatViewModel
     LaunchedEffect(vm) {
@@ -122,6 +131,14 @@ fun ChatSheet(vm: WireViewModel, onDismiss: () -> Unit) {
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // 💸 Transfer button
+                TextButton(
+                    onClick  = { payAmount = ""; showPay = true },
+                    enabled  = toId != null
+                ) {
+                    Text("💸", fontSize = 22.sp)
+                }
+
                 TextField(
                     value         = input,
                     onValueChange = { input = it },
@@ -163,6 +180,71 @@ fun ChatSheet(vm: WireViewModel, onDismiss: () -> Unit) {
 
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.ime))
         }
+    }
+
+    // 💸 Payment dialog
+    if (showPay && toId != null) {
+        AlertDialog(
+            onDismissRequest = { showPay = false },
+            containerColor   = Color(0xFF1A1A1A),
+            title = {
+                Text("💸 Chuyển tiền đến #$toId",
+                    color = Color.White, fontWeight = FontWeight.SemiBold)
+            },
+            text = {
+                Column {
+                    TextField(
+                        value         = payAmount,
+                        onValueChange = { payAmount = it },
+                        label         = { Text("Số tiền (VND)", color = Color.Gray) },
+                        colors        = TextFieldDefaults.colors(
+                            focusedContainerColor   = Color.White.copy(alpha = 0.08f),
+                            unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
+                            focusedIndicatorColor   = Color.White,
+                            unfocusedIndicatorColor = Color.Gray,
+                            focusedTextColor        = Color.White,
+                            unfocusedTextColor      = Color.White,
+                            cursorColor             = Color.White
+                        ),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled  = payAmount.toLongOrNull()?.let { it >= 1000 } == true && !paying,
+                    onClick  = {
+                        val amount = payAmount.replace(".", "").toLongOrNull() ?: return@TextButton
+                        scope.launch {
+                            paying = true
+                            runCatching {
+                                vm.client.sendMsg(toId, "💸 Đang chuyển ${amount.vndFormatted()}...")
+                                vm.client.transfer(toId, amount)
+                                val notice = "💸 Chuyển ${amount.vndFormatted()}"
+                                chatVm.onIncoming(0L, notice)   // show locally
+                                vm.client.sendMsg(toId, notice)
+                                showPay = false
+                            }.onFailure { e ->
+                                val err = when {
+                                    e is WireError && e.code == WireCode.ERR_LOW_BALANCE -> "Không đủ số dư"
+                                    else -> e.message ?: "Lỗi"
+                                }
+                                chatVm.onIncoming(0L, "⚠ $err")
+                            }
+                            paying = false
+                        }
+                    }
+                ) {
+                    Text(if (paying) "Đang chuyển..." else "Xác nhận", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPay = false }) {
+                    Text("Huỷ", color = Color.Gray)
+                }
+            }
+        )
     }
 }
 
