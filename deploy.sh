@@ -37,6 +37,7 @@ cd "$SCRIPT_DIR"
 echo "==> Building saving-gateway (linux/amd64)..."
 cd "$SCRIPT_DIR/saving-gateway"
 GOOS=linux GOARCH=amd64 go build -o saving-gateway-linux .
+GOOS=linux GOARCH=amd64 go build -o gateway-subprocess-linux ./cmd/gateway-subprocess/
 cd "$SCRIPT_DIR"
 
 
@@ -65,6 +66,7 @@ sed -e "s/__OSS_ENDPOINT__/${OSS_ENDPOINT}/g" \
 scp /tmp/goproxy-rendered.json                            "$SERVER:/root/app/goproxy.json"
 scp infra/systemd/goproxy.service                         "$SERVER:/etc/systemd/system/goproxy.service"
 scp saving-gateway/saving-gateway-linux                   "$SERVER:/root/app/saving-gateway/saving-gateway-new"
+scp saving-gateway/gateway-subprocess-linux               "$SERVER:/root/app/saving-gateway/gateway-subprocess"
 scp infra/systemd/saving-gateway.service                  "$SERVER:/etc/systemd/system/saving-gateway.service"
 scp Caddyfile                                             "$SERVER:/etc/caddy/Caddyfile"
 
@@ -105,6 +107,7 @@ mkdir -p /var/lib/goproxy
 mkdir -p /root/app/saving-gateway
 mv /root/app/saving-gateway/saving-gateway-new /root/app/saving-gateway/saving-gateway
 chmod +x /root/app/saving-gateway/saving-gateway
+chmod +x /root/app/saving-gateway/gateway-subprocess
 
 systemctl daemon-reload
 systemctl enable saving-gateway
