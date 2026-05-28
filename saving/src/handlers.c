@@ -1058,23 +1058,32 @@ static void acs_notify_async(const char *acs_url, uint32_t mid, uint32_t custome
  * Merchant signed (mid||amount||ts) offline with Ed25519 privkey.
  * Wire server verifies sig, transfers, POSTs result to acs_url.
  */
+/* QR_PAY body: [customer_token 32B][mid 4B][amount 8B][ts 8B][sig 64B][ref_len 1B][ref N][acs_url rest]
+ * Signed msg:  mid(4BE) || amount(8BE) || ts(8BE) || ref(N bytes)                               */
 static void handle_qr_pay(DB *db, SessionTable *st, int fd, const WireFrame *f) {
-    if (f->body_len < 116) {
+    if (f->body_len < 117) {  /* minimum: 32+4+8+8+64+1 */
         send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
     }
     uint32_t customer_id = st_lookup(st, f->body);
     if (!customer_id) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
 
-    uint32_t merchant_id = rd32(f->body + 32);
-    uint64_t amount      = rd64(f->body + 36);
-    uint64_t ts          = rd64(f->body + 44);
-    const uint8_t *sig   = f->body + 52;   /* 64 bytes Ed25519 sig */
+    uint32_t merchant_id   = rd32(f->body + 32);
+    uint64_t amount        = rd64(f->body + 36);
+    uint64_t ts            = rd64(f->body + 44);
+    const uint8_t *sig     = f->body + 52;  /* 64 bytes Ed25519 sig */
+    uint8_t  ref_len       = f->body[116];
+    if (117 + (size_t)ref_len > f->body_len) {
+        send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
+    }
+    char ref[256] = {0};
+    if (ref_len > 0 && ref_len < (uint8_t)sizeof(ref))
+        memcpy(ref, f->body + 117, ref_len);
 
-    /* acs_url is the remaining bytes after sig (optional) */
-    size_t acs_len = (f->body_len > 116) ? (size_t)(f->body_len - 116) : 0;
+    size_t acs_off = 117 + ref_len;
+    size_t acs_len = (f->body_len > acs_off) ? (f->body_len - acs_off) : 0;
     char acs_url[1024] = {0};
     if (acs_len > 0 && acs_len < sizeof(acs_url))
-        memcpy(acs_url, f->body + 116, acs_len);
+        memcpy(acs_url, f->body + acs_off, acs_len);
 
     /* Replay protection: QR must be within 10-minute window */
     uint64_t now = (uint64_t)time(NULL);
@@ -1082,17 +1091,29 @@ static void handle_qr_pay(DB *db, SessionTable *st, int fd, const WireFrame *f) 
         send_ack(fd, f->seq, WIRE_ERR_INTENT_SETTLED, NULL, 0); return;
     }
 
-    /* Verify merchant Ed25519 sig over mid(4BE)||amount(8BE)||ts(8BE) */
+    /* Verify merchant Ed25519 sig over mid(4BE)||amount(8BE)||ts(8BE)||ref */
     uint8_t pubkey[32];
     if (db_merchant_pubkey_get(db, merchant_id, pubkey) != 0) {
         send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND, NULL, 0); return;
     }
-    uint8_t msg[20];
+    uint8_t msg[276];  /* 20 + up to 255 ref bytes */
     wr32(msg,      merchant_id);
     wr64(msg + 4,  amount);
     wr64(msg + 12, ts);
-    if (ed25519_verify(pubkey, sig, msg, 20) != 0) {
+    memcpy(msg + 20, ref, ref_len);
+    if (ed25519_verify(pubkey, sig, msg, 20 + ref_len) != 0) {
         send_ack(fd, f->seq, WIRE_ERR_BAD_SIG, NULL, 0); return;
+    }
+
+    /* Idempotency: atomically claim the ref — reject duplicate payments */
+    if (ref_len > 0) {
+        int claimed = db_qr_ref_claim(db, ref, merchant_id);
+        if (claimed == 0) {
+            send_ack(fd, f->seq, WIRE_ERR_INTENT_SETTLED, NULL, 0); return;
+        }
+        if (claimed < 0) {
+            send_ack(fd, f->seq, WIRE_ERR_INTERNAL, NULL, 0); return;
+        }
     }
 
     /* Transfer: customer → merchant */

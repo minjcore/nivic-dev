@@ -150,9 +150,9 @@ class SavingClient(
     }
 
     suspend fun qrPay(merchantId: Long, amount: Long, ts: Long,
-                      sig: ByteArray, acsUrl: String): ConfirmIntentResult {
+                      ref: String, sig: ByteArray, acsUrl: String): ConfirmIntentResult {
         val ack = conn.send(
-            WireFrame.qrPay(requireToken(), merchantId, amount, ts, sig, acsUrl, conn.nextSeq())
+            WireFrame.qrPay(requireToken(), merchantId, amount, ts, ref, sig, acsUrl, conn.nextSeq())
         ).parseAck()
         if (ack.code != WireCode.OK) throw WireError(ack.code)
         val d = ack.data

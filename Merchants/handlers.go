@@ -1925,21 +1925,25 @@ func (h *handler) handleQRPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ts := time.Now().Unix()
-	msg := make([]byte, 20)
+	ref := token // QR token IS the idempotency ref
+	// Signed msg: mid(4BE) || amount(8BE) || ts(8BE) || ref
+	msg := make([]byte, 20+len(ref))
 	binary.BigEndian.PutUint32(msg[0:4], qt.MID)
 	binary.BigEndian.PutUint64(msg[4:12], uint64(qt.Amount))
 	binary.BigEndian.PutUint64(msg[12:20], uint64(ts))
+	copy(msg[20:], ref)
 	sig    := ed25519.Sign(ed25519.PrivateKey(privKeyBytes), msg)
 	sigB64 := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(sig)
 
 	// meta content is query-string encoded so app can reuse AcsPayload.parse("saving://acs?"+content)
-	metaContent := fmt.Sprintf("mid=%d&amount=%d&ts=%d&sig=%s&acs=%s&note=%s",
-		qt.MID, qt.Amount, ts, sigB64,
+	metaContent := fmt.Sprintf("mid=%d&amount=%d&ts=%d&sig=%s&ref=%s&acs=%s&note=%s",
+		qt.MID, qt.Amount, ts, sigB64, ref,
 		strings.ReplaceAll(qt.AcsURL, "&", "%26"),
 		strings.ReplaceAll(qt.Note, "&", "%26"),
 	)
 
 	amountFmt := fmt.Sprintf("%s ₫", formatVND(qt.Amount))
+	_ = ref // used in metaContent above
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!DOCTYPE html>
 <html lang="vi">

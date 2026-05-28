@@ -170,12 +170,16 @@ fun WireFrame.Companion.confirmIntent(token: ByteArray, merchantId: Long, reques
     WireFrame(WireCmd.CONFIRM_INTENT, seq,
         token + merchantId.toUInt32Bytes() + requestId.toInt64Bytes())
 
-/* QR_PAY body: [customer_token 32B][mid 4B][amount 8B][ts 8B][sig 64B][acs_url N] */
+/* QR_PAY body: [customer_token 32B][mid 4B][amount 8B][ts 8B][sig 64B][ref_len 1B][ref N][acs_url rest] */
 fun WireFrame.Companion.qrPay(token: ByteArray, merchantId: Long, amount: Long,
-                               ts: Long, sig: ByteArray, acsUrl: String, seq: Int) =
-    WireFrame(WireCmd.QR_PAY, seq,
+                               ts: Long, ref: String, sig: ByteArray, acsUrl: String, seq: Int): WireFrame {
+    val refBytes = ref.toByteArray(Charsets.UTF_8)
+    return WireFrame(WireCmd.QR_PAY, seq,
         token + merchantId.toUInt32Bytes() + amount.toInt64Bytes() +
-        ts.toInt64Bytes() + sig + acsUrl.toByteArray(Charsets.UTF_8))
+        ts.toInt64Bytes() + sig +
+        byteArrayOf(refBytes.size.toByte()) + refBytes +
+        acsUrl.toByteArray(Charsets.UTF_8))
+}
 
 // ─── Body parsers ──────────────────────────────────────────────────────────
 

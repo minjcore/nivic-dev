@@ -124,12 +124,13 @@ data class IntentPayload(val mid: Long, val requestId: Long, val amount: Long, v
     }
 }
 
-// saving://acs?mid=X&amount=Y&ts=T&sig=BASE64&acs=URL[&note=N] → ACS payment
+// saving://acs?mid=X&amount=Y&ts=T&sig=BASE64&ref=TOKEN&acs=URL[&note=N] → ACS payment
 data class AcsPayload(
     val mid:    Long,
     val amount: Long,
     val ts:     Long,
     val sig:    ByteArray,      // 64-byte Ed25519 sig
+    val ref:    String,         // idempotency key (QR token)
     val acsUrl: String,
     val note:   String,
 ) {
@@ -141,6 +142,7 @@ data class AcsPayload(
             val amount = uri.getQueryParameter("amount")?.toLongOrNull() ?: return null
             val ts     = uri.getQueryParameter("ts")?.toLongOrNull() ?: return null
             val sigB64 = uri.getQueryParameter("sig") ?: return null
+            val ref    = uri.getQueryParameter("ref") ?: ""
             val acsUrl = uri.getQueryParameter("acs") ?: return null
             val note   = uri.getQueryParameter("note") ?: ""
             val sig = try {
@@ -150,7 +152,7 @@ data class AcsPayload(
                 )
             } catch (_: Exception) { return null }
             if (sig.size != 64) return null
-            return AcsPayload(mid, amount, ts, sig, acsUrl, note)
+            return AcsPayload(mid, amount, ts, sig, ref, acsUrl, note)
         }
     }
 }
@@ -645,7 +647,7 @@ private fun AcsPayContent(
                     loading = true; error = null
                     try {
                         client.qrPay(payload.mid, payload.amount, payload.ts,
-                                     payload.sig, payload.acsUrl)
+                                     payload.ref, payload.sig, payload.acsUrl)
                         success = true
                         kotlinx.coroutines.delay(1500)
                         onDone()

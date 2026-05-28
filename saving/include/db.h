@@ -85,6 +85,9 @@ int db_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount, int t
  * ─────────────────────────────────────────────────────────────────────────── */
 int db_idempotency_claim(DB *db, uint64_t mid, uint64_t request_id, uint64_t order_id);
 
+/* Atomically claim a QR ref as settled. Returns 1=new (proceed), 0=duplicate (reject), -1=error. */
+int db_qr_ref_claim(DB *db, const char *ref, uint32_t mid);
+
 /* ─── Ledger  (ported from Java JdbcWalletLedger) ───────────────────────── *
  *
  *  Append-only audit row.  Never updated after insert.

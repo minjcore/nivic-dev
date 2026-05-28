@@ -160,6 +160,12 @@ static const char SCHEMA[] =
     "  mid          BIGINT PRIMARY KEY,"
     "  device_token TEXT   NOT NULL,"
     "  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+    ");"
+
+    "CREATE TABLE IF NOT EXISTS qr_settled_refs ("
+    "  ref        TEXT        PRIMARY KEY,"
+    "  mid        BIGINT      NOT NULL,"
+    "  settled_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
     ");";
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -442,6 +448,33 @@ int db_idempotency_claim(DB *db, uint64_t mid, uint64_t request_id, uint64_t ord
         rc = (affected && affected[0] == '1') ? 1 : 0;
     } else {
         fprintf(stderr, "[db] idempotency_claim: %s\n", PQerrorMessage(db->conn));
+    }
+    PQclear(r);
+    return rc;
+}
+
+/* Returns 1 if ref was newly claimed (proceed), 0 if duplicate (reject). */
+int db_qr_ref_claim(DB *db, const char *ref, uint32_t mid) {
+    static const char SQL[] =
+        "INSERT INTO qr_settled_refs (ref, mid)"
+        " VALUES ($1, $2)"
+        " ON CONFLICT (ref) DO NOTHING";
+
+    uint64_t mid_be = pg_int8(mid);
+    const char *vals[2] = { ref,              (char *)&mid_be };
+    int         lens[2] = { (int)strlen(ref),  8              };
+    int         fmts[2] = { 0,                 1              };
+
+    DB_LOCK(db);
+    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
+    DB_UNLOCK(db);
+
+    int rc = -1;
+    if (PQresultStatus(r) == PGRES_COMMAND_OK) {
+        char *affected = PQcmdTuples(r);
+        rc = (affected && affected[0] == '1') ? 1 : 0;
+    } else {
+        fprintf(stderr, "[db] qr_ref_claim: %s\n", PQerrorMessage(db->conn));
     }
     PQclear(r);
     return rc;

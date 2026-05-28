@@ -65,9 +65,9 @@
  *    0x29  CONFIRM_INTENT body: [ customer_token 32B ][ merchant_id 4B ][ request_id 8B ]
  *                        Customer-initiated: scan merchant QR → confirm → pay. No TOTP required.
  *    0x2A  GET_MERCHANT_HISTORY  body: [ merchant_token 32B ]
- *    0x2B  QR_PAY       body: [ customer_token 32B ][ merchant_id 4B ][ amount 8B ][ ts 8B ][ sig 64B ][ acs_url N ]
- *                       Merchant signed QR: offline Ed25519 over mid(4BE)||amount(8BE)||ts(8BE).
- *                       Wire server verifies, transfers, POST acs_url async.
+ *    0x2B  QR_PAY       body: [ customer_token 32B ][ mid 4B ][ amount 8B ][ ts 8B ][ sig 64B ][ ref_len 1B ][ ref N ][ acs_url rest ]
+ *                       Merchant signs mid(4BE)||amount(8BE)||ts(8BE)||ref offline with Ed25519.
+ *                       ref = idempotency key; server rejects duplicate ref. Wire transfers, POST acs_url async.
  *                       ACK extra: [ txn_id 8B ][ after_balance 8B ]
  *                        ACK extra: [ count 1B ][ customer_id 4B | amount 8B | after_balance 8B ]xN  (newest first)
  *
@@ -144,9 +144,10 @@
 /* ENROLL_TOTP       body: [merchant_token 32B][customer_id 4B][secret 20B]   */
 /* CREATE_INTENT     body: [merchant_token 32B][request_id 8B][order_id 8B][amount 8B] */
 /* PAY_INTENT        body: [customer_token 32B][merchant_id 4B][request_id 8B][totp_code 4B] */
-/* QR_PAY body: [customer_token 32B][mid 4B][amount 8B][ts 8B][sig 64B][acs_url N]
- *   Merchant signs (mid||amount||ts) offline with Ed25519.
- *   ACK extra: [txn_id 8B][after_balance 8B]                                    */
+/* QR_PAY body: [customer_token 32B][mid 4B][amount 8B][ts 8B][sig 64B][ref_len 1B][ref N][acs_url rest]
+ *   Merchant signs mid(4BE)||amount(8BE)||ts(8BE)||ref with Ed25519.
+ *   ref = idempotency key; server rejects duplicate ref atomically.
+ *   ACK extra: [txn_id 8B][after_balance 8B]                                                          */
 #define WIRE_QR_PAY               0x2B
 #define WIRE_REGISTER_PUSH_TOKEN  0x30
 #define WIRE_CASH_IN              0x24
