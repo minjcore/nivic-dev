@@ -7,6 +7,7 @@
 #include <limits.h>
 #include <pthread.h>
 #include "crypto_compat.h"
+#include <openssl/evp.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
@@ -681,9 +682,26 @@ static void handle_pay_intent(DB *db, SessionTable *st, int fd, const WireFrame 
     send_ack(fd, f->seq, WIRE_OK, NULL, 0);
 }
 
-/* CONFIRM_INTENT  body: [customer_token 32B][merchant_id 4B][request_id 8B]
- * Customer-initiated: scan merchant QR → confirm → pay. No TOTP required.
- * QR format: saving://intent?mid=M&req=R&amount=A
+/* Verify Ed25519 signature using OpenSSL EVP (available on both macOS brew + Linux). */
+static int ed25519_verify(const uint8_t pubkey[32], const uint8_t sig[64],
+                          const uint8_t *msg, size_t msg_len) {
+    EVP_PKEY *pkey = EVP_PKEY_new_raw_public_key(EVP_PKEY_ED25519, NULL, pubkey, 32);
+    if (!pkey) return -1;
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    if (!ctx) { EVP_PKEY_free(pkey); return -1; }
+    int ok = (EVP_DigestVerifyInit(ctx, NULL, NULL, NULL, pkey) == 1) &&
+             (EVP_DigestVerify(ctx, sig, 64, msg, msg_len) == 1);
+    EVP_MD_CTX_free(ctx);
+    EVP_PKEY_free(pkey);
+    return ok ? 0 : -1;
+}
+
+/* CONFIRM_INTENT  body (standard):  [customer_token 32B][merchant_id 4B][request_id 8B]       = 44B
+ *                body (signed QR):  [customer_token 32B][merchant_id 4B][request_id 8B]
+ *                                   [amount 8B][sig 64B]                                       = 116B
+ *
+ * Signed variant skips db_intent_get — merchant signed the QR locally offline.
+ * Signed msg = mid(4BE) || amount(8BE) || request_id(8BE)  (20 bytes fixed)
  */
 static void handle_confirm_intent(DB *db, SessionTable *st, int fd, const WireFrame *f) {
     if (f->body_len < 44) {
@@ -694,35 +712,66 @@ static void handle_confirm_intent(DB *db, SessionTable *st, int fd, const WireFr
     uint32_t merchant_id = rd32(f->body + 32);
     uint64_t request_id  = rd64(f->body + 36);
 
-    IntentInfo intent;
-    if (db_intent_get(db, merchant_id, request_id, &intent) != 0) {
-        send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND, NULL, 0); return;
-    }
-    if (intent.status != 0) {
-        send_ack(fd, f->seq, WIRE_ERR_INTENT_SETTLED, NULL, 0); return;
+    uint64_t pay_amount;
+
+    if (f->body_len >= 116) {
+        /* ── Signed QR path: verify Ed25519, no pre-registered intent needed ── */
+        uint64_t amount_from_qr = rd64(f->body + 44);
+        const uint8_t *sig      = f->body + 52;
+
+        uint8_t pubkey[32];
+        if (db_merchant_pubkey_get(db, merchant_id, pubkey) != 0) {
+            send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND, NULL, 0); return;
+        }
+
+        /* signed msg = mid(4BE) || amount(8BE) || request_id(8BE) */
+        uint8_t msg[20];
+        wr32(msg,      merchant_id);
+        wr64(msg + 4,  amount_from_qr);
+        wr64(msg + 12, request_id);
+
+        if (ed25519_verify(pubkey, sig, msg, 20) != 0) {
+            send_ack(fd, f->seq, WIRE_ERR_BAD_SIG, NULL, 0); return;
+        }
+        pay_amount = amount_from_qr;
+    } else {
+        /* ── Standard path: look up pre-registered intent ── */
+        IntentInfo intent;
+        if (db_intent_get(db, merchant_id, request_id, &intent) != 0) {
+            send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND, NULL, 0); return;
+        }
+        if (intent.status != 0) {
+            send_ack(fd, f->seq, WIRE_ERR_INTENT_SETTLED, NULL, 0); return;
+        }
+        pay_amount = intent.amount;
     }
 
     int64_t after_cust = 0, txn_id = 0;
-    int rc = db_transfer(db, customer_id, merchant_id, intent.amount, 1, &after_cust, &txn_id);
+    int rc = db_transfer(db, customer_id, merchant_id, pay_amount, 1, &after_cust, &txn_id);
     if (rc == -1) { send_ack(fd, f->seq, WIRE_ERR_LOW_BALANCE, NULL, 0); return; }
     if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
     if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
-    db_intent_settle(db, merchant_id, request_id);
 
-    gateway_notify_async(intent.gateway_order_id, customer_id);
+    if (f->body_len < 116) {
+        /* Standard path: settle intent + gateway callback */
+        IntentInfo settled_intent;
+        if (db_intent_get(db, merchant_id, request_id, &settled_intent) == 0)
+            gateway_notify_async(settled_intent.gateway_order_id, customer_id);
+        db_intent_settle(db, merchant_id, request_id);
+    }
 
     /* Push EVT_TRANSFER_IN to merchant; APNs fallback if offline */
     int64_t merch_bal = db_account_balance(db, merchant_id);
     if (merch_bal >= 0) {
         uint8_t body[20], evt[WIRE_MAX_FRAME];
         wr32(body,      customer_id);
-        wr64(body + 4,  intent.amount);
+        wr64(body + 4,  pay_amount);
         wr64(body + 12, (uint64_t)merch_bal);
         size_t n = wire_frame_encode(WIRE_EVT_TRANSFER_IN, 0, body, 20, evt, sizeof(evt));
         if (n > 0) {
             char ab[80];
             snprintf(ab, sizeof(ab), "+%llu \xe2\x82\xab t\xe1\xbb\xab #%u",
-                     (unsigned long long)intent.amount, (unsigned)customer_id);
+                     (unsigned long long)pay_amount, (unsigned)customer_id);
             push_or_apns(db, merchant_id, evt, n, "Nh\xe1\xba\xadn ti\xe1\xbb\x81n", ab);
         }
     }
@@ -732,13 +781,13 @@ static void handle_confirm_intent(DB *db, SessionTable *st, int fd, const WireFr
         uint8_t ip_body[20], ip_evt[WIRE_MAX_FRAME];
         wr64(ip_body,      request_id);
         wr32(ip_body + 8,  customer_id);
-        wr64(ip_body + 12, intent.amount);
+        wr64(ip_body + 12, pay_amount);
         size_t ip_n = wire_frame_encode(WIRE_EVT_INTENT_PAID, 0, ip_body, 20,
                                         ip_evt, sizeof(ip_evt));
         if (ip_n > 0) {
             char ab[80];
             snprintf(ab, sizeof(ab), "+%llu \xe2\x82\xab t\xe1\xbb\xab #%u",
-                     (unsigned long long)intent.amount, (unsigned)customer_id);
+                     (unsigned long long)pay_amount, (unsigned)customer_id);
             push_or_apns(db, merchant_id, ip_evt, ip_n,
                          "\xc4\x90\xc6\xa1n h\xc3\xa0ng \xc4\x91\xc6\xb0\xe1\xbb\xa3"
                          "c thanh to\xc3\xa1n", ab);
@@ -749,7 +798,7 @@ static void handle_confirm_intent(DB *db, SessionTable *st, int fd, const WireFr
     {
         uint8_t body[20], evt[WIRE_MAX_FRAME];
         wr32(body,      merchant_id);
-        wr64(body + 4,  intent.amount);
+        wr64(body + 4,  pay_amount);
         wr64(body + 12, (uint64_t)after_cust);
         size_t n = wire_frame_encode(WIRE_EVT_TRANSFER_OUT, 0, body, 20,
                                      evt, sizeof(evt));

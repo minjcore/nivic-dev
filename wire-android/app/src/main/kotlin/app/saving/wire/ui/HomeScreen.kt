@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.saving.wire.deeplink.SavingDeeplink
 import app.saving.wire.util.vndFormatted
 import app.saving.wire.viewmodel.WireViewModel
 import kotlinx.coroutines.delay
@@ -47,7 +48,35 @@ fun HomeScreen(vm: WireViewModel, accountId: Long) {
     var frontStoreMid     by remember { mutableLongStateOf(0L) }
     var frontStoreIntent  by remember { mutableStateOf<IntentPayload?>(null) }
 
+    val launchLink by vm.launchDeeplink.collectAsStateWithLifecycle()
+
     LaunchedEffect(Unit) { vm.refreshBalance() }
+
+    LaunchedEffect(launchLink) {
+        when (val link = launchLink) {
+            null -> return@LaunchedEffect
+            is SavingDeeplink.PaymentIntent -> {
+                frontStoreMid = link.mid
+                frontStoreIntent = IntentPayload(link.mid, link.requestId, link.amount, link.orderId)
+            }
+            is SavingDeeplink.Store -> {
+                val mid = link.mid ?: link.slug?.let { slug ->
+                    runCatching { vm.merchantsClient.getMerchantBySlug(slug).mid }.getOrNull()
+                }
+                if (mid != null) {
+                    frontStoreMid = mid
+                    frontStoreIntent = null
+                }
+            }
+            is SavingDeeplink.PayOrder -> {
+                runCatching { vm.merchantsClient.fetchOrderWire(link.orderId) }.onSuccess { w ->
+                    frontStoreMid = w.mid
+                    frontStoreIntent = IntentPayload(w.mid, w.requestId, w.amount, w.orderId)
+                }
+            }
+        }
+        vm.consumeLaunchDeeplink()
+    }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
 

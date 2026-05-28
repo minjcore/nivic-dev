@@ -67,15 +67,32 @@ class MerchantsClient(private val baseURL: String = "https://saving.nivic.dev") 
         }
     }
 
-    suspend fun onboard(uid: Long, name: String): String = withContext(Dispatchers.IO) {
-        val body = JSONObject().apply { put("uid", uid); put("name", name) }.toString()
+    data class AuthResult(val token: String, val name: String, val slug: String)
+
+    suspend fun onboard(uid: Long, name: String, password: String): AuthResult = withContext(Dispatchers.IO) {
+        val body = JSONObject().apply {
+            put("uid", uid); put("name", name); put("password", password)
+        }.toString()
         val conn = post("$baseURL/merchants/onboard", body)
         val code = conn.responseCode
         val resp = (if (code == 200) conn.inputStream else conn.errorStream)
             .bufferedReader().readText()
         if (code == 409) throw Exception("Bạn đã là merchant rồi")
         if (code != 200) throw Exception(JSONObject(resp).optString("error", "onboard failed"))
-        JSONObject(resp).getString("token")
+        val j = JSONObject(resp)
+        AuthResult(j.getString("token"), name, j.optString("slug", ""))
+    }
+
+    suspend fun login(uid: Long, password: String): AuthResult = withContext(Dispatchers.IO) {
+        val body = JSONObject().apply { put("uid", uid); put("password", password) }.toString()
+        val conn = post("$baseURL/merchants/login", body)
+        val code = conn.responseCode
+        val resp = (if (code == 200) conn.inputStream else conn.errorStream)
+            .bufferedReader().readText()
+        if (code == 401) throw Exception("Sai mật khẩu")
+        if (code != 200) throw Exception(JSONObject(resp).optString("error", "login failed"))
+        val j = JSONObject(resp)
+        AuthResult(j.getString("token"), j.getString("name"), j.optString("slug", ""))
     }
 
     suspend fun stats(mid: Long, token: String): MerchantStats = withContext(Dispatchers.IO) {

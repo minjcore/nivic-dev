@@ -33,6 +33,8 @@ import com.google.mlkit.vision.common.InputImage
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import app.saving.wire.data.SavingClient
+import app.saving.wire.deeplink.SavingDeeplink
+import app.saving.wire.deeplink.SavingDeeplinkParser
 import app.saving.wire.protocol.WireCode
 import app.saving.wire.protocol.WireError
 import kotlinx.coroutines.launch
@@ -118,6 +120,28 @@ data class IntentPayload(val mid: Long, val requestId: Long, val amount: Long, v
     }
 }
 
+/* saving://store?mid=X  OR  https://<slug>.nivic.dev  → open FrontStoreSheet */
+data class StorePayload(val mid: Long?, val slug: String?) {
+    companion object {
+        fun parse(raw: String): StorePayload? {
+            val uri = android.net.Uri.parse(raw) ?: return null
+            return when {
+                uri.scheme == "saving" && uri.host == "store" -> {
+                    val mid = uri.getQueryParameter("mid")?.toLongOrNull()
+                    val slug = uri.getQueryParameter("slug")
+                    if (mid == null && slug == null) null else StorePayload(mid, slug)
+                }
+                uri.scheme == "https" && uri.host?.endsWith(".nivic.dev") == true -> {
+                    val mid = uri.getQueryParameter("mid")?.toLongOrNull()
+                    val slug = uri.host!!.removeSuffix(".nivic.dev").takeIf { it.isNotEmpty() && it != "www" && it != "api" }
+                    StorePayload(mid, slug)
+                }
+                else -> null
+            }
+        }
+    }
+}
+
 // ─── QR Scan screen ────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -136,6 +160,7 @@ fun QRScanSheet(
     var totpPayload   by remember { mutableStateOf<TOTPPayPayload?>(null) }
     var intentPayload by remember { mutableStateOf<IntentPayload?>(null) }
     var scanError     by remember { mutableStateOf<String?>(null) }
+    val scope         = rememberCoroutineScope()
     val ctx          = LocalContext.current
 
     ModalBottomSheet(
@@ -208,16 +233,35 @@ fun QRScanSheet(
                             .padding(horizontal = 20.dp)
                             .background(Color.Black, RoundedCornerShape(16.dp)),
                         onCode = { raw ->
-                            val ip = IntentPayload.parse(raw)
-                            val ep = TOTPEnrollPayload.parse(raw)
-                            val tp = TOTPPayPayload.parse(raw)
-                            val mp = MerchantPayload.parse(raw)
-                            when {
-                                ip != null -> { intentPayload = ip; scanError = null }
-                                ep != null -> { enrollPayload = ep; scanError = null }
-                                tp != null -> { totpPayload = tp;  scanError = null }
-                                mp != null -> { payload = mp;      scanError = null }
-                                else       -> scanError = "QR không hợp lệ"
+                            when (val dl = SavingDeeplinkParser.fromQr(raw)) {
+                                is SavingDeeplink.PaymentIntent -> {
+                                    intentPayload = IntentPayload(dl.mid, dl.requestId, dl.amount, dl.orderId)
+                                    scanError = null
+                                }
+                                is SavingDeeplink.Store -> {
+                                    scope.launch {
+                                        val mid = dl.mid ?: dl.slug?.let { slug ->
+                                            runCatching { merchantsClient.getMerchantBySlug(slug).mid }.getOrNull()
+                                        }
+                                        if (mid != null) {
+                                            onFrontStore(mid, null)
+                                        } else {
+                                            scanError = "Không tìm thấy cửa hàng"
+                                        }
+                                    }
+                                }
+                                null -> {
+                                    val ep = TOTPEnrollPayload.parse(raw)
+                                    val tp = TOTPPayPayload.parse(raw)
+                                    val mp = MerchantPayload.parse(raw)
+                                    when {
+                                        ep != null -> { enrollPayload = ep; scanError = null }
+                                        tp != null -> { totpPayload = tp;  scanError = null }
+                                        mp != null -> { payload = mp;      scanError = null }
+                                        else       -> scanError = "QR không hợp lệ"
+                                    }
+                                }
+                                is SavingDeeplink.PayOrder -> scanError = "Mở link thanh toán từ trình duyệt"
                             }
                         }
                     )

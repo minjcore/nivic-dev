@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -58,34 +59,47 @@ fun MerchantSheet(
     intentPaid:   SharedFlow<SavingEvent.IntentPaid>,
     onClose:      () -> Unit,
 ) {
-    val savedToken = prefs.getString("merchant_token", "") ?: ""
-    val savedName  = prefs.getString("merchant_name",  "") ?: ""
+    var savedToken by remember { mutableStateOf(prefs.getString("merchant_token", "") ?: "") }
+    var savedName  by remember { mutableStateOf(prefs.getString("merchant_name",  "") ?: "") }
 
     if (savedToken.isEmpty()) {
-        MerchantOnboardingView(uid, client, onClose) { name, token ->
+        MerchantAuthView(uid, client, onClose) { name, token ->
             prefs.edit().putString("merchant_token", token).putString("merchant_name", name).apply()
+            savedToken = token; savedName = name
         }
     } else {
-        MerchantDashboardView(uid, savedName, savedToken, prefs, client, wireClient, intentPaid, onClose)
+        MerchantDashboardView(
+            uid        = uid,
+            name       = savedName,
+            token      = savedToken,
+            prefs      = prefs,
+            client     = client,
+            wireClient = wireClient,
+            intentPaid = intentPaid,
+            onLogout   = {
+                prefs.edit().remove("merchant_token").remove("merchant_name").apply()
+                savedToken = ""; savedName = ""
+            },
+            onClose    = onClose,
+        )
     }
 }
 
-// ─── Onboarding ───────────────────────────────────────────────────────────────
+// ─── Auth (Register / Login) ──────────────────────────────────────────────────
 
 @Composable
-private fun MerchantOnboardingView(
-    uid:    Long,
-    client: MerchantsClient,
+private fun MerchantAuthView(
+    uid:     Long,
+    client:  MerchantsClient,
     onClose: () -> Unit,
-    onDone: (String, String) -> Unit,
+    onDone:  (name: String, token: String) -> Unit,
 ) {
-    var shopName by remember { mutableStateOf("") }
-    var loading  by remember { mutableStateOf(false) }
-    var error    by remember { mutableStateOf<String?>(null) }
-    var newToken by remember { mutableStateOf("") }
-    var done     by remember { mutableStateOf(false) }
-    val scope    = rememberCoroutineScope()
-    val ctx      = LocalContext.current
+    var isRegister by remember { mutableStateOf(true) }
+    var shopName   by remember { mutableStateOf("") }
+    var password   by remember { mutableStateOf("") }
+    var loading    by remember { mutableStateOf(false) }
+    var error      by remember { mutableStateOf<String?>(null) }
+    val scope      = rememberCoroutineScope()
 
     Column(
         Modifier
@@ -96,104 +110,108 @@ private fun MerchantOnboardingView(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            IconButton(onClick = onClose) {
-                Icon(Icons.Default.Close, null, tint = Color.Gray)
+            IconButton(onClick = onClose) { Icon(Icons.Default.Close, null, tint = Color.Gray) }
+        }
+        Spacer(Modifier.height(24.dp))
+        Icon(Icons.Default.Store, null, modifier = Modifier.size(64.dp), tint = Color.White)
+        Spacer(Modifier.height(20.dp))
+
+        // ── Tab toggle ────────────────────────────────────────────────────────
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
+                .padding(4.dp)
+        ) {
+            listOf(true to "Đăng ký", false to "Đăng nhập").forEach { (reg, label) ->
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .background(
+                            if (isRegister == reg) Color.White.copy(alpha = 0.15f) else Color.Transparent,
+                            RoundedCornerShape(10.dp)
+                        )
+                        .clickable { isRegister = reg; error = null }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(label,
+                        color = if (isRegister == reg) Color.White else Color.Gray,
+                        fontWeight = if (isRegister == reg) FontWeight.SemiBold else FontWeight.Normal,
+                        fontSize = 14.sp)
+                }
             }
         }
 
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(24.dp))
 
-        if (!done) {
-            Icon(Icons.Default.Store, null,
-                modifier = Modifier.size(72.dp), tint = Color.White)
-            Spacer(Modifier.height(24.dp))
-            Text("Mở gian hàng của bạn", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Text("Nhận thanh toán qua QR code\ntrực tiếp vào tài khoản Saving",
-                color = Color.Gray, fontSize = 14.sp,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            Spacer(Modifier.height(32.dp))
-
+        if (isRegister) {
             OutlinedTextField(
-                value         = shopName,
-                onValueChange = { shopName = it },
-                label         = { Text("Tên cửa hàng") },
-                placeholder   = { Text("VD: Quán Cà Phê ABC") },
-                modifier      = Modifier.fillMaxWidth(),
-                colors        = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor    = Color.White,
-                    unfocusedTextColor  = Color.White,
-                    focusedBorderColor  = Color.White,
-                    unfocusedBorderColor= Color.Gray,
-                    focusedLabelColor   = Color.White,
-                    unfocusedLabelColor = Color.Gray,
-                )
-            )
-
-            error?.let {
-                Spacer(Modifier.height(8.dp))
-                Text(it, color = Color.Red, fontSize = 13.sp)
-            }
-
-            Spacer(Modifier.height(24.dp))
-            Button(
-                onClick  = {
-                    scope.launch {
-                        loading = true; error = null
-                        runCatching { client.onboard(uid, shopName.trim()) }
-                            .onSuccess { token -> newToken = token; done = true; onDone(shopName.trim(), token) }
-                            .onFailure { error = it.message }
-                        loading = false
-                    }
-                },
-                enabled  = shopName.isNotBlank() && !loading,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                colors   = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
-                shape    = RoundedCornerShape(14.dp)
-            ) {
-                if (loading) CircularProgressIndicator(Modifier.size(20.dp), color = Color.Black, strokeWidth = 2.dp)
-                else Text("Bắt đầu bán hàng", fontWeight = FontWeight.SemiBold)
-            }
-        } else {
-            Icon(Icons.Default.CheckCircleOutline, null,
-                modifier = Modifier.size(80.dp), tint = Color(0xFF4CAF50))
-            Spacer(Modifier.height(20.dp))
-            Text("Chào mừng, $shopName! 🎉", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Text("Merchant ID: $uid", color = Color.White, fontSize = 16.sp)
-            Spacer(Modifier.height(4.dp))
-            Text("Lưu token bên dưới — chỉ hiện một lần",
-                color = Color(0xFFFFA726), fontSize = 13.sp)
-            Spacer(Modifier.height(16.dp))
-
-            Surface(
+                value = shopName, onValueChange = { shopName = it },
+                label = { Text("Tên cửa hàng") },
+                placeholder = { Text("VD: Quán Cà Phê ABC") },
                 modifier = Modifier.fillMaxWidth(),
-                shape    = RoundedCornerShape(12.dp),
-                color    = Color.White.copy(alpha = 0.08f)
-            ) {
-                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(newToken, color = Color.White.copy(alpha = 0.8f),
-                        fontSize = 11.sp, fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.weight(1f))
-                    IconButton(onClick = {
-                        val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        cm.setPrimaryClip(ClipData.newPlainText("token", newToken))
-                    }) {
-                        Icon(Icons.Default.ContentCopy, null, tint = Color.White)
-                    }
-                }
-            }
+                colors = authFieldColors()
+            )
+            Spacer(Modifier.height(12.dp))
+        } else {
+            Text("UID: $uid", color = Color.Gray, fontSize = 13.sp,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(12.dp))
+        }
 
-            Spacer(Modifier.height(24.dp))
-            Button(
-                onClick  = onClose,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                colors   = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
-                shape    = RoundedCornerShape(14.dp)
-            ) { Text("Vào Dashboard", fontWeight = FontWeight.SemiBold) }
+        OutlinedTextField(
+            value = password, onValueChange = { password = it },
+            label = { Text("Mật khẩu") },
+            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+            colors = authFieldColors()
+        )
+
+        error?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, color = Color.Red, fontSize = 13.sp)
+        }
+
+        Spacer(Modifier.height(24.dp))
+        Button(
+            onClick = {
+                scope.launch {
+                    loading = true; error = null
+                    val pw = password.trim()
+                    if (isRegister) {
+                        runCatching { client.onboard(uid, shopName.trim(), pw) }
+                            .onSuccess { onDone(it.name, it.token) }
+                            .onFailure { error = it.message }
+                    } else {
+                        runCatching { client.login(uid, pw) }
+                            .onSuccess { onDone(it.name, it.token) }
+                            .onFailure { error = it.message }
+                    }
+                    loading = false
+                }
+            },
+            enabled  = password.isNotBlank() && (isRegister && shopName.isNotBlank() || !isRegister) && !loading,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            colors   = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+            shape    = RoundedCornerShape(14.dp)
+        ) {
+            if (loading) CircularProgressIndicator(Modifier.size(20.dp), color = Color.Black, strokeWidth = 2.dp)
+            else Text(if (isRegister) "Bắt đầu bán hàng" else "Đăng nhập", fontWeight = FontWeight.SemiBold)
         }
     }
 }
+
+@Composable
+private fun authFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedTextColor     = Color.White,
+    unfocusedTextColor   = Color.White,
+    focusedBorderColor   = Color.White,
+    unfocusedBorderColor = Color.Gray,
+    focusedLabelColor    = Color.White,
+    unfocusedLabelColor  = Color.Gray,
+)
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
@@ -206,6 +224,7 @@ private fun MerchantDashboardView(
     client:      MerchantsClient,
     wireClient:  SavingClient,
     intentPaid:  SharedFlow<SavingEvent.IntentPaid>,
+    onLogout:    () -> Unit,
     onClose:     () -> Unit,
 ) {
     var stats           by remember { mutableStateOf<MerchantStats?>(null) }
@@ -255,8 +274,13 @@ private fun MerchantDashboardView(
             verticalAlignment     = Alignment.CenterVertically
         ) {
             Text(name, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            IconButton(onClick = onClose) {
-                Icon(Icons.Default.Close, null, tint = Color.Gray)
+            Row {
+                IconButton(onClick = onLogout) {
+                    Icon(Icons.AutoMirrored.Filled.ExitToApp, null, tint = Color.Gray)
+                }
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Default.Close, null, tint = Color.Gray)
+                }
             }
         }
 

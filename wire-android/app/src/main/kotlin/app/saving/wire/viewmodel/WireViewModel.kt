@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import app.saving.wire.data.MerchantsClient
 import app.saving.wire.data.SavingClient
 import app.saving.wire.data.SavingEvent
+import app.saving.wire.deeplink.SavingDeeplink
 import app.saving.wire.util.vndFormatted
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,6 +44,19 @@ class WireViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _intentPaid = MutableSharedFlow<SavingEvent.IntentPaid>()
     val intentPaid: SharedFlow<SavingEvent.IntentPaid> = _intentPaid.asSharedFlow()
+
+    private val _launchDeeplink = MutableStateFlow<SavingDeeplink?>(null)
+    val launchDeeplink: StateFlow<SavingDeeplink?> = _launchDeeplink.asStateFlow()
+
+    fun setLaunchDeeplink(link: SavingDeeplink?) {
+        _launchDeeplink.value = link
+    }
+
+    fun consumeLaunchDeeplink(): SavingDeeplink? {
+        val link = _launchDeeplink.value
+        _launchDeeplink.value = null
+        return link
+    }
 
     init {
         viewModelScope.launch {
