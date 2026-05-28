@@ -20,7 +20,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		224F8804F2F642B3D7FB27EC /* Saving.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Saving.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		224F8804F2F642B3D7FB27EC /* Saving.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Saving.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		311606476E8B5901D6982CAD /* WireProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WireProtocol.swift; sourceTree = "<group>"; };
 		3F5A8ADE94614501CC99B306 /* Saving.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Saving.entitlements; sourceTree = "<group>"; };
 		690475AD3A8424FB889079D6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -110,7 +110,6 @@
 				LastUpgradeCheck = 1500;
 				TargetAttributes = {
 					0AC122CB276FE257336A4DD2 = {
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -226,7 +225,7 @@
 				CODE_SIGN_ENTITLEMENTS = App/Saving.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = V54SXH3H56;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -303,7 +302,7 @@
 				CODE_SIGN_ENTITLEMENTS = App/Saving.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = V54SXH3H56;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
