@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -88,7 +89,9 @@ func (v *GatewayVerticle) Start(ctx core.FluxorContext) error {
 
 func (v *GatewayVerticle) Stop(ctx core.FluxorContext) error {
 	if v.server != nil {
-		_ = v.server.Close()
+		shutCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_ = v.server.Shutdown(shutCtx)
 	}
 	return v.BaseVerticle.Stop(ctx)
 }
