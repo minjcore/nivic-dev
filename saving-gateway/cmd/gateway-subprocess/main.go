@@ -58,6 +58,14 @@ func (v *GatewayVerticle) Start(ctx core.FluxorContext) error {
 	mux.HandleFunc("GET /wire/balance", wireGet(ctx, "saving.wire.balance", "token"))
 	mux.HandleFunc("GET /wire/ping", wireGet(ctx, "saving.wire.ping"))
 
+	// Drain test endpoint — sleeps 5s then responds. Only active when DRAIN_TEST=1.
+	if os.Getenv("DRAIN_TEST") == "1" {
+		mux.HandleFunc("GET /test/drain", func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(5 * time.Second)
+			jsonResp(w, 200, map[string]any{"ok": true, "msg": "completed after 5s sleep"})
+		})
+	}
+
 	port := os.Getenv("GATEWAY_PORT")
 	if port == "" {
 		port = "8081"
