@@ -1274,6 +1274,46 @@ static void handle_cash_in(DB *db, SessionTable *st, int fd, const WireFrame *f)
 }
 
 /* REGISTER_PUSH_TOKEN  body: [token 32B][device_token N bytes] */
+/* SEND_MSG: relay a text message to another online user.
+ * body: [session_token 32B][to_id 4B][text N bytes UTF-8]
+ * EVT_MSG_IN pushed to recipient: [from_id 4B][text N bytes UTF-8]
+ */
+static void handle_send_msg(DB *db, SessionTable *st, int fd, const WireFrame *f) {
+    if (f->body_len < 37) {
+        send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
+    }
+    uint32_t from_id = st_lookup(st, f->body);
+    if (!from_id) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
+
+    uint32_t to_id  = rd32(f->body + 32);
+    const uint8_t *text     = f->body + 36;
+    uint32_t       text_len = f->body_len - 36;
+
+    if (text_len == 0 || text_len > 2000) {
+        send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
+    }
+
+    /* ACK sender immediately */
+    send_ack(fd, f->seq, WIRE_OK, NULL, 0);
+
+    /* Build EVT_MSG_IN frame: [from_id 4B][text N] */
+    uint8_t evt_body[4 + 2000];
+    wr32(evt_body, from_id);
+    memcpy(evt_body + 4, text, text_len);
+
+    uint8_t evt[WIRE_MAX_FRAME];
+    size_t n = wire_frame_encode(WIRE_EVT_MSG_IN, 0, evt_body, 4 + text_len,
+                                 evt, sizeof(evt));
+    if (n > 0) {
+        /* null-terminate text for APNs notification body */
+        char notif[256] = "";
+        uint32_t copy = text_len < 200 ? text_len : 200;
+        memcpy(notif, text, copy);
+        notif[copy] = '\0';
+        push_or_apns(db, to_id, evt, n, "Tin nh\xe1\xba\xafn m\xe1\xbb\x9bi", notif);
+    }
+}
+
 static void handle_register_push_token(DB *db, SessionTable *st,
                                         int fd, const WireFrame *f) {
     if (f->body_len < 33) {
@@ -1357,6 +1397,7 @@ void handle_frame(DB *db, SessionTable *st, int fd, const WireFrame *f) {
         case WIRE_CONFIRM_INTENT:         handle_confirm_intent(db, st, fd, f);           break;
         case WIRE_QR_PAY:                 handle_qr_pay(db, st, fd, f);                   break;
         case WIRE_REGISTER_PUSH_TOKEN:    handle_register_push_token(db, st, fd, f);      break;
+        case WIRE_SEND_MSG:               handle_send_msg(db, st, fd, f);                 break;
         default:
             send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0);
     }

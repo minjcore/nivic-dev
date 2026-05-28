@@ -167,6 +167,7 @@ struct HomeView: View {
     @State private var showMerchant     = false
     @State private var showLoyalty      = false
     @State private var showPaymentToken = false
+    @State private var showChat         = false
     @State private var toast: String? = nil
 
     var body: some View {
@@ -229,6 +230,9 @@ struct HomeView: View {
                             MiniAppTile(icon: "arrow.counterclockwise.circle", label: "Phục hồi") {
                                 showToast("Tính năng đang phát triển 🛠️")
                             }
+                            MiniAppTile(icon: "bubble.left.and.bubble.right.fill", label: "Nhắn tin") {
+                                showChat = true
+                            }
                         }
                         .padding(.horizontal, 20)
                     }
@@ -281,6 +285,9 @@ struct HomeView: View {
         .sheet(isPresented: $showPaymentToken) {
             PaymentTokenSheet(uid: accountID)
         }
+        .sheet(isPresented: $showChat) {
+            ChatSheet(client: client, myID: accountID)
+        }
         .task { await refreshBalance() }
         .onReceive(NotificationCenter.default.publisher(for: .savingDeviceToken)) { note in
             guard let token = note.userInfo?["token"] as? String else { return }
@@ -288,6 +295,10 @@ struct HomeView: View {
                 try? await cardsClient.registerDeviceToken(uid: accountID, token: token)
                 try? await tomcatsClient.registerToken(uid: accountID, token: token)
             }
+        }
+        .onChange(of: client.lastMsgIn) { msg in
+            guard let m = msg else { return }
+            showToast("Tin từ #\(m.fromID): \(m.text.prefix(30))")
         }
         .onChange(of: client.lastTransferIn) { transfer in
             guard let t = transfer else { return }
@@ -2585,4 +2596,150 @@ struct MyLoyaltySheet: View {
         entries = (try? await merchantsClient.userLoyalty(uid: uid)) ?? []
     }
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  MARK: - Chat Sheet (Wire P2P relay)
+// ══════════════════════════════════════════════════════════════════════════════
+
+struct ChatMsg: Identifiable {
+    let id   = UUID()
+    let fromID: UInt32?   // nil = sent by me
+    let text: String
+    var isSent: Bool { fromID == nil }
+}
+
+struct ChatSheet: View {
+    let client: SavingClient
+    let myID:   UInt32
+
+    @State private var messages: [ChatMsg] = [
+        ChatMsg(fromID: 0, text: "Wire chat — nhắn thẳng đến ID khác qua server relay.")
+    ]
+    @State private var input   = ""
+    @State private var toIDText = ""
+    @State private var error: String?
+    @Environment(\.dismiss) private var dismiss
+
+    private var toID: UInt32? { UInt32(toIDText) }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color(white: 0.05).ignoresSafeArea()
+                VStack(spacing: 0) {
+                    // Recipient field
+                    HStack(spacing: 8) {
+                        Text("Đến #")
+                            .foregroundStyle(.gray)
+                            .font(.system(.body, design: .monospaced))
+                        TextField("ID người nhận", text: $toIDText)
+                            .keyboardType(.numberPad)
+                            .foregroundStyle(.white)
+                            .font(.system(.body, design: .monospaced))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color.white.opacity(0.06))
+
+                    // Messages
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(spacing: 6) {
+                                ForEach(messages) { msg in
+                                    ChatBubbleView(msg: msg)
+                                        .id(msg.id)
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                        }
+                        .onChange(of: messages.count) { _ in
+                            if let last = messages.last {
+                                withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                            }
+                        }
+                    }
+
+                    if let error {
+                        Text(error)
+                            .font(.caption).foregroundStyle(.red)
+                            .padding(.horizontal, 16)
+                    }
+
+                    // Input bar
+                    HStack(spacing: 8) {
+                        TextField("> nhắn tin...", text: $input)
+                            .foregroundStyle(.white)
+                            .font(.system(.body, design: .monospaced))
+                            .onSubmit { Task { await send() } }
+                        Button {
+                            Task { await send() }
+                        } label: {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 28))
+                                .foregroundStyle(input.isEmpty || toID == nil ? .gray : .white)
+                        }
+                        .disabled(input.isEmpty || toID == nil)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color.white.opacity(0.04))
+                }
+            }
+            .navigationTitle("Nhắn tin")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Đóng") { dismiss() }.foregroundStyle(.white)
+                }
+            }
+        }
+        .onReceive(client.$lastMsgIn) { msg in
+            guard let m = msg else { return }
+            messages.append(ChatMsg(fromID: m.fromID, text: m.text))
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private func send() async {
+        guard let to = toID, !input.isEmpty else { return }
+        let text = input
+        input = ""
+        error = nil
+        messages.append(ChatMsg(fromID: nil, text: text))
+        do {
+            try await client.sendMsg(to: to, text: text)
+        } catch WireError.serverError(let c) {
+            error = "Lỗi: \(c)"
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+struct ChatBubbleView: View {
+    let msg: ChatMsg
+    var body: some View {
+        HStack {
+            if msg.isSent { Spacer(minLength: 60) }
+            VStack(alignment: msg.isSent ? .trailing : .leading, spacing: 2) {
+                if !msg.isSent, let from = msg.fromID, from != 0 {
+                    Text("#\(from)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.gray)
+                }
+                Text(msg.text)
+                    .font(.system(size: 14, design: msg.isSent ? .monospaced : .default))
+                    .foregroundStyle(msg.isSent ? Color(red: 0.7, green: 0.85, blue: 1.0) : .white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(msg.isSent ? Color(red: 0.1, green: 0.22, blue: 0.36) : Color(white: 0.13))
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+            }
+            if !msg.isSent { Spacer(minLength: 60) }
+        }
+    }
+}
+
 #endif

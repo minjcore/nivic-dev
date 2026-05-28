@@ -38,6 +38,11 @@ public struct TransferOut {
     public let balance: UInt64
 }
 
+public struct IncomingMsg: Equatable {
+    public let fromID: UInt32
+    public let text:   String
+}
+
 public struct PendingIntent {
     public let requestID: UInt64
     public let amount:    UInt64
@@ -70,6 +75,7 @@ public enum SavingEvent {
     case totpCharged(merchantID: UInt32, update: BalanceUpdate)
     case intentPaid(IntentPaid)
     case transferOut(TransferOut)
+    case msgIn(IncomingMsg)
 }
 
 public struct TransactionPage {
@@ -190,6 +196,15 @@ private actor SavingNetwork {
     }
 
     // ─── History ────────────────────────────────────────────────────────────
+
+    func sendMsg(to: UInt32, text: String) async throws {
+        let token = try requireToken()
+        guard let frame = WireFrame.sendMsg(token: token, toID: to, text: text, seq: nextSeq()) else {
+            throw WireError.serverError(.errBadFrame)
+        }
+        let ack = try await conn.send(frame).parseAck()
+        guard ack.code == .ok else { throw WireError.serverError(ack.code) }
+    }
 
     func history(beforeID: UInt64 = 0) async throws -> TransactionPage {
         let token = try requireToken()
@@ -386,6 +401,7 @@ public final class SavingClient: ObservableObject {
 
     @Published public var isConnected    = false
     @Published public var lastTransferIn: SavingTransfer?
+    @Published public var lastMsgIn:      IncomingMsg?
 
     private var pendingDeviceToken: String?
 #if os(iOS)
@@ -455,6 +471,10 @@ public final class SavingClient: ObservableObject {
     // ─── Transfer ────────────────────────────────────────────────────────────
 
     @discardableResult
+    public func sendMsg(to: UInt32, text: String) async throws {
+        try await net.sendMsg(to: to, text: text)
+    }
+
     public func transfer(to: UInt32, amount: UInt64, ref: UInt64) async throws -> TransferAckBody {
         try await net.transfer(to: to, amount: amount, ref: ref)
     }
@@ -596,6 +616,13 @@ public final class SavingClient: ObservableObject {
             guard let body = try? frame.parseEvtTransferOut() else { return }
             let out = TransferOut(toID: body.toID, amount: body.amount, balance: body.balance)
             onEvent?(.transferOut(out))
+        case .evtMsgIn:
+            guard frame.body.count >= 5 else { return }
+            let fromID = frame.body.readBigEndianUInt32(at: 0)
+            let text   = String(bytes: frame.body.dropFirst(4), encoding: .utf8) ?? ""
+            let msg    = IncomingMsg(fromID: fromID, text: text)
+            lastMsgIn  = msg
+            onEvent?(.msgIn(msg))
         default:
             break
         }

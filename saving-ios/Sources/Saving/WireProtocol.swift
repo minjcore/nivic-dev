@@ -28,6 +28,7 @@ enum WireType: UInt8 {
     case confirmIntent     = 0x29
     case getMerchantHistory = 0x2A
     case registerPushToken  = 0x30
+    case sendMsg            = 0x31
 
     // Server → Client (responses)
     case pong            = 0x80
@@ -44,6 +45,7 @@ enum WireType: UInt8 {
     case evtTotpCharged  = 0xC6
     case evtCashIn       = 0xC7
     case evtTransferOut  = 0xC8
+    case evtMsgIn        = 0xC9
 }
 
 enum WireCode: UInt8 {
@@ -196,6 +198,15 @@ extension WireFrame {
         var body = token
         if beforeID != 0 { body.appendBigEndian(beforeID) }
         return WireFrame(type: .getHistory, seq: seq, body: body)
+    }
+
+    // SEND_MSG body: [token 32B][to_id 4B][text N bytes UTF-8]
+    static func sendMsg(token: Data, toID: UInt32, text: String, seq: UInt32) -> WireFrame? {
+        guard let textData = text.data(using: .utf8), !textData.isEmpty, textData.count <= 2000 else { return nil }
+        var body = token
+        body.appendBigEndian(toID)
+        body.append(textData)
+        return WireFrame(type: .sendMsg, seq: seq, body: body)
     }
 
     static func logout(token: Data, seq: UInt32) -> WireFrame {

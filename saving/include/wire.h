@@ -149,6 +149,8 @@
  *   ref = idempotency key; server rejects duplicate ref atomically.
  *   ACK extra: [txn_id 8B][after_balance 8B]                                                          */
 #define WIRE_QR_PAY               0x2B
+/* 0x31  SEND_MSG  body: [to_id 4B][text N bytes UTF-8] */
+#define WIRE_SEND_MSG             0x31
 #define WIRE_REGISTER_PUSH_TOKEN  0x30
 #define WIRE_CASH_IN              0x24
 #define WIRE_TOTP_CHARGE          0x25
@@ -180,6 +182,8 @@
 #define WIRE_EVT_CASH_IN      0xC7
 /* 0xC8  EVT_TRANSFER_OUT  body: [to_id 4B][amount 8B][balance 8B] */
 #define WIRE_EVT_TRANSFER_OUT 0xC8
+/* 0xC9  EVT_MSG_IN        body: [from_id 4B][text N bytes UTF-8] */
+#define WIRE_EVT_MSG_IN       0xC9
 
 /* ─── Response codes ─────────────────────────────────────────────────────── */
 #define WIRE_OK                0x00
