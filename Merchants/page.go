@@ -219,8 +219,8 @@ type payPageData struct {
 	MerchantName string
 	Amount       uint64
 	Note         string
-	DeepLink     string // saving://intent — open Wire mini-app
-	QrLink       string // saving://pay?pr — legacy counter QR
+	DeepLink     template.URL // saving://intent — open Wire mini-app
+	QrLink       template.URL // saving://pay?pr — legacy counter QR
 	Status       string
 }
 

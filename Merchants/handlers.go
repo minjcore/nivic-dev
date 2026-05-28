@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -1521,8 +1522,8 @@ func (h *handler) handlePayPage(w http.ResponseWriter, r *http.Request) {
 		MerchantName: m.Name,
 		Amount:       o.Amount,
 		Note:         o.Note,
-		DeepLink:     wireIntentURL(o.MID, rid, o.Amount, orderID),
-		QrLink:       "saving://pay?pr=" + prB64,
+		DeepLink:     template.URL(wireIntentURL(o.MID, rid, o.Amount, orderID)),
+		QrLink:       template.URL("saving://pay?pr=" + prB64),
 		Status:       o.Status,
 	})
 }
