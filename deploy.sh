@@ -66,7 +66,7 @@ sed -e "s/__OSS_ENDPOINT__/${OSS_ENDPOINT}/g" \
 scp /tmp/goproxy-rendered.json                            "$SERVER:/root/app/goproxy.json"
 scp infra/systemd/goproxy.service                         "$SERVER:/etc/systemd/system/goproxy.service"
 scp saving-gateway/saving-gateway-linux                   "$SERVER:/root/app/saving-gateway/saving-gateway-new"
-scp saving-gateway/gateway-subprocess-linux               "$SERVER:/root/app/saving-gateway/gateway-subprocess"
+scp saving-gateway/gateway-subprocess-linux               "$SERVER:/root/app/saving-gateway/gateway-subprocess-new"
 scp infra/systemd/saving-gateway.service                  "$SERVER:/etc/systemd/system/saving-gateway.service"
 scp Caddyfile                                             "$SERVER:/etc/caddy/Caddyfile"
 
@@ -105,13 +105,15 @@ chmod +x /root/app/goproxy
 mkdir -p /var/lib/goproxy
 
 mkdir -p /root/app/saving-gateway
+systemctl stop saving-gateway 2>/dev/null || true
 mv /root/app/saving-gateway/saving-gateway-new /root/app/saving-gateway/saving-gateway
 chmod +x /root/app/saving-gateway/saving-gateway
+mv /root/app/saving-gateway/gateway-subprocess-new /root/app/saving-gateway/gateway-subprocess
 chmod +x /root/app/saving-gateway/gateway-subprocess
 
 systemctl daemon-reload
 systemctl enable saving-gateway
-systemctl restart saving-gateway
+systemctl start saving-gateway
 systemctl restart merchants
 systemctl enable ops
 systemctl restart ops
