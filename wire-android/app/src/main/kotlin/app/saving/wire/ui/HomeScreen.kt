@@ -127,7 +127,7 @@ fun HomeScreen(vm: WireViewModel, accountId: Long) {
                     MiniTile(Icons.Default.VpnKey,   "Mã TT",     Modifier.weight(1f)) { showTOTP    = true }
                     MiniTile(Icons.Default.Star,     "Tích điểm", Modifier.weight(1f)) { showLoyalty = true }
                     MiniTile(Icons.Default.Refresh,  "Phục hồi",  Modifier.weight(1f)) { }
-                    MiniTile(Icons.Default.Terminal, "Terminal",  Modifier.weight(1f)) { showChat    = true }
+                    MiniTile(Icons.Default.Chat, "Nhắn tin",  Modifier.weight(1f)) { showChat    = true }
                 }
             }
 
