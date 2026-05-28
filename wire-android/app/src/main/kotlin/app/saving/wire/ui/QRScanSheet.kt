@@ -120,6 +120,37 @@ data class IntentPayload(val mid: Long, val requestId: Long, val amount: Long, v
     }
 }
 
+// saving://acs?mid=X&amount=Y&ts=T&sig=BASE64&acs=URL[&note=N] → ACS payment
+data class AcsPayload(
+    val mid:    Long,
+    val amount: Long,
+    val ts:     Long,
+    val sig:    ByteArray,      // 64-byte Ed25519 sig
+    val acsUrl: String,
+    val note:   String,
+) {
+    companion object {
+        fun parse(raw: String): AcsPayload? {
+            val uri = android.net.Uri.parse(raw)
+            if (uri.scheme != "saving" || uri.host != "acs") return null
+            val mid    = uri.getQueryParameter("mid")?.toLongOrNull() ?: return null
+            val amount = uri.getQueryParameter("amount")?.toLongOrNull() ?: return null
+            val ts     = uri.getQueryParameter("ts")?.toLongOrNull() ?: return null
+            val sigB64 = uri.getQueryParameter("sig") ?: return null
+            val acsUrl = uri.getQueryParameter("acs") ?: return null
+            val note   = uri.getQueryParameter("note") ?: ""
+            val sig = try {
+                android.util.Base64.decode(
+                    sigB64.replace('-', '+').replace('_', '/'),
+                    android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING
+                )
+            } catch (_: Exception) { return null }
+            if (sig.size != 64) return null
+            return AcsPayload(mid, amount, ts, sig, acsUrl, note)
+        }
+    }
+}
+
 /* saving://store?mid=X  OR  https://<slug>.nivic.dev  → open FrontStoreSheet */
 data class StorePayload(val mid: Long?, val slug: String?) {
     companion object {
@@ -159,6 +190,7 @@ fun QRScanSheet(
     var enrollPayload by remember { mutableStateOf<TOTPEnrollPayload?>(null) }
     var totpPayload   by remember { mutableStateOf<TOTPPayPayload?>(null) }
     var intentPayload by remember { mutableStateOf<IntentPayload?>(null) }
+    var acsPayload    by remember { mutableStateOf<AcsPayload?>(null) }
     var scanError     by remember { mutableStateOf<String?>(null) }
     val scope         = rememberCoroutineScope()
     val ctx          = LocalContext.current
@@ -179,6 +211,7 @@ fun QRScanSheet(
             ) {
                 Text(
                     when {
+                        acsPayload    != null -> "Xác nhận thanh toán"
                         intentPayload != null -> "Xác nhận đơn hàng"
                         payload != null       -> "Xác nhận thanh toán"
                         enrollPayload != null -> "Đăng ký TOTP"
@@ -187,14 +220,22 @@ fun QRScanSheet(
                     },
                     color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp
                 )
-                if (payload != null || enrollPayload != null || totpPayload != null || intentPayload != null) {
-                    TextButton(onClick = { payload = null; enrollPayload = null; totpPayload = null; intentPayload = null; scanError = null }) {
+                if (payload != null || enrollPayload != null || totpPayload != null || intentPayload != null || acsPayload != null) {
+                    TextButton(onClick = { payload = null; enrollPayload = null; totpPayload = null; intentPayload = null; acsPayload = null; scanError = null }) {
                         Text("Quét lại", color = Color.Gray)
                     }
                 }
             }
 
             when {
+                acsPayload != null -> {
+                    AcsPayContent(
+                        client    = client,
+                        accountId = accountId,
+                        payload   = acsPayload!!,
+                        onDone    = { onDone(); onDismiss() }
+                    )
+                }
                 intentPayload != null -> {
                     LaunchedEffect(intentPayload) {
                         onFrontStore(intentPayload!!.mid, intentPayload)
@@ -251,10 +292,12 @@ fun QRScanSheet(
                                     }
                                 }
                                 null -> {
+                                    val ap = AcsPayload.parse(raw)
                                     val ep = TOTPEnrollPayload.parse(raw)
                                     val tp = TOTPPayPayload.parse(raw)
                                     val mp = MerchantPayload.parse(raw)
                                     when {
+                                        ap != null -> { acsPayload = ap;   scanError = null }
                                         ep != null -> { enrollPayload = ep; scanError = null }
                                         tp != null -> { totpPayload = tp;  scanError = null }
                                         mp != null -> { payload = mp;      scanError = null }
@@ -536,6 +579,81 @@ private fun IntentPayContent(
             }
             Spacer(Modifier.height(8.dp))
         }
+    }
+}
+
+// ─── ACS payment confirmation ─────────────────────────────────────────────────
+
+@Composable
+private fun AcsPayContent(
+    client:    SavingClient,
+    accountId: Long,
+    payload:   AcsPayload,
+    onDone:    () -> Unit,
+) {
+    var loading by remember { mutableStateOf(false) }
+    var error   by remember { mutableStateOf<String?>(null) }
+    var success by remember { mutableStateOf(false) }
+    val scope   = rememberCoroutineScope()
+
+    Column(
+        modifier            = Modifier.fillMaxWidth().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        Icon(Icons.Default.Store, null,
+            modifier = Modifier.size(64.dp), tint = Color.White.copy(alpha = 0.85f))
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally,
+               verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Người bán #${payload.mid}", color = Color.White,
+                fontWeight = FontWeight.Bold, fontSize = 18.sp,
+                fontFamily = FontFamily.Monospace)
+            if (payload.note.isNotEmpty())
+                Text(payload.note, color = Color.Gray, fontSize = 13.sp)
+        }
+
+        Text(payload.amount.vndFormatted(), color = Color.White,
+            fontSize = 32.sp, fontWeight = FontWeight.Black)
+
+        error?.let { Text(it, color = Color.Red, fontSize = 13.sp) }
+
+        if (success) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.CheckCircleOutline, null, tint = Color(0xFF4CAF50))
+                Text("Thanh toán thành công!", color = Color(0xFF4CAF50),
+                    fontWeight = FontWeight.SemiBold)
+            }
+        } else {
+            WirePrimaryButton(title = "XÁC NHẬN THANH TOÁN", loading = loading, enabled = !loading) {
+                scope.launch {
+                    loading = true; error = null
+                    try {
+                        client.qrPay(payload.mid, payload.amount, payload.ts,
+                                     payload.sig, payload.acsUrl)
+                        success = true
+                        kotlinx.coroutines.delay(1500)
+                        onDone()
+                    } catch (e: WireError) {
+                        error = when (e.code) {
+                            WireCode.ERR_LOW_BALANCE    -> "Không đủ số dư"
+                            WireCode.ERR_BAD_SIG        -> "QR không hợp lệ hoặc đã hết hạn"
+                            WireCode.ERR_INTENT_SETTLED -> "QR đã hết hạn (> 10 phút)"
+                            WireCode.ERR_NOT_FOUND      -> "Không tìm thấy cửa hàng"
+                            WireCode.ERR_SYSTEM_OFFLINE,
+                            WireCode.ERR_MAINTENANCE    -> "Hệ thống tạm thời không khả dụng"
+                            else -> "Lỗi: 0x${e.code.toInt().and(0xFF).toString(16)}"
+                        }
+                    } catch (e: Exception) {
+                        error = e.message
+                    } finally {
+                        loading = false
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
     }
 }
 

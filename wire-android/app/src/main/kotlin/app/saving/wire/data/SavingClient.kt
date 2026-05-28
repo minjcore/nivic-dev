@@ -149,6 +149,19 @@ class SavingClient(
         )
     }
 
+    suspend fun qrPay(merchantId: Long, amount: Long, ts: Long,
+                      sig: ByteArray, acsUrl: String): ConfirmIntentResult {
+        val ack = conn.send(
+            WireFrame.qrPay(requireToken(), merchantId, amount, ts, sig, acsUrl, conn.nextSeq())
+        ).parseAck()
+        if (ack.code != WireCode.OK) throw WireError(ack.code)
+        val d = ack.data
+        return ConfirmIntentResult(
+            txnId        = if (d.size >= 8)  d.getLong(0) else 0L,
+            afterBalance = if (d.size >= 16) d.getLong(8) else 0L
+        )
+    }
+
     // ─── History ─────────────────────────────────────────────────────────────
 
     suspend fun history(): List<Transaction> {

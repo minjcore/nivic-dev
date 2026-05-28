@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include "crypto_compat.h"
 #include <openssl/evp.h>
+#include <curl/curl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
@@ -1016,6 +1017,127 @@ static void handle_list_intents(DB *db, SessionTable *st, int fd, const WireFram
 
 /* ─── Gateway notification ───────────────────────────────────────────────── */
 
+/* ── ACS callback: fire-and-forget POST to arbitrary HTTPS URL ────────────── */
+typedef struct { char url[1024]; char body[256]; } AcsArg;
+
+static void *acs_notify_thread(void *arg) {
+    AcsArg *a = (AcsArg *)arg;
+    CURL *curl = curl_easy_init();
+    if (curl) {
+        struct curl_slist *hdrs = curl_slist_append(NULL, "Content-Type: application/json");
+        curl_easy_setopt(curl, CURLOPT_URL,        a->url);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS,  a->body);
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER,  hdrs);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT,     10L);
+        curl_easy_setopt(curl, CURLOPT_NOSIGNAL,    1L);
+        curl_easy_perform(curl);
+        curl_slist_free_all(hdrs);
+        curl_easy_cleanup(curl);
+    }
+    free(a);
+    return NULL;
+}
+
+static void acs_notify_async(const char *acs_url, uint32_t mid, uint32_t customer_id,
+                              uint64_t amount, int64_t txn_id) {
+    if (!acs_url || !acs_url[0]) return;
+    AcsArg *a = malloc(sizeof(AcsArg));
+    if (!a) return;
+    snprintf(a->url, sizeof(a->url), "%s", acs_url);
+    snprintf(a->body, sizeof(a->body),
+        "{\"mid\":%u,\"customer_id\":%u,\"amount\":%llu,\"txn_id\":%lld,\"status\":\"paid\"}",
+        mid, customer_id, (unsigned long long)amount, (long long)txn_id);
+    pthread_t t;
+    if (pthread_create(&t, NULL, acs_notify_thread, a) == 0)
+        pthread_detach(t);
+    else
+        free(a);
+}
+
+/* QR_PAY body: [customer_token 32B][mid 4B][amount 8B][ts 8B][sig 64B][acs_url N]
+ * Merchant signed (mid||amount||ts) offline with Ed25519 privkey.
+ * Wire server verifies sig, transfers, POSTs result to acs_url.
+ */
+static void handle_qr_pay(DB *db, SessionTable *st, int fd, const WireFrame *f) {
+    if (f->body_len < 116) {
+        send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
+    }
+    uint32_t customer_id = st_lookup(st, f->body);
+    if (!customer_id) { send_ack(fd, f->seq, WIRE_ERR_BAD_TOKEN, NULL, 0); return; }
+
+    uint32_t merchant_id = rd32(f->body + 32);
+    uint64_t amount      = rd64(f->body + 36);
+    uint64_t ts          = rd64(f->body + 44);
+    const uint8_t *sig   = f->body + 52;   /* 64 bytes Ed25519 sig */
+
+    /* acs_url is the remaining bytes after sig (optional) */
+    size_t acs_len = (f->body_len > 116) ? (size_t)(f->body_len - 116) : 0;
+    char acs_url[1024] = {0};
+    if (acs_len > 0 && acs_len < sizeof(acs_url))
+        memcpy(acs_url, f->body + 116, acs_len);
+
+    /* Replay protection: QR must be within 10-minute window */
+    uint64_t now = (uint64_t)time(NULL);
+    if (ts + 600 < now || ts > now + 60) {
+        send_ack(fd, f->seq, WIRE_ERR_INTENT_SETTLED, NULL, 0); return;
+    }
+
+    /* Verify merchant Ed25519 sig over mid(4BE)||amount(8BE)||ts(8BE) */
+    uint8_t pubkey[32];
+    if (db_merchant_pubkey_get(db, merchant_id, pubkey) != 0) {
+        send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND, NULL, 0); return;
+    }
+    uint8_t msg[20];
+    wr32(msg,      merchant_id);
+    wr64(msg + 4,  amount);
+    wr64(msg + 12, ts);
+    if (ed25519_verify(pubkey, sig, msg, 20) != 0) {
+        send_ack(fd, f->seq, WIRE_ERR_BAD_SIG, NULL, 0); return;
+    }
+
+    /* Transfer: customer → merchant */
+    int64_t after_cust = 0, txn_id = 0;
+    int rc = db_transfer(db, customer_id, merchant_id, amount, 1, &after_cust, &txn_id);
+    if (rc == -1) { send_ack(fd, f->seq, WIRE_ERR_LOW_BALANCE, NULL, 0); return; }
+    if (rc == -2) { send_ack(fd, f->seq, WIRE_ERR_NOT_FOUND,   NULL, 0); return; }
+    if (rc != 0)  { send_ack(fd, f->seq, WIRE_ERR_INTERNAL,    NULL, 0); return; }
+
+    /* Async ACS callback to merchant site */
+    acs_notify_async(acs_url, merchant_id, customer_id, amount, txn_id);
+
+    /* Push EVT_TRANSFER_IN to merchant */
+    int64_t merch_bal = db_account_balance(db, merchant_id);
+    if (merch_bal >= 0) {
+        uint8_t body[20], evt[WIRE_MAX_FRAME];
+        wr32(body,      customer_id);
+        wr64(body + 4,  amount);
+        wr64(body + 12, (uint64_t)merch_bal);
+        size_t n = wire_frame_encode(WIRE_EVT_TRANSFER_IN, 0, body, 20, evt, sizeof(evt));
+        if (n > 0) {
+            char ab[80];
+            snprintf(ab, sizeof(ab), "+%llu \xe2\x82\xab t\xe1\xbb\xab #%u",
+                     (unsigned long long)amount, (unsigned)customer_id);
+            push_or_apns(db, merchant_id, evt, n, "Nh\xe1\xba\xadn ti\xe1\xbb\x81n", ab);
+        }
+    }
+
+    /* Push EVT_TRANSFER_OUT to customer */
+    {
+        uint8_t body[20], evt[WIRE_MAX_FRAME];
+        wr32(body,      merchant_id);
+        wr64(body + 4,  amount);
+        wr64(body + 12, (uint64_t)after_cust);
+        size_t n = wire_frame_encode(WIRE_EVT_TRANSFER_OUT, 0, body, 20, evt, sizeof(evt));
+        if (n > 0) registry_push(customer_id, evt, n);
+    }
+
+    /* ACK: [txn_id 8B][after_balance 8B] */
+    uint8_t extra[16];
+    wr64(extra,     (uint64_t)txn_id);
+    wr64(extra + 8, (uint64_t)after_cust);
+    send_ack(fd, f->seq, WIRE_OK, extra, 16);
+}
+
 /* Fire-and-forget: POST /orders/{gateway_order_id}/confirm to localhost:8090 */
 static void *gateway_confirm_thread(void *arg) {
     char *s = (char *)arg;           /* "ORDER_ID|PAID_BY" */
@@ -1177,6 +1299,7 @@ void handle_frame(DB *db, SessionTable *st, int fd, const WireFrame *f) {
         case WIRE_CREATE_INTENT:
         case WIRE_PAY_INTENT:
         case WIRE_CONFIRM_INTENT:
+        case WIRE_QR_PAY:
         case WIRE_CASH_IN:
         case WIRE_TOTP_CHARGE:
         case WIRE_CASH_OUT:
@@ -1211,6 +1334,7 @@ void handle_frame(DB *db, SessionTable *st, int fd, const WireFrame *f) {
         case WIRE_LIST_INTENTS:           handle_list_intents(db, st, fd, f);              break;
         case WIRE_GET_MERCHANT_HISTORY:   handle_get_merchant_history(db, st, fd, f);     break;
         case WIRE_CONFIRM_INTENT:         handle_confirm_intent(db, st, fd, f);           break;
+        case WIRE_QR_PAY:                 handle_qr_pay(db, st, fd, f);                   break;
         case WIRE_REGISTER_PUSH_TOKEN:    handle_register_push_token(db, st, fd, f);      break;
         default:
             send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0);

@@ -152,6 +152,7 @@ func migrate(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_loyalty_uid ON loyalty_points(uid)`,
 
 		`ALTER TABLE orders ADD COLUMN IF NOT EXISTS wire_request_id BIGINT NOT NULL DEFAULT 0`,
+		`ALTER TABLE orders ADD COLUMN IF NOT EXISTS wire_txn_id BIGINT NOT NULL DEFAULT 0`,
 
 		`CREATE TABLE IF NOT EXISTS chat_messages (
 			id            BIGSERIAL PRIMARY KEY,
@@ -390,6 +391,49 @@ func (s *Store) MarkPaid(orderID string, paidBy uint32) (pointsAwarded int64, er
 	}
 
 	return pointsAwarded, tx.Commit()
+}
+
+// MarkOrderPaidByRef marks an order paid via the ACS QR callback from Wire server.
+func (s *Store) MarkOrderPaidByRef(ref string, paidBy uint32, txnID int64) error {
+	o, err := s.GetOrder(ref)
+	if err != nil || o == nil {
+		return fmt.Errorf("order not found: %s", ref)
+	}
+	if o.Status != StatusPending {
+		return nil // already settled — idempotent
+	}
+
+	pointsAwarded := int64(o.Amount / PointsPerVND)
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	res, err := tx.Exec(
+		`UPDATE orders SET status=$1, paid_at=$2, paid_by=$3, points_awarded=$4, wire_txn_id=$5
+		 WHERE id=$6 AND status=$7`,
+		StatusPaid, time.Now().UnixMilli(), paidBy, pointsAwarded, txnID, ref, StatusPending,
+	)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil
+	}
+
+	if pointsAwarded > 0 {
+		if _, err := tx.Exec(
+			`INSERT INTO loyalty_points (uid, mid, points) VALUES ($1, $2, $3)
+			 ON CONFLICT (uid, mid) DO UPDATE SET points = loyalty_points.points + EXCLUDED.points`,
+			paidBy, o.MID, pointsAwarded,
+		); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 // ─── Loyalty ──────────────────────────────────────────────────────────────────

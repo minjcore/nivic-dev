@@ -148,6 +148,9 @@ func (h *handler) routes() http.Handler {
 	mux.HandleFunc("GET /pay/{order_id}/wire",                   h.handlePayOrderWire)
 	mux.HandleFunc("GET /pay/{order_id}/status",                   h.handlePayStatus)
 
+	// ACS flow — offline signed QR payments
+	mux.HandleFunc("POST /merchants/{mid}/qr",   h.handleGenerateQR)   // generate signed QR URL
+	mux.HandleFunc("POST /acs/{ref}",            h.handleACSCallback)   // Wire server callback
 
 	// Middleware: merchant public page for *.nivic.dev subdomains and custom domains
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1832,4 +1835,102 @@ func (h *handler) handleCustomerPayConfirm(w http.ResponseWriter, r *http.Reques
 		"amount_charged": chargeAmount,
 		"points_awarded": pts,
 	})
+}
+
+// POST /merchants/{mid}/qr
+// Header: X-Merchant-Token
+// Body: { "amount": 50000, "note": "Coffee", "acs_url": "https://..." }
+// Returns: { "qr_url": "saving://acs?..." }
+func (h *handler) handleGenerateQR(w http.ResponseWriter, r *http.Request) {
+	mid, err := parseMID(r.PathValue("mid"))
+	if err != nil {
+		jsonErr(w, 400, "invalid mid"); return
+	}
+	m, err := h.store.Get(mid)
+	if err != nil || m == nil {
+		jsonErr(w, 404, "merchant not found"); return
+	}
+	if r.Header.Get("X-Merchant-Token") != m.Token {
+		jsonErr(w, 401, "unauthorized"); return
+	}
+
+	var req struct {
+		Amount int64  `json:"amount"`
+		Note   string `json:"note"`
+		AcsURL string `json:"acs_url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid body"); return
+	}
+	if req.Amount <= 0 {
+		jsonErr(w, 400, "amount required"); return
+	}
+
+	privKeyBytes, err := base64.StdEncoding.DecodeString(m.PrivkeyB64)
+	if err != nil || len(privKeyBytes) != ed25519.PrivateKeySize {
+		jsonErr(w, 500, "merchant key not configured"); return
+	}
+
+	ts := time.Now().Unix()
+
+	// Signed msg: mid(4BE) || amount(8BE) || ts(8BE) = 20 bytes
+	msg := make([]byte, 20)
+	binary.BigEndian.PutUint32(msg[0:4], uint32(mid))
+	binary.BigEndian.PutUint64(msg[4:12], uint64(req.Amount))
+	binary.BigEndian.PutUint64(msg[12:20], uint64(ts))
+
+	sig := ed25519.Sign(ed25519.PrivateKey(privKeyBytes), msg)
+	sigB64 := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(sig)
+
+	acsURL := req.AcsURL
+	if acsURL == "" {
+		slug := m.Slug
+		if slug == "" {
+			slug = fmt.Sprintf("%d", mid)
+		}
+		acsURL = fmt.Sprintf("https://%s.nivic.dev/acs/default", slug)
+	}
+
+	qrURL := fmt.Sprintf(
+		"saving://acs?mid=%d&amount=%d&ts=%d&sig=%s&acs=%s&note=%s",
+		mid, req.Amount, ts, sigB64,
+		strings.ReplaceAll(acsURL, "&", "%26"),
+		strings.ReplaceAll(req.Note, "&", "%26"),
+	)
+
+	jsonOK(w, map[string]any{
+		"qr_url":  qrURL,
+		"mid":     mid,
+		"amount":  req.Amount,
+		"ts":      ts,
+		"expires": ts + 600,
+	})
+}
+
+// POST /acs/{ref}
+// Wire server POSTs here after QR_PAY completes.
+// Body: { "mid": N, "customer_id": N, "amount": N, "txn_id": N, "status": "paid" }
+func (h *handler) handleACSCallback(w http.ResponseWriter, r *http.Request) {
+	ref := r.PathValue("ref")
+
+	var cb struct {
+		MID        uint32 `json:"mid"`
+		CustomerID uint32 `json:"customer_id"`
+		Amount     int64  `json:"amount"`
+		TxnID      int64  `json:"txn_id"`
+		Status     string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&cb); err != nil {
+		w.WriteHeader(400); return
+	}
+
+	slog.Info("acs callback", "ref", ref, "mid", cb.MID,
+		"customer", cb.CustomerID, "amount", cb.Amount,
+		"txn_id", cb.TxnID, "status", cb.Status)
+
+	if ref != "default" && cb.Status == "paid" {
+		_ = h.store.MarkOrderPaidByRef(ref, cb.CustomerID, cb.TxnID)
+	}
+
+	w.WriteHeader(200)
 }

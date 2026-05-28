@@ -23,6 +23,7 @@ object WireCmd {
     const val REGISTER_MERCHANT:   Byte = 0x23.toByte()
     const val TOTP_CHARGE:         Byte = 0x25.toByte()
     const val CONFIRM_INTENT:      Byte = 0x29.toByte()
+    const val QR_PAY:              Byte = 0x2B.toByte()
 
     const val PONG:              Byte = 0x80.toByte()
     const val LOGIN_ACK:         Byte = 0x81.toByte()
@@ -168,6 +169,13 @@ fun WireFrame.Companion.payIntent(token: ByteArray, merchantId: Long, requestId:
 fun WireFrame.Companion.confirmIntent(token: ByteArray, merchantId: Long, requestId: Long, seq: Int) =
     WireFrame(WireCmd.CONFIRM_INTENT, seq,
         token + merchantId.toUInt32Bytes() + requestId.toInt64Bytes())
+
+/* QR_PAY body: [customer_token 32B][mid 4B][amount 8B][ts 8B][sig 64B][acs_url N] */
+fun WireFrame.Companion.qrPay(token: ByteArray, merchantId: Long, amount: Long,
+                               ts: Long, sig: ByteArray, acsUrl: String, seq: Int) =
+    WireFrame(WireCmd.QR_PAY, seq,
+        token + merchantId.toUInt32Bytes() + amount.toInt64Bytes() +
+        ts.toInt64Bytes() + sig + acsUrl.toByteArray(Charsets.UTF_8))
 
 // ─── Body parsers ──────────────────────────────────────────────────────────
 
