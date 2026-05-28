@@ -27,7 +27,7 @@ func main() {
 		log.Fatalf("deploy wire: %v", err)
 	}
 
-	if _, err = app.DeployVerticle(NewGatewayVerticle()); err != nil {sưa
+	if _, err = app.DeployVerticle(NewGatewayVerticle()); err != nil {
 		log.Fatalf("deploy gateway: %v", err)
 	}
 

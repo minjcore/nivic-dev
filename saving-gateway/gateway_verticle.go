@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"sync/atomic"
 	"time"
 
@@ -58,14 +59,19 @@ func (v *GatewayVerticle) Start(ctx core.FluxorContext) error {
 	mux.HandleFunc("GET /wire/balance", v.wireGetHandler(ctx, "saving.wire.balance", "token"))
 	mux.HandleFunc("GET /wire/ping",    v.wireGetHandler(ctx, "saving.wire.ping"))
 
+	port := os.Getenv("GATEWAY_PORT")
+	if port == "" {
+		port = "8080"
+	}
+	addr := ":" + port
 	v.server = &http.Server{
-		Addr:              ":8080",
+		Addr:              addr,
 		Handler:           v.countMiddleware(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	go func() {
-		slog.Info("saving-gateway ready", "addr", ":8080")
+		slog.Info("saving-gateway ready", "addr", addr)
 		if err := v.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("gateway crashed", "err", err)
 		}

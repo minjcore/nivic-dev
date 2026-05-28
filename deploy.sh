@@ -34,6 +34,11 @@ cd "$HOME/fluxor-runtime/apps/go-proxy"
 GOOS=linux GOARCH=amd64 go build -o goproxy-linux .
 cd "$SCRIPT_DIR"
 
+echo "==> Building saving-gateway (linux/amd64)..."
+cd "$SCRIPT_DIR/saving-gateway"
+GOOS=linux GOARCH=amd64 go build -o saving-gateway-linux .
+cd "$SCRIPT_DIR"
+
 
 echo "==> Syncing source to server..."
 rsync -az --exclude '.build' --exclude '*.db' \
@@ -59,6 +64,8 @@ sed -e "s/__OSS_ENDPOINT__/${OSS_ENDPOINT}/g" \
     GoProxy/goproxy.json > /tmp/goproxy-rendered.json
 scp /tmp/goproxy-rendered.json                            "$SERVER:/root/app/goproxy.json"
 scp infra/systemd/goproxy.service                         "$SERVER:/etc/systemd/system/goproxy.service"
+scp saving-gateway/saving-gateway-linux                   "$SERVER:/root/app/saving-gateway/saving-gateway-new"
+scp infra/systemd/saving-gateway.service                  "$SERVER:/etc/systemd/system/saving-gateway.service"
 scp Caddyfile                                             "$SERVER:/etc/caddy/Caddyfile"
 
 echo "==> Deploying on server..."
@@ -95,7 +102,13 @@ mv /root/app/goproxy-new /root/app/goproxy
 chmod +x /root/app/goproxy
 mkdir -p /var/lib/goproxy
 
+mkdir -p /root/app/saving-gateway
+mv /root/app/saving-gateway/saving-gateway-new /root/app/saving-gateway/saving-gateway
+chmod +x /root/app/saving-gateway/saving-gateway
+
 systemctl daemon-reload
+systemctl enable saving-gateway
+systemctl restart saving-gateway
 systemctl restart merchants
 systemctl enable ops
 systemctl restart ops
@@ -107,7 +120,8 @@ caddy reload --config /etc/caddy/Caddyfile
 echo "merchants status: \$(systemctl is-active merchants)"
 echo "ops status:       \$(systemctl is-active ops)"
 echo "iam status:       \$(systemctl is-active iam)"
-echo "goproxy status:   \$(systemctl is-active goproxy)"
+echo "goproxy status:         \$(systemctl is-active goproxy)"
+echo "saving-gateway status:  \$(systemctl is-active saving-gateway)"
 
 # ── Wire .env ────────────────────────────────────────────────────────────────
 cd $REMOTE_DIR

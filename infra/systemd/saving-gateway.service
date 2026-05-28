@@ -1,0 +1,22 @@
+[Unit]
+Description=Saving Gateway (Wire teller session / BFF)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/root/app/saving-gateway/saving-gateway
+Restart=on-failure
+RestartSec=5
+
+Environment=WIRE_HOST=localhost:7474
+Environment=WIRE_SERVICE_UID=1
+Environment=WIRE_SERVICE_PASSWORD=saving_gateway_1779949264
+Environment=GATEWAY_PORT=8081
+Environment=AMQP_URL=amqp://guest:guest@localhost:5672/
+
+WorkingDirectory=/root/app/saving-gateway
+StandardOutput=append:/var/log/saving-gateway.log
+StandardError=append:/var/log/saving-gateway.log
+
+[Install]
+WantedBy=multi-user.target
