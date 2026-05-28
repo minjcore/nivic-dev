@@ -397,7 +397,7 @@ struct TransferSheet: View {
         loading = true; error = nil
         defer { loading = false }
         do {
-            try await client.transfer(to: to, amount: amt)
+            try await client.transfer(to: to, amount: amt, ref: UInt64.random(in: 1...UInt64.max))
             await onDone()
             dismiss()
         } catch WireError.serverError(let code) {
@@ -449,7 +449,7 @@ struct HistorySheet: View {
             }
         }
         .task {
-            txs = (try? await client.history()) ?? []
+            txs = (try? await client.history())?.transactions ?? []
             loading = false
         }
     }
@@ -682,7 +682,7 @@ struct SearchSheet: View {
             QuickTransferSheet(client: client, toID: id)
         }
         .task {
-            allTxs = (try? await client.history()) ?? []
+            allTxs = (try? await client.history())?.transactions ?? []
             loading = false
         }
     }
@@ -727,7 +727,7 @@ struct QuickTransferSheet: View {
         loading = true; error = nil
         defer { loading = false }
         do {
-            try await client.transfer(to: toID, amount: amt)
+            try await client.transfer(to: toID, amount: amt, ref: UInt64.random(in: 1...UInt64.max))
             dismiss()
         } catch WireError.serverError(let code) {
             error = code == .errLowBalance ? "Không đủ số dư." : "Lỗi: \(code)"
@@ -1520,7 +1520,7 @@ struct MerchantPaySheet: View {
         loading = true; error = nil
         defer { loading = false }
         do {
-            try await client.payMerchant(mid: payload.mid, amount: amount)
+            try await client.payMerchant(mid: payload.mid, amount: amount, ref: UInt64.random(in: 1...UInt64.max))
             // Notify Merchants Host order is paid (best-effort, after Wire ACK)
             if let orderID = payload.orderID, let uid = client.uid {
                 await merchantsClient.confirmPaid(orderID: orderID, paidBy: uid)

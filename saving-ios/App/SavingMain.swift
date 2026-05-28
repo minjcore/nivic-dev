@@ -8,9 +8,11 @@ struct SavingMain: App {
         WindowGroup {
             SavingApp(
                 host:         "wire.nivic.dev",
-                merchantsURL: "http://wire.nivic.dev:8090",
-                cardsURL:     "http://wire.nivic.dev:8091",
-                tomcatsURL:   "http://wire.nivic.dev:8093"
+                port:         7474,
+                secret:       "saving_wire_secret_changeme",
+                merchantsURL: "http://saving.nivic.dev:8090",
+                cardsURL:     "http://saving.nivic.dev:8091",
+                tomcatsURL:   "http://saving.nivic.dev:8093"
             )
         }
     }
