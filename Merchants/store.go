@@ -172,6 +172,15 @@ func migrate(db *sql.DB) error {
 		// GIN trigram indexes for fast ILIKE search on Vietnamese text
 		`CREATE INDEX IF NOT EXISTS idx_merchants_name_trgm ON merchants USING gin (name gin_trgm_ops)`,
 		`CREATE INDEX IF NOT EXISTS idx_merchants_addr_trgm ON merchants USING gin (address gin_trgm_ops)`,
+
+		`CREATE TABLE IF NOT EXISTS qr_tokens (
+			token      TEXT   PRIMARY KEY,
+			mid        BIGINT NOT NULL REFERENCES merchants(mid),
+			amount     BIGINT NOT NULL,
+			note       TEXT   NOT NULL DEFAULT '',
+			acs_url    TEXT   NOT NULL DEFAULT '',
+			created_at BIGINT NOT NULL
+		)`,
 	}
 
 	for _, s := range stmts {
@@ -863,6 +872,38 @@ func (s *Store) GenerateSlug(mid uint32, name string) (string, error) {
 		return base, nil
 	}
 	return fmt.Sprintf("%s-%d", base, mid), nil
+}
+
+// ─── QR Tokens ───────────────────────────────────────────────────────────────
+
+type QRToken struct {
+	Token     string
+	MID       uint32
+	Amount    int64
+	Note      string
+	AcsURL    string
+	CreatedAt int64
+}
+
+func (s *Store) CreateQRToken(token string, mid uint32, amount int64, note, acsURL string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO qr_tokens (token, mid, amount, note, acs_url, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6)
+		 ON CONFLICT (token) DO UPDATE SET amount=$3, note=$4, acs_url=$5`,
+		token, mid, amount, note, acsURL, time.Now().Unix(),
+	)
+	return err
+}
+
+func (s *Store) GetQRToken(token string) (*QRToken, error) {
+	var q QRToken
+	err := s.db.QueryRow(
+		`SELECT token, mid, amount, note, acs_url, created_at FROM qr_tokens WHERE token=$1`, token,
+	).Scan(&q.Token, &q.MID, &q.Amount, &q.Note, &q.AcsURL, &q.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return &q, err
 }
 
 // ─── Control Plane / Ops ─────────────────────────────────────────────────────

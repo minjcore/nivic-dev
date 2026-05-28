@@ -149,7 +149,8 @@ func (h *handler) routes() http.Handler {
 	mux.HandleFunc("GET /pay/{order_id}/status",                   h.handlePayStatus)
 
 	// ACS flow — offline signed QR payments
-	mux.HandleFunc("POST /merchants/{mid}/qr",   h.handleGenerateQR)   // generate signed QR URL
+	mux.HandleFunc("POST /merchants/{mid}/qr",   h.handleGenerateQR)   // generate QR token
+	mux.HandleFunc("GET /qr/{token}",            h.handleQRPage)        // resolve QR → HTML with saving-pay meta
 	mux.HandleFunc("POST /acs/{ref}",            h.handleACSCallback)   // Wire server callback
 
 	// Middleware: merchant public page for *.nivic.dev subdomains and custom domains
@@ -1866,21 +1867,10 @@ func (h *handler) handleGenerateQR(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "amount required"); return
 	}
 
-	privKeyBytes, err := base64.StdEncoding.DecodeString(m.PrivkeyB64)
-	if err != nil || len(privKeyBytes) != ed25519.PrivateKeySize {
+	// Verify merchant has a signing key
+	if _, err := base64.StdEncoding.DecodeString(m.PrivkeyB64); err != nil {
 		jsonErr(w, 500, "merchant key not configured"); return
 	}
-
-	ts := time.Now().Unix()
-
-	// Signed msg: mid(4BE) || amount(8BE) || ts(8BE) = 20 bytes
-	msg := make([]byte, 20)
-	binary.BigEndian.PutUint32(msg[0:4], uint32(mid))
-	binary.BigEndian.PutUint64(msg[4:12], uint64(req.Amount))
-	binary.BigEndian.PutUint64(msg[12:20], uint64(ts))
-
-	sig := ed25519.Sign(ed25519.PrivateKey(privKeyBytes), msg)
-	sigB64 := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(sig)
 
 	acsURL := req.AcsURL
 	if acsURL == "" {
@@ -1891,20 +1881,105 @@ func (h *handler) handleGenerateQR(w http.ResponseWriter, r *http.Request) {
 		acsURL = fmt.Sprintf("https://%s.nivic.dev/acs/default", slug)
 	}
 
-	qrURL := fmt.Sprintf(
-		"saving://acs?mid=%d&amount=%d&ts=%d&sig=%s&acs=%s&note=%s",
-		mid, req.Amount, ts, sigB64,
-		strings.ReplaceAll(acsURL, "&", "%26"),
-		strings.ReplaceAll(req.Note, "&", "%26"),
-	)
+	// Generate short random token (8 bytes → 11 base64url chars)
+	tokenBytes := make([]byte, 8)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		jsonErr(w, 500, "token generation failed"); return
+	}
+	token := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(tokenBytes)
+
+	if err := h.store.CreateQRToken(token, mid, req.Amount, req.Note, acsURL); err != nil {
+		jsonErr(w, 500, "store failed"); return
+	}
+
+	slug := m.Slug
+	if slug == "" {
+		slug = fmt.Sprintf("%d", mid)
+	}
+	qrURL := fmt.Sprintf("https://%s.nivic.dev/qr/%s", slug, token)
 
 	jsonOK(w, map[string]any{
-		"qr_url":  qrURL,
-		"mid":     mid,
-		"amount":  req.Amount,
-		"ts":      ts,
-		"expires": ts + 600,
+		"qr_url": qrURL,
+		"token":  token,
+		"mid":    mid,
+		"amount": req.Amount,
 	})
+}
+
+// GET /qr/{token} — returns HTML with saving-pay meta tag; app fetches this to resolve payment params.
+func (h *handler) handleQRPage(w http.ResponseWriter, r *http.Request) {
+	token := r.PathValue("token")
+	qt, err := h.store.GetQRToken(token)
+	if err != nil || qt == nil {
+		http.NotFound(w, r); return
+	}
+
+	m, err := h.store.Get(qt.MID)
+	if err != nil || m == nil {
+		http.NotFound(w, r); return
+	}
+
+	privKeyBytes, err := base64.StdEncoding.DecodeString(m.PrivkeyB64)
+	if err != nil || len(privKeyBytes) != ed25519.PrivateKeySize {
+		http.Error(w, "key error", 500); return
+	}
+
+	ts := time.Now().Unix()
+	msg := make([]byte, 20)
+	binary.BigEndian.PutUint32(msg[0:4], qt.MID)
+	binary.BigEndian.PutUint64(msg[4:12], uint64(qt.Amount))
+	binary.BigEndian.PutUint64(msg[12:20], uint64(ts))
+	sig    := ed25519.Sign(ed25519.PrivateKey(privKeyBytes), msg)
+	sigB64 := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(sig)
+
+	// meta content is query-string encoded so app can reuse AcsPayload.parse("saving://acs?"+content)
+	metaContent := fmt.Sprintf("mid=%d&amount=%d&ts=%d&sig=%s&acs=%s&note=%s",
+		qt.MID, qt.Amount, ts, sigB64,
+		strings.ReplaceAll(qt.AcsURL, "&", "%26"),
+		strings.ReplaceAll(qt.Note, "&", "%26"),
+	)
+
+	amountFmt := fmt.Sprintf("%s ₫", formatVND(qt.Amount))
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprintf(w, `<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="saving-pay" content="%s">
+<title>Thanh toán %s - %s</title>
+<style>
+body{background:#000;color:#fff;font-family:-apple-system,sans-serif;display:flex;align-items:center;
+justify-content:center;min-height:100vh;margin:0;text-align:center;padding:24px;box-sizing:border-box}
+.card{max-width:360px;width:100%%}
+.amt{font-size:2.5rem;font-weight:900;margin:16px 0}
+.note{color:#888;font-size:.9rem;margin-bottom:24px}
+.btn{display:inline-block;background:#fff;color:#000;padding:14px 32px;border-radius:14px;
+text-decoration:none;font-weight:700;font-size:1rem}
+.sub{color:#555;font-size:.75rem;margin-top:16px}
+</style>
+</head>
+<body>
+<div class="card">
+<div style="font-size:3rem">🏪</div>
+<h2 style="margin:8px 0">%s</h2>
+<div class="amt">%s</div>
+%s
+<a href="saving://acs?%s" class="btn">Mở Wire để thanh toán</a>
+<div class="sub">Hoặc quét QR này bằng Wire app</div>
+</div>
+</body>
+</html>`,
+		metaContent,
+		amountFmt, m.Name,
+		m.Name,
+		amountFmt,
+		func() string {
+			if qt.Note != "" { return `<div class="note">` + qt.Note + `</div>` }
+			return ""
+		}(),
+		metaContent,
+	)
 }
 
 // POST /acs/{ref}

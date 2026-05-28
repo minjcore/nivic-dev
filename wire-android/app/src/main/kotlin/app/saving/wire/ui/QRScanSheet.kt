@@ -37,7 +37,11 @@ import app.saving.wire.deeplink.SavingDeeplink
 import app.saving.wire.deeplink.SavingDeeplinkParser
 import app.saving.wire.protocol.WireCode
 import app.saving.wire.protocol.WireError
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.Executors
 
 // ─── QR payload types ────────────────────────────────────────────────────────
@@ -274,7 +278,17 @@ fun QRScanSheet(
                             .padding(horizontal = 20.dp)
                             .background(Color.Black, RoundedCornerShape(16.dp)),
                         onCode = { raw ->
-                            when (val dl = SavingDeeplinkParser.fromQr(raw)) {
+                            // Payment QR URL: https://*.nivic.dev/qr/{token}
+                            val rawUri = android.net.Uri.parse(raw)
+                            if (rawUri.scheme == "https" &&
+                                rawUri.host?.endsWith(".nivic.dev") == true &&
+                                rawUri.path?.startsWith("/qr/") == true) {
+                                scope.launch {
+                                    val fetched = fetchAcsPayload(raw)
+                                    if (fetched != null) { acsPayload = fetched; scanError = null }
+                                    else scanError = "Không thể tải thông tin QR"
+                                }
+                            } else when (val dl = SavingDeeplinkParser.fromQr(raw)) {
                                 is SavingDeeplink.PaymentIntent -> {
                                     intentPayload = IntentPayload(dl.mid, dl.requestId, dl.amount, dl.orderId)
                                     scanError = null
@@ -737,6 +751,26 @@ private fun MerchantPayContent(
 
         Spacer(Modifier.height(8.dp))
     }
+}
+
+// ─── Fetch saving-pay meta from a payment QR URL ─────────────────────────────
+
+private suspend fun fetchAcsPayload(url: String): AcsPayload? = withContext(Dispatchers.IO) {
+    try {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        conn.connectTimeout = 5_000
+        conn.readTimeout    = 5_000
+        conn.setRequestProperty("User-Agent", "WireApp/1.0")
+        val html = conn.inputStream.bufferedReader().readText()
+        conn.disconnect()
+        // Match <meta name="saving-pay" content="..."> (order of attributes may vary)
+        val regex = Regex(
+            """<meta\b[^>]*\bname=["']saving-pay["'][^>]*\bcontent=["']([^"']+)["']""",
+            RegexOption.IGNORE_CASE
+        )
+        val content = regex.find(html)?.groupValues?.get(1) ?: return@withContext null
+        AcsPayload.parse("saving://acs?$content")
+    } catch (_: Exception) { null }
 }
 
 // ─── CameraX QR scanner ────────────────────────────────────────────────────
