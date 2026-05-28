@@ -21,11 +21,12 @@ data class Transaction(
 data class TransferEvent(val fromId: Long, val amount: Long, val balance: Long)
 
 sealed class SavingEvent {
-    data class TransferIn(val transfer: TransferEvent)                              : SavingEvent()
-    data class RecoveryRequested(val accountId: Long)                              : SavingEvent()
-    data class RecoveryGranted(val accountId: Long)                                : SavingEvent()
-    data class GuardianAdded(val accountId: Long)                                  : SavingEvent()
+    data class TransferIn(val transfer: TransferEvent)                                 : SavingEvent()
+    data class RecoveryRequested(val accountId: Long)                                  : SavingEvent()
+    data class RecoveryGranted(val accountId: Long)                                    : SavingEvent()
+    data class GuardianAdded(val accountId: Long)                                      : SavingEvent()
     data class IntentPaid(val requestId: Long, val customerId: Long, val amount: Long) : SavingEvent()
+    data class MsgIn(val fromId: Long, val text: String)                               : SavingEvent()
 }
 
 class SavingClient(
@@ -87,6 +88,11 @@ class SavingClient(
     }
 
     suspend fun payMerchant(mid: Long, amount: Long) = transfer(mid, amount)
+
+    suspend fun sendMsg(toId: Long, text: String) {
+        val ack = conn.send(WireFrame.sendMsg(requireToken(), toId, text, conn.nextSeq())).parseAck()
+        if (ack.code != WireCode.OK) throw WireError(ack.code)
+    }
 
     // ─── Payment Intent ───────────────────────────────────────────────────────
 
@@ -228,6 +234,10 @@ class SavingClient(
                     customerId = frame.body.getInt(8).toLong() and 0xFFFFFFFFL,
                     amount     = frame.body.getLong(12)
                 ) else return
+            WireCmd.EVT_MSG_IN -> {
+                val b = frame.parseEvtMsgIn()
+                SavingEvent.MsgIn(fromId = b.fromId, text = b.text)
+            }
             else -> return
         }
         onEvent?.invoke(event)

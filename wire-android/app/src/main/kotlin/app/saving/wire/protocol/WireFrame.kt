@@ -24,6 +24,7 @@ object WireCmd {
     const val TOTP_CHARGE:         Byte = 0x25.toByte()
     const val CONFIRM_INTENT:      Byte = 0x29.toByte()
     const val QR_PAY:              Byte = 0x2B.toByte()
+    const val SEND_MSG:            Byte = 0x31.toByte()
 
     const val PONG:              Byte = 0x80.toByte()
     const val LOGIN_ACK:         Byte = 0x81.toByte()
@@ -34,6 +35,7 @@ object WireCmd {
     const val EVT_RECOVERY_OK:   Byte = 0xC2.toByte()
     const val EVT_GUARDIAN_ADD:  Byte = 0xC3.toByte()
     const val EVT_INTENT_PAID:   Byte = 0xC4.toByte()
+    const val EVT_MSG_IN:        Byte = 0xC9.toByte()
 }
 
 object WireCode {
@@ -206,6 +208,19 @@ fun WireFrame.parseEvtTransferIn(): EvtTransferInBody {
         amount  = body.getLong(4),
         balance = body.getLong(12)
     )
+}
+
+/* SEND_MSG body: [token 32B][to_id 4B][text N bytes UTF-8] */
+fun WireFrame.Companion.sendMsg(token: ByteArray, toId: Long, text: String, seq: Int) =
+    WireFrame(WireCmd.SEND_MSG, seq, token + toId.toUInt32Bytes() + text.toByteArray(Charsets.UTF_8))
+
+data class EvtMsgInBody(val fromId: Long, val text: String)
+
+fun WireFrame.parseEvtMsgIn(): EvtMsgInBody {
+    require(body.size >= 5)
+    val fromId = body.getInt(0).toLong() and 0xFFFFFFFFL
+    val text   = body.copyOfRange(4, body.size).toString(Charsets.UTF_8)
+    return EvtMsgInBody(fromId, text)
 }
 
 // ─── Error ─────────────────────────────────────────────────────────────────
