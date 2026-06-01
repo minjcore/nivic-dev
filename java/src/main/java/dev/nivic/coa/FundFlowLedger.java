@@ -43,6 +43,28 @@ public interface FundFlowLedger {
    */
   long walletBalance(long mid);
 
+  /** Số dư tiền gửi tiết kiệm của một user — sổ chi tiết của control account 2140. */
+  long savingsBalance(long mid);
+
+  // ── Savings ví ↔ Sổ cái (control account 2140 + chi phí lãi 5200) ─────────────
+
+  /**
+   * Chuyển ví → tiết kiệm: DR 2110(mid) / CR 2140(mid). Tái phân loại nợ phải trả.
+   * @throws InsufficientWalletException nếu số dư ví user &lt; amount
+   */
+  CoaTrans savingsDeposit(SavingsDepositCmd cmd);
+
+  /**
+   * Rút tiết kiệm → ví: DR 2140(mid) / CR 2110(mid).
+   * @throws InsufficientWalletException nếu số dư tiết kiệm user &lt; amount
+   */
+  CoaTrans savingsWithdraw(SavingsWithdrawCmd cmd);
+
+  /**
+   * Ghi lãi tiền gửi (chi phí nền tảng): DR 5200 / CR 2140(mid).
+   */
+  CoaTrans savingsInterest(SavingsInterestCmd cmd);
+
   /** Full journal transaction with bút toán lines. Returns null if not found. */
   CoaTrans findTrans(UUID transId);
 

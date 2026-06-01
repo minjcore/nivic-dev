@@ -294,6 +294,7 @@ INSERT INTO coa_account (code, name, kind) VALUES
   ('2110', 'Wallet Balance - User',           'LIABILITY'),
   ('2120', 'Wallet Balance Merchant',         'LIABILITY'),
   ('2130', 'Ký quỹ - Đối tác Chi hộ',         'LIABILITY'),
+  ('2140', 'Tiền gửi tiết kiệm',              'LIABILITY'),
   -- Nhóm 3: Transit
   ('3100', 'Transit - Nạp tiền',              'TRANSIT'),
   ('3200', 'Transit - Rút tiền',              'TRANSIT'),
@@ -313,6 +314,7 @@ INSERT INTO coa_account (code, name, kind) VALUES
   ('4150', 'Doanh thu Phí Chi Lương/Chi hộ',  'REVENUE'),
   -- Nhóm 5: Chi phí
   ('5100', 'Chi phí Phí NH / Napas',          'EXPENSE'),
+  ('5200', 'Chi phí lãi tiền gửi',            'EXPENSE'),
   -- Nhóm 6: Vốn
   ('6000', 'Vốn chủ sở hữu',                  'EQUITY'),
   ('6100', 'Lợi nhuận giữ lại',               'EQUITY')

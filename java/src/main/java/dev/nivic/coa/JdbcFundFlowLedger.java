@@ -120,6 +120,7 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
       {"2110", "Wallet Balance - User",           "LIABILITY"},
       {"2120", "Wallet Balance Merchant",         "LIABILITY"},
       {"2130", "Ký quỹ - Đối tác Chi hộ",         "LIABILITY"},
+      {"2140", "Tiền gửi tiết kiệm",              "LIABILITY"},
       {"3100", "Transit - Nạp tiền",              "TRANSIT"},
       {"3200", "Transit - Rút tiền",              "TRANSIT"},
       {"3300", "Transit - Chuyển tiền nội bộ",    "TRANSIT"},
@@ -136,9 +137,15 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
       {"4140", "Doanh thu Phí MDR",               "REVENUE"},
       {"4150", "Doanh thu Phí Chi Lương/Chi hộ",  "REVENUE"},
       {"5100", "Chi phí Phí NH / Napas",          "EXPENSE"},
+      {"5200", "Chi phí lãi tiền gửi",            "EXPENSE"},
       {"6000", "Vốn chủ sở hữu",                  "EQUITY"},
       {"6100", "Lợi nhuận giữ lại",               "EQUITY"},
   };
+
+  /** Control account cho tiền gửi tiết kiệm (subledger = sav_account per-user). */
+  static final String SAVINGS_CONTROL = "2140";
+  /** Chi phí lãi tiền gửi tiết kiệm. */
+  static final String SAVINGS_INTEREST_EXPENSE = "5200";
 
   /** Retained-earnings account closing entries flow into. */
   private static final String RETAINED_EARNINGS = "6100";
@@ -889,6 +896,88 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
       }
     } catch (SQLException e) {
       throw new IllegalStateException("walletBalance failed: mid=" + mid, e);
+    }
+  }
+
+  @Override
+  public long savingsBalance(long mid) {
+    try {
+      ensureSchema();
+      try (Connection c = dataSource.getConnection();
+          PreparedStatement ps = c.prepareStatement(SELECT_PARTY_BALANCE)) {
+        ps.setString(1, SAVINGS_CONTROL);
+        ps.setLong(2, mid);
+        try (ResultSet rs = ps.executeQuery()) {
+          rs.next();
+          return rs.getLong(1);
+        }
+      }
+    } catch (SQLException e) {
+      throw new IllegalStateException("savingsBalance failed: mid=" + mid, e);
+    }
+  }
+
+  @Override
+  public CoaTrans savingsDeposit(SavingsDepositCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.requestRef());
+      if (existing != null) return existing;
+      if (walletBalance(cmd.mid()) < cmd.amount()) {
+        throw new InsufficientWalletException(WALLET_CONTROL, walletBalance(cmd.mid()), cmd.amount());
+      }
+      // DR 2110(mid) / CR 2140(mid) — tái phân loại nợ ví → tiết kiệm
+      List<JournalLine> lines = List.of(
+          new JournalLine(WALLET_CONTROL, cmd.amount(), 0L).withParty(cmd.mid()),
+          new JournalLine(SAVINGS_CONTROL, 0L, cmd.amount()).withParty(cmd.mid()));
+      return postJournal(lines, cmd.requestRef(),
+          cmd.memo() != null ? cmd.memo() : "Gửi tiết kiệm (ví→TK): " + cmd.amount());
+    } catch (InsufficientWalletException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("savingsDeposit failed: " + cmd.requestRef(), e);
+    }
+  }
+
+  @Override
+  public CoaTrans savingsWithdraw(SavingsWithdrawCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.requestRef());
+      if (existing != null) return existing;
+      if (savingsBalance(cmd.mid()) < cmd.amount()) {
+        throw new InsufficientWalletException(SAVINGS_CONTROL, savingsBalance(cmd.mid()), cmd.amount());
+      }
+      // DR 2140(mid) / CR 2110(mid)
+      List<JournalLine> lines = List.of(
+          new JournalLine(SAVINGS_CONTROL, cmd.amount(), 0L).withParty(cmd.mid()),
+          new JournalLine(WALLET_CONTROL, 0L, cmd.amount()).withParty(cmd.mid()));
+      return postJournal(lines, cmd.requestRef(),
+          cmd.memo() != null ? cmd.memo() : "Rút tiết kiệm (TK→ví): " + cmd.amount());
+    } catch (InsufficientWalletException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("savingsWithdraw failed: " + cmd.requestRef(), e);
+    }
+  }
+
+  @Override
+  public CoaTrans savingsInterest(SavingsInterestCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.requestRef());
+      if (existing != null) return existing;
+      // DR 5200 (chi phí lãi) / CR 2140(mid)
+      List<JournalLine> lines = List.of(
+          new JournalLine(SAVINGS_INTEREST_EXPENSE, cmd.amount(), 0L),
+          new JournalLine(SAVINGS_CONTROL, 0L, cmd.amount()).withParty(cmd.mid()));
+      return postJournal(lines, cmd.requestRef(),
+          cmd.memo() != null ? cmd.memo() : "Lãi tiền gửi tiết kiệm: " + cmd.amount());
+    } catch (SQLException e) {
+      throw new IllegalStateException("savingsInterest failed: " + cmd.requestRef(), e);
     }
   }
 
