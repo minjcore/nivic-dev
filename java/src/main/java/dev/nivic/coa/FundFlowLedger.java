@@ -132,6 +132,26 @@ public interface FundFlowLedger {
    */
   CoaTrans disbursePayroll(PayrollDisburseCmd cmd);
 
+  // ── Thanh Toán Bằng Ví (Use Case 8) ──────────────────────────────────────────
+
+  /**
+   * Step 1 — Trừ số dư ví user, ghi transit thanh toán.
+   * Posts: DR 2110 (amount) / CR 3500 (Transit Thanh toán).
+   * Idempotent on {@link WalletPaymentInitCmd#requestRef()}.
+   *
+   * @throws InsufficientWalletException if Wallet User (2110) balance is insufficient
+   */
+  CoaTrans initWalletPayment(WalletPaymentInitCmd cmd);
+
+  /**
+   * Step 2 — Giải phóng transit, cộng ví merchant (chờ Settlement EOD).
+   * Posts: DR 3500 (amount) / CR 2120 (Wallet Merchant).
+   * Idempotent on {@link WalletPaymentSettleCmd#settleRef()}.
+   *
+   * @throws InsufficientTransitException if Transit 3500 balance would go below zero
+   */
+  CoaTrans settleWalletPayment(WalletPaymentSettleCmd cmd);
+
   // ── Chi Hộ — Disbursement on Behalf (Use Case 10) ────────────────────────────
 
   /**

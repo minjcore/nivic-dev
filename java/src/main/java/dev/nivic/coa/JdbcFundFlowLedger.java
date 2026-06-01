@@ -443,6 +443,63 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
     }
   }
 
+  // ── Thanh Toán Bằng Ví (Wallet Payment) ──────────────────────────────────────
+
+  @Override
+  public CoaTrans initWalletPayment(WalletPaymentInitCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.requestRef());
+      if (existing != null) return existing;
+
+      // 2110 credit-normal: balance < 0 khi user có tiền
+      long walletBalance = getBalance("2110");
+      if (walletBalance > -cmd.amount()) {
+        throw new InsufficientWalletException("2110", walletBalance, cmd.amount());
+      }
+
+      // DR 2110 / CR 3500
+      List<JournalLine> lines = List.of(
+          new JournalLine("2110", cmd.amount(), 0L),
+          new JournalLine("3500", 0L, cmd.amount()));
+
+      return postJournal(lines, cmd.requestRef(),
+          cmd.memo() != null ? cmd.memo() : "Thanh toán ví — trừ ví user: " + cmd.amount());
+    } catch (InsufficientWalletException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("initWalletPayment failed: " + cmd.requestRef(), e);
+    }
+  }
+
+  @Override
+  public CoaTrans settleWalletPayment(WalletPaymentSettleCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.settleRef());
+      if (existing != null) return existing;
+
+      long transitBalance = getBalance("3500");
+      if (transitBalance > -cmd.amount()) {
+        throw new InsufficientTransitException("3500", transitBalance, cmd.amount());
+      }
+
+      // DR 3500 / CR 2120
+      List<JournalLine> lines = List.of(
+          new JournalLine("3500", cmd.amount(), 0L),
+          new JournalLine("2120", 0L, cmd.amount()));
+
+      return postJournal(lines, cmd.settleRef(),
+          cmd.memo() != null ? cmd.memo() : "Thanh toán ví — ghi ví merchant: " + cmd.amount());
+    } catch (InsufficientTransitException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("settleWalletPayment failed: " + cmd.settleRef(), e);
+    }
+  }
+
   // ── Chi Hộ (Disbursement on Behalf) ──────────────────────────────────────────
 
   @Override
