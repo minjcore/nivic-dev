@@ -513,17 +513,29 @@ public final class ControlPlaneServer {
         #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card);
           border:1px solid var(--blue);border-radius:8px;padding:10px 18px;opacity:0;transition:.3s;pointer-events:none}
         #toast.show{opacity:1}
+        .tabs{display:flex;gap:8px;padding:12px 24px 0;max-width:1400px;margin:0 auto}
+        .tab{background:var(--card);border:1px solid var(--line);border-bottom:none;
+          border-radius:10px 10px 0 0;padding:10px 18px;cursor:pointer;font-size:14px;
+          font-weight:600;color:var(--mut)}
+        .tab.active{color:var(--txt);border-color:var(--blue);background:#1b2230}
+        .savcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
       </style></head><body>
       <header>
         <h1>⚡ GtelPay Control Plane</h1>
         <span id="badge" class="badge ok">checking…</span>
         <span style="color:var(--mut);font-size:12px;margin-left:auto" id="clock"></span>
       </header>
-      <div class="wrap">
+      <div class="tabs">
+        <div class="tab active" id="tab-coa" onclick="showTab('coa')">⚖️ Hệ Kế toán (COA)</div>
+        <div class="tab" id="tab-sav" onclick="showTab('sav')">🏦 Hệ Ví / Tiết kiệm</div>
+      </div>
+
+      <!-- ── HỆ KẾ TOÁN ── -->
+      <div class="wrap" id="pane-coa">
         <div id="groups"></div>
         <div class="side">
           <div class="panel">
-            <h2>Chạy nghiệp vụ</h2>
+            <h2>Chạy nghiệp vụ kế toán</h2>
             <div class="btns">
               <button onclick="run('topup')">Nạp tiền</button>
               <button onclick="run('withdraw')">Rút tiền</button>
@@ -537,16 +549,6 @@ public final class ControlPlaneServer {
               <button class="wide" onclick="run('close')">📕 Khoá sổ cuối kỳ</button>
               <button class="wide reset" onclick="reset()">⟲ Reset toàn bộ</button>
             </div>
-          </div>
-          <div class="panel">
-            <h2>Tiết kiệm <span style="color:var(--mut);font-weight:400">· phân hệ riêng (sav_*)</span></h2>
-            <div class="btns" style="margin-bottom:12px">
-              <button onclick="run('sav_open')">Mở sổ</button>
-              <button onclick="run('sav_deposit')">Gửi tiền</button>
-              <button onclick="run('sav_withdraw')">Rút tiền</button>
-              <button onclick="run('sav_interest')">Tính lãi</button>
-            </div>
-            <div id="savings"></div>
           </div>
           <div class="panel">
             <h2>Tra cứu giao dịch</h2>
@@ -566,6 +568,29 @@ public final class ControlPlaneServer {
           <div class="panel">
             <h2>Bút toán gần nhất</h2>
             <div id="recent"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── HỆ VÍ / TIẾT KIỆM ── -->
+      <div class="wrap" id="pane-sav" style="display:none;grid-template-columns:1fr 360px">
+        <div>
+          <div class="group"><h2>Sổ tiết kiệm (sav_account · per-user)</h2>
+            <div id="savcards" class="savcards"></div>
+          </div>
+        </div>
+        <div class="side">
+          <div class="panel">
+            <h2>Nghiệp vụ tiết kiệm</h2>
+            <div class="btns">
+              <button onclick="run('sav_open')">Mở sổ</button>
+              <button onclick="run('sav_deposit')">Gửi tiền</button>
+              <button onclick="run('sav_withdraw')">Rút tiền</button>
+              <button onclick="run('sav_interest')">Tính lãi</button>
+              <button class="wide reset" onclick="reset()">⟲ Reset toàn bộ</button>
+            </div>
+            <p style="color:var(--mut);font-size:12px;margin:12px 0 0">
+              Phân hệ độc lập, sổ riêng (account + trans + trans_data), không trộn COA.</p>
           </div>
         </div>
       </div>
@@ -646,16 +671,24 @@ public final class ControlPlaneServer {
           el.innerHTML=h;
         }
         function renderSavings(list){
-          const el=document.getElementById('savings');
-          if(!list||!list.length){el.innerHTML='<span style="color:var(--mut);font-size:12px">Chưa có sổ tiết kiệm</span>';return;}
+          const el=document.getElementById('savcards');
+          if(!list||!list.length){el.innerHTML='<span style="color:var(--mut);font-size:12px">Chưa có sổ tiết kiệm — bấm Mở sổ / Gửi tiền</span>';return;}
           let h='';
           for(const s of list){
-            h+='<div class="sav"><div><div class="no">'+s.accountNo+'</div>'+
-               '<div class="k">'+s.kind+(s.closed?' · ĐÃ ĐÓNG':'')+'</div></div>'+
-               '<div style="text-align:right"><div class="av">'+fmt(s.available)+' đ</div>'+
-               (s.pending?'<div class="pend">giữ '+fmt(s.pending)+' đ</div>':'')+'</div></div>';
+            const cls=s.available>0?'pos':(s.available===0?'zero':'neg');
+            h+='<div class="acct"><div class="code">'+s.accountNo+'</div>'+
+               '<div class="nm">'+s.kind+(s.closed?' · ĐÃ ĐÓNG':'')+'</div>'+
+               '<div class="bal '+cls+'">'+fmt(s.available)+'<span style="font-size:12px;color:var(--mut)"> đ</span></div>'+
+               (s.pending?'<div class="pend" style="font-size:11px;color:var(--amber);margin-top:4px">giữ (pending) '+fmt(s.pending)+' đ</div>':'')+
+               '</div>';
           }
           el.innerHTML=h;
+        }
+        function showTab(t){
+          document.getElementById('pane-coa').style.display = t==='coa'?'grid':'none';
+          document.getElementById('pane-sav').style.display = t==='sav'?'grid':'none';
+          document.getElementById('tab-coa').classList.toggle('active', t==='coa');
+          document.getElementById('tab-sav').classList.toggle('active', t==='sav');
         }
         async function lookupTx(){
           const q=document.getElementById('txq').value.trim();
