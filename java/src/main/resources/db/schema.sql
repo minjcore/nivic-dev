@@ -284,6 +284,35 @@ CREATE INDEX IF NOT EXISTS coa_trans_data_account_idx ON coa_trans_data (account
 CREATE INDEX IF NOT EXISTS coa_trans_data_party_idx
   ON coa_trans_data (account_code, party_mid) WHERE party_mid IS NOT NULL;
 
+-- ── Maker-checker (4-eyes) — staging đề xuất bút toán ───────────────────────
+-- Maker tạo đề xuất (PENDING, chưa đụng số dư); Checker (≠ maker) duyệt → post vào
+-- sổ cái (sinh coa_trans), hoặc từ chối. Bảng workflow nên CHO PHÉP update (khác
+-- coa_trans append-only).
+CREATE TABLE IF NOT EXISTS coa_proposal (
+  id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  ref_id          VARCHAR(128) UNIQUE,
+  memo            VARCHAR(512),
+  maker_id        VARCHAR(64)  NOT NULL,
+  status          VARCHAR(16)  NOT NULL DEFAULT 'PENDING',  -- PENDING|APPROVED|REJECTED
+  checker_id      VARCHAR(64),
+  reason          VARCHAR(512),
+  posted_trans_id UUID,                                     -- coa_trans sinh khi APPROVED
+  created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  decided_at      TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS coa_proposal_line (
+  proposal_id  UUID        NOT NULL REFERENCES coa_proposal(id),
+  line_no      SMALLINT    NOT NULL,
+  account_code VARCHAR(10) NOT NULL,
+  debit_minor  BIGINT      NOT NULL DEFAULT 0,
+  credit_minor BIGINT      NOT NULL DEFAULT 0,
+  party_mid    BIGINT,
+  PRIMARY KEY (proposal_id, line_no)
+);
+
+CREATE INDEX IF NOT EXISTS coa_proposal_status_idx ON coa_proposal (status, created_at DESC);
+
 -- ── Frozen rules (triggers) — đóng băng sổ nhật ký ──────────────────────────
 -- 1) Append-only: cấm UPDATE/DELETE bút toán đã ghi (TRUNCATE admin vẫn cho phép).
 CREATE OR REPLACE FUNCTION coa_forbid_mutation() RETURNS trigger LANGUAGE plpgsql AS $$

@@ -2,6 +2,9 @@ package dev.nivic.coa;
 
 import dev.nivic.coa.cmd.*;
 import dev.nivic.coa.error.*;
+import dev.nivic.coa.mc.Proposal;
+import dev.nivic.coa.mc.ProposalStatus;
+import dev.nivic.coa.mc.ProposeJournalCmd;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -134,6 +137,56 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
 
   private static final String DDL_IDX_DATA_ACCOUNT =
       "CREATE INDEX IF NOT EXISTS coa_trans_data_account_idx ON coa_trans_data (account_code)";
+
+  // ── Maker-checker staging tables ──────────────────────────────────────────────
+  private static final String DDL_PROPOSAL = """
+      CREATE TABLE IF NOT EXISTS coa_proposal (
+        id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+        ref_id          VARCHAR(128) UNIQUE,
+        memo            VARCHAR(512),
+        maker_id        VARCHAR(64)  NOT NULL,
+        status          VARCHAR(16)  NOT NULL DEFAULT 'PENDING',
+        checker_id      VARCHAR(64),
+        reason          VARCHAR(512),
+        posted_trans_id UUID,
+        created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        decided_at      TIMESTAMPTZ
+      )
+      """;
+  private static final String DDL_PROPOSAL_LINE = """
+      CREATE TABLE IF NOT EXISTS coa_proposal_line (
+        proposal_id  UUID        NOT NULL REFERENCES coa_proposal(id),
+        line_no      SMALLINT    NOT NULL,
+        account_code VARCHAR(10) NOT NULL,
+        debit_minor  BIGINT      NOT NULL DEFAULT 0,
+        credit_minor BIGINT      NOT NULL DEFAULT 0,
+        party_mid    BIGINT,
+        PRIMARY KEY (proposal_id, line_no)
+      )
+      """;
+  private static final String DDL_IDX_PROPOSAL_STATUS =
+      "CREATE INDEX IF NOT EXISTS coa_proposal_status_idx ON coa_proposal (status, created_at DESC)";
+
+  private static final String INSERT_PROPOSAL =
+      "INSERT INTO coa_proposal (ref_id, memo, maker_id) VALUES (?, ?, ?) RETURNING id, created_at";
+  private static final String INSERT_PROPOSAL_LINE =
+      "INSERT INTO coa_proposal_line (proposal_id, line_no, account_code, debit_minor, credit_minor, party_mid)"
+          + " VALUES (?, ?, ?, ?, ?, ?)";
+  private static final String SELECT_PROPOSAL_ID_BY_REF =
+      "SELECT id FROM coa_proposal WHERE ref_id = ?";
+  private static final String SELECT_PROPOSAL_COLS =
+      "id, ref_id, memo, maker_id, status, checker_id, reason, posted_trans_id, created_at, decided_at";
+  private static final String SELECT_PROPOSAL =
+      "SELECT " + SELECT_PROPOSAL_COLS + " FROM coa_proposal WHERE id = ?";
+  private static final String SELECT_PROPOSAL_FOR_UPDATE = SELECT_PROPOSAL + " FOR UPDATE";
+  private static final String SELECT_PROPOSAL_LINES =
+      "SELECT line_no, account_code, debit_minor, credit_minor, party_mid FROM coa_proposal_line"
+          + " WHERE proposal_id = ? ORDER BY line_no";
+  private static final String UPDATE_PROPOSAL_DECIDE =
+      "UPDATE coa_proposal SET status = ?, checker_id = ?, reason = ?, posted_trans_id = ?,"
+          + " decided_at = NOW() WHERE id = ?";
+  private static final String SELECT_PENDING_PROPOSALS =
+      "SELECT id FROM coa_proposal WHERE status = 'PENDING' ORDER BY created_at DESC";
 
   /** Subsidiary-ledger index: per-account, per-party balance scans (e.g. wallet balance of a user). */
   private static final String DDL_IDX_DATA_PARTY =
@@ -1094,6 +1147,227 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
     }
   }
 
+  // ── Maker-checker ─────────────────────────────────────────────────────────────
+
+  @Override
+  public Proposal propose(ProposeJournalCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    long dr = cmd.lines().stream().mapToLong(ProposeJournalCmd.EntryLine::debitMinor).sum();
+    long cr = cmd.lines().stream().mapToLong(ProposeJournalCmd.EntryLine::creditMinor).sum();
+    if (dr != cr) throw new IllegalArgumentException("proposal not balanced: DR=" + dr + " CR=" + cr);
+    try {
+      ensureSchema();
+      java.util.UUID existing = proposalIdByRef(cmd.requestRef());
+      if (existing != null) return findProposal(existing);
+
+      try (Connection c = dataSource.getConnection()) {
+        c.setAutoCommit(false);
+        try {
+          java.util.UUID id;
+          try (PreparedStatement ps = c.prepareStatement(INSERT_PROPOSAL)) {
+            ps.setString(1, cmd.requestRef());
+            if (cmd.memo() != null) ps.setString(2, cmd.memo()); else ps.setNull(2, Types.VARCHAR);
+            ps.setString(3, cmd.makerId());
+            try (ResultSet rs = ps.executeQuery()) { rs.next(); id = rs.getObject(1, java.util.UUID.class); }
+          }
+          int lineNo = 1;
+          for (ProposeJournalCmd.EntryLine l : cmd.lines()) {
+            try (PreparedStatement ps = c.prepareStatement(INSERT_PROPOSAL_LINE)) {
+              ps.setObject(1, id);
+              ps.setInt(2, lineNo++);
+              ps.setString(3, l.accountCode());
+              ps.setLong(4, l.debitMinor());
+              ps.setLong(5, l.creditMinor());
+              if (l.partyMid() != null) ps.setLong(6, l.partyMid()); else ps.setNull(6, Types.BIGINT);
+              ps.executeUpdate();
+            }
+          }
+          c.commit();
+          return findProposal(id);
+        } catch (SQLException | RuntimeException e) {
+          try { c.rollback(); } catch (SQLException ignored) {}
+          throw e;
+        }
+      }
+    } catch (SQLException e) {
+      throw new IllegalStateException("propose failed: " + cmd.requestRef(), e);
+    }
+  }
+
+  @Override
+  public CoaTrans approve(java.util.UUID proposalId, String checkerId) {
+    Objects.requireNonNull(proposalId, "proposalId");
+    Objects.requireNonNull(checkerId, "checkerId");
+    try {
+      ensureSchema();
+      try (Connection c = dataSource.getConnection()) {
+        c.setAutoCommit(false);
+        try {
+          Proposal p = lockProposal(c, proposalId);
+          if (p == null) throw new ProposalNotFoundException(proposalId);
+          if (p.status() != ProposalStatus.PENDING)
+            throw new ProposalStateException("proposal already " + p.status() + ": " + proposalId);
+          if (checkerId.equals(p.makerId()))
+            throw new SegregationOfDutiesException(checkerId);
+
+          List<JournalLine> lines = new ArrayList<>(p.lines().size());
+          for (Proposal.Line l : p.lines()) {
+            lines.add(new JournalLine(l.accountCode(), l.debitMinor(), l.creditMinor(), l.partyMid()));
+          }
+          CoaTrans posted = postJournalTx(c, lines, p.refId(), p.memo(), null);
+          try (PreparedStatement ps = c.prepareStatement(UPDATE_PROPOSAL_DECIDE)) {
+            ps.setString(1, ProposalStatus.APPROVED.name());
+            ps.setString(2, checkerId);
+            ps.setNull(3, Types.VARCHAR);
+            ps.setObject(4, posted.id());
+            ps.setObject(5, proposalId);
+            ps.executeUpdate();
+          }
+          c.commit();
+          return posted;
+        } catch (SQLException e) {
+          try { c.rollback(); } catch (SQLException ignored) {}
+          if ("23514".equals(e.getSQLState()) && String.valueOf(e.getMessage()).contains(BALANCE_CHECK)) {
+            throw new NegativeBalanceException("balance-sign rule violated on approve: " + e.getMessage());
+          }
+          throw e;
+        } catch (RuntimeException e) {
+          try { c.rollback(); } catch (SQLException ignored) {}
+          throw e;
+        }
+      }
+    } catch (ProposalNotFoundException | ProposalStateException | SegregationOfDutiesException
+        | NegativeBalanceException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("approve failed: " + proposalId, e);
+    }
+  }
+
+  @Override
+  public Proposal reject(java.util.UUID proposalId, String checkerId, String reason) {
+    Objects.requireNonNull(proposalId, "proposalId");
+    Objects.requireNonNull(checkerId, "checkerId");
+    try {
+      ensureSchema();
+      try (Connection c = dataSource.getConnection()) {
+        c.setAutoCommit(false);
+        try {
+          Proposal p = lockProposal(c, proposalId);
+          if (p == null) throw new ProposalNotFoundException(proposalId);
+          if (p.status() != ProposalStatus.PENDING)
+            throw new ProposalStateException("proposal already " + p.status() + ": " + proposalId);
+          if (checkerId.equals(p.makerId()))
+            throw new SegregationOfDutiesException(checkerId);
+
+          try (PreparedStatement ps = c.prepareStatement(UPDATE_PROPOSAL_DECIDE)) {
+            ps.setString(1, ProposalStatus.REJECTED.name());
+            ps.setString(2, checkerId);
+            if (reason != null) ps.setString(3, reason); else ps.setNull(3, Types.VARCHAR);
+            ps.setNull(4, Types.OTHER);
+            ps.setObject(5, proposalId);
+            ps.executeUpdate();
+          }
+          c.commit();
+          return findProposal(proposalId);
+        } catch (SQLException | RuntimeException e) {
+          try { c.rollback(); } catch (SQLException ignored) {}
+          throw e;
+        }
+      }
+    } catch (ProposalNotFoundException | ProposalStateException | SegregationOfDutiesException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("reject failed: " + proposalId, e);
+    }
+  }
+
+  @Override
+  public Proposal findProposal(java.util.UUID proposalId) {
+    Objects.requireNonNull(proposalId, "proposalId");
+    try {
+      ensureSchema();
+      try (Connection c = dataSource.getConnection()) {
+        Proposal p = readProposal(c, proposalId, false);
+        return p;
+      }
+    } catch (SQLException e) {
+      throw new IllegalStateException("findProposal failed: " + proposalId, e);
+    }
+  }
+
+  @Override
+  public List<Proposal> pendingProposals() {
+    try {
+      ensureSchema();
+      List<Proposal> out = new ArrayList<>();
+      try (Connection c = dataSource.getConnection();
+          PreparedStatement ps = c.prepareStatement(SELECT_PENDING_PROPOSALS);
+          ResultSet rs = ps.executeQuery()) {
+        List<java.util.UUID> ids = new ArrayList<>();
+        while (rs.next()) ids.add(rs.getObject(1, java.util.UUID.class));
+        for (java.util.UUID id : ids) out.add(readProposal(c, id, false));
+      }
+      return out;
+    } catch (SQLException e) {
+      throw new IllegalStateException("pendingProposals failed", e);
+    }
+  }
+
+  private java.util.UUID proposalIdByRef(String ref) throws SQLException {
+    if (ref == null) return null;
+    try (Connection c = dataSource.getConnection();
+        PreparedStatement ps = c.prepareStatement(SELECT_PROPOSAL_ID_BY_REF)) {
+      ps.setString(1, ref);
+      try (ResultSet rs = ps.executeQuery()) {
+        return rs.next() ? rs.getObject(1, java.util.UUID.class) : null;
+      }
+    }
+  }
+
+  private Proposal lockProposal(Connection c, java.util.UUID id) throws SQLException {
+    return readProposalRow(c, id, true);
+  }
+
+  private Proposal readProposal(Connection c, java.util.UUID id, boolean forUpdate) throws SQLException {
+    return readProposalRow(c, id, forUpdate);
+  }
+
+  private Proposal readProposalRow(Connection c, java.util.UUID id, boolean forUpdate) throws SQLException {
+    Proposal header;
+    try (PreparedStatement ps = c.prepareStatement(forUpdate ? SELECT_PROPOSAL_FOR_UPDATE : SELECT_PROPOSAL)) {
+      ps.setObject(1, id);
+      try (ResultSet rs = ps.executeQuery()) {
+        if (!rs.next()) return null;
+        header = new Proposal(
+            rs.getObject("id", java.util.UUID.class),
+            rs.getString("ref_id"),
+            rs.getString("memo"),
+            rs.getString("maker_id"),
+            ProposalStatus.valueOf(rs.getString("status")),
+            rs.getString("checker_id"),
+            rs.getString("reason"),
+            rs.getObject("posted_trans_id", java.util.UUID.class),
+            rs.getTimestamp("created_at").toInstant(),
+            rs.getTimestamp("decided_at") == null ? null : rs.getTimestamp("decided_at").toInstant(),
+            List.of());
+      }
+    }
+    List<Proposal.Line> lines = new ArrayList<>();
+    try (PreparedStatement ps = c.prepareStatement(SELECT_PROPOSAL_LINES)) {
+      ps.setObject(1, id);
+      try (ResultSet rs = ps.executeQuery()) {
+        while (rs.next()) {
+          lines.add(new Proposal.Line(rs.getInt("line_no"), rs.getString("account_code"),
+              rs.getLong("debit_minor"), rs.getLong("credit_minor"), (Long) rs.getObject("party_mid")));
+        }
+      }
+    }
+    return new Proposal(header.id(), header.refId(), header.memo(), header.makerId(), header.status(),
+        header.checkerId(), header.reason(), header.postedTransId(), header.createdAt(),
+        header.decidedAt(), lines);
+  }
+
   @Override
   public CoaTrans reverse(ReversalCmd cmd) {
     Objects.requireNonNull(cmd, "cmd");
@@ -1164,73 +1438,14 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
 
   private CoaTrans postJournal(List<JournalLine> lines, String refId, String memo, String reversesRef)
       throws SQLException {
-    // Pre-flight: must be balanced
-    long totalDr = lines.stream().mapToLong(JournalLine::debitMinor).sum();
-    long totalCr = lines.stream().mapToLong(JournalLine::creditMinor).sum();
-    if (totalDr != totalCr) {
-      throw new IllegalArgumentException(
-          "journal not balanced: DR=" + totalDr + " CR=" + totalCr + " ref=" + refId);
-    }
-
-    // Lock accounts in code order to prevent deadlocks
-    List<String> codesOrdered = lines.stream()
-        .map(JournalLine::accountCode)
-        .distinct()
-        .sorted()
-        .toList();
-
     try (Connection c = dataSource.getConnection()) {
       c.setAutoCommit(false);
       try {
-        // Acquire row locks
-        Map<String, CoaAccount> locked = new LinkedHashMap<>();
-        for (String code : codesOrdered) {
-          locked.put(code, lockAccount(c, code));
-        }
-
-        // Insert header
-        UUID transId;
-        Instant createdAt;
-        try (PreparedStatement ps = c.prepareStatement(INSERT_TRANS)) {
-          if (refId != null)      ps.setString(1, refId);       else ps.setNull(1, Types.VARCHAR);
-          if (memo  != null)      ps.setString(2, memo);        else ps.setNull(2, Types.VARCHAR);
-          if (reversesRef != null) ps.setString(3, reversesRef); else ps.setNull(3, Types.VARCHAR);
-          try (ResultSet rs = ps.executeQuery()) {
-            rs.next();
-            transId   = rs.getObject(1, UUID.class);
-            createdAt = rs.getTimestamp(2).toInstant();
-          }
-        }
-
-        // Insert lines + update balances
-        List<CoaTransLine> resultLines = new ArrayList<>(lines.size());
-        for (int i = 0; i < lines.size(); i++) {
-          JournalLine l = lines.get(i);
-          int lineNo = i + 1;
-          try (PreparedStatement ps = c.prepareStatement(INSERT_TRANS_DATA)) {
-            ps.setObject(1, transId);
-            ps.setInt(2, lineNo);
-            ps.setString(3, l.accountCode());
-            ps.setLong(4, l.debitMinor());
-            ps.setLong(5, l.creditMinor());
-            if (l.partyMid() != null) ps.setLong(6, l.partyMid()); else ps.setNull(6, Types.BIGINT);
-            ps.executeUpdate();
-          }
-          try (PreparedStatement ps = c.prepareStatement(UPDATE_BALANCE)) {
-            ps.setLong(1, l.netDelta()); // debit − credit
-            ps.setString(2, l.accountCode());
-            ps.executeUpdate();
-          }
-          CoaAccount acct = locked.get(l.accountCode());
-          resultLines.add(new CoaTransLine(lineNo, l.accountCode(), acct.name(),
-              l.debitMinor(), l.creditMinor(), "VND"));
-        }
-
+        CoaTrans t = postJournalTx(c, lines, refId, memo, reversesRef);
         c.commit();
-        return new CoaTrans(transId, refId, memo, createdAt, resultLines);
+        return t;
       } catch (SQLException e) {
         try { c.rollback(); } catch (SQLException ignored) {}
-        // 23514 = check_violation (balance-sign frozen rule) → domain exception
         if ("23514".equals(e.getSQLState()) && String.valueOf(e.getMessage()).contains(BALANCE_CHECK)) {
           throw new dev.nivic.coa.error.NegativeBalanceException(
               "balance-sign rule violated (ref=" + refId + "): " + e.getMessage());
@@ -1241,6 +1456,62 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
         throw e;
       }
     }
+  }
+
+  /**
+   * Posts a balanced journal within an existing transaction (no commit/rollback — caller manages).
+   * Reused by {@link #postJournal} and by maker-checker approval so posting + workflow update
+   * commit atomically.
+   */
+  private CoaTrans postJournalTx(Connection c, List<JournalLine> lines, String refId,
+      String memo, String reversesRef) throws SQLException {
+    long totalDr = lines.stream().mapToLong(JournalLine::debitMinor).sum();
+    long totalCr = lines.stream().mapToLong(JournalLine::creditMinor).sum();
+    if (totalDr != totalCr) {
+      throw new IllegalArgumentException(
+          "journal not balanced: DR=" + totalDr + " CR=" + totalCr + " ref=" + refId);
+    }
+    // Lock accounts in code order to prevent deadlocks.
+    List<String> codesOrdered = lines.stream()
+        .map(JournalLine::accountCode).distinct().sorted().toList();
+    Map<String, CoaAccount> locked = new LinkedHashMap<>();
+    for (String code : codesOrdered) locked.put(code, lockAccount(c, code));
+
+    UUID transId;
+    Instant createdAt;
+    try (PreparedStatement ps = c.prepareStatement(INSERT_TRANS)) {
+      if (refId != null)       ps.setString(1, refId);       else ps.setNull(1, Types.VARCHAR);
+      if (memo  != null)       ps.setString(2, memo);        else ps.setNull(2, Types.VARCHAR);
+      if (reversesRef != null) ps.setString(3, reversesRef); else ps.setNull(3, Types.VARCHAR);
+      try (ResultSet rs = ps.executeQuery()) {
+        rs.next();
+        transId   = rs.getObject(1, UUID.class);
+        createdAt = rs.getTimestamp(2).toInstant();
+      }
+    }
+    List<CoaTransLine> resultLines = new ArrayList<>(lines.size());
+    for (int i = 0; i < lines.size(); i++) {
+      JournalLine l = lines.get(i);
+      int lineNo = i + 1;
+      try (PreparedStatement ps = c.prepareStatement(INSERT_TRANS_DATA)) {
+        ps.setObject(1, transId);
+        ps.setInt(2, lineNo);
+        ps.setString(3, l.accountCode());
+        ps.setLong(4, l.debitMinor());
+        ps.setLong(5, l.creditMinor());
+        if (l.partyMid() != null) ps.setLong(6, l.partyMid()); else ps.setNull(6, Types.BIGINT);
+        ps.executeUpdate();
+      }
+      try (PreparedStatement ps = c.prepareStatement(UPDATE_BALANCE)) {
+        ps.setLong(1, l.netDelta());
+        ps.setString(2, l.accountCode());
+        ps.executeUpdate();
+      }
+      CoaAccount acct = locked.get(l.accountCode());
+      resultLines.add(new CoaTransLine(lineNo, l.accountCode(), acct.name(),
+          l.debitMinor(), l.creditMinor(), "VND"));
+    }
+    return new CoaTrans(transId, refId, memo, createdAt, resultLines);
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1258,6 +1529,9 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
         st.execute(DDL_TRANS_DATA_ALTER);
         st.execute(DDL_IDX_DATA_ACCOUNT);
         st.execute(DDL_IDX_DATA_PARTY);
+        st.execute(DDL_PROPOSAL);
+        st.execute(DDL_PROPOSAL_LINE);
+        st.execute(DDL_IDX_PROPOSAL_STATUS);
       }
       try (Connection c = dataSource.getConnection();
           PreparedStatement ps = c.prepareStatement(UPSERT_ACCOUNT)) {

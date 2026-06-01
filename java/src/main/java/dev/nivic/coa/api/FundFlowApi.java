@@ -74,6 +74,12 @@ public final class FundFlowApi {
       return ApiResponse.error(422, "INSUFFICIENT_FUNDS", e.getMessage());
     } catch (NegativeBalanceException e) {
       return ApiResponse.error(422, "NEGATIVE_BALANCE", e.getMessage());
+    } catch (dev.nivic.coa.error.SegregationOfDutiesException e) {
+      return ApiResponse.error(409, "SEGREGATION_OF_DUTIES", e.getMessage());
+    } catch (dev.nivic.coa.error.ProposalStateException e) {
+      return ApiResponse.error(409, "PROPOSAL_STATE", e.getMessage());
+    } catch (dev.nivic.coa.error.ProposalNotFoundException e) {
+      return ApiResponse.error(404, "NOT_FOUND", e.getMessage());
     } catch (AlreadyReversedException e) {
       return ApiResponse.error(409, "ALREADY_REVERSED", e.getMessage());
     } catch (NothingToCloseException e) {

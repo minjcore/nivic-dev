@@ -252,6 +252,39 @@ public interface FundFlowLedger {
    */
   CoaTrans eodRejectSettlement(EodRejectSettlementCmd cmd);
 
+  // ── Maker-checker (4-eyes / segregation of duties) ────────────────────────────
+
+  /**
+   * Maker đề xuất một bút toán cân — lưu PENDING, CHƯA ảnh hưởng số dư.
+   * Idempotent on {@link dev.nivic.coa.mc.ProposeJournalCmd#requestRef()}.
+   *
+   * @throws IllegalArgumentException nếu bút toán không cân
+   */
+  dev.nivic.coa.mc.Proposal propose(dev.nivic.coa.mc.ProposeJournalCmd cmd);
+
+  /**
+   * Checker duyệt — post bút toán vào sổ cái (atomic) và đánh dấu APPROVED.
+   *
+   * @throws dev.nivic.coa.error.ProposalNotFoundException nếu không tồn tại
+   * @throws dev.nivic.coa.error.ProposalStateException nếu đã quyết định
+   * @throws dev.nivic.coa.error.SegregationOfDutiesException nếu checker trùng maker
+   */
+  CoaTrans approve(java.util.UUID proposalId, String checkerId);
+
+  /**
+   * Checker từ chối — đánh dấu REJECTED, không post.
+   *
+   * @throws dev.nivic.coa.error.ProposalNotFoundException / ProposalStateException
+   *     / SegregationOfDutiesException tương tự {@link #approve}
+   */
+  dev.nivic.coa.mc.Proposal reject(java.util.UUID proposalId, String checkerId, String reason);
+
+  /** Đề xuất theo id (kèm lines), hoặc null nếu không tồn tại. */
+  dev.nivic.coa.mc.Proposal findProposal(java.util.UUID proposalId);
+
+  /** Danh sách đề xuất đang chờ duyệt (PENDING), mới nhất trước. */
+  java.util.List<dev.nivic.coa.mc.Proposal> pendingProposals();
+
   // ── Reversal / Hoàn tiền ──────────────────────────────────────────────────────
 
   /**
