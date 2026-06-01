@@ -78,6 +78,39 @@ public final class FundFlowReports {
     return new BalanceSheet(asset, liability, equity, netIncome, transit);
   }
 
+  /**
+   * Báo cáo lưu chuyển tiền tệ (direct method) trên TK tiền (nhóm ASSET).
+   * Tiền vào = Σ ghi nợ; tiền ra = Σ ghi có trên các TK tiền.
+   */
+  public CashFlow cashFlow() {
+    List<CashFlow.Line> lines = new ArrayList<>();
+    long inflows = 0, outflows = 0, closing = 0;
+    try (Connection c = dataSource.getConnection();
+        PreparedStatement ps = c.prepareStatement(
+            "SELECT a.code, a.name, a.balance_minor,"
+                + " COALESCE(SUM(d.debit_minor),0) AS infl,"
+                + " COALESCE(SUM(d.credit_minor),0) AS outfl"
+                + " FROM coa_account a"
+                + " LEFT JOIN coa_trans_data d ON d.account_code = a.code"
+                + " WHERE a.kind = 'ASSET'"
+                + " GROUP BY a.code, a.name, a.balance_minor"
+                + " ORDER BY a.code");
+        ResultSet rs = ps.executeQuery()) {
+      while (rs.next()) {
+        long in = rs.getLong("infl");
+        long out = rs.getLong("outfl");
+        if (in == 0 && out == 0) continue; // bỏ TK tiền chưa phát sinh
+        lines.add(new CashFlow.Line(rs.getString("code"), rs.getString("name"), in, out));
+        inflows += in;
+        outflows += out;
+        closing += rs.getLong("balance_minor"); // ASSET debit-normal: balance = net cash
+      }
+    } catch (SQLException e) {
+      throw new IllegalStateException("cashFlow failed", e);
+    }
+    return new CashFlow(0L, inflows, outflows, closing, lines);
+  }
+
   /** Báo cáo kết quả kinh doanh: doanh thu (4xxx) − chi phí (5xxx). */
   public ProfitAndLoss profitAndLoss() {
     List<ProfitAndLoss.Line> revenue = new ArrayList<>();

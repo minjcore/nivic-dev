@@ -226,6 +226,66 @@ class FundFlowReportsTest {
   // ── Cross-report consistency ──────────────────────────────────────────────────
 
   @Test
+  void cashFlow_emptyZero() {
+    CashFlow cf = reports.cashFlow();
+    assertEquals(0L, cf.inflows());
+    assertEquals(0L, cf.outflows());
+    assertEquals(0L, cf.netCashFlow());
+    assertEquals(0L, cf.closingCash());
+    assertTrue(cf.isConsistent());
+  }
+
+  @Test
+  void cashFlow_topupInflow() {
+    // Nạp 100k: DR 1111 100k (tiền vào). confirm không chạm TK tiền.
+    ledger.receiveTopUp(new TopUpReceiveCmd(100_000L, "CF-R", null));
+    ledger.confirmTopUp(new TopUpConfirmCmd(100_000L, 1_000L, "CF-C", null));
+
+    CashFlow cf = reports.cashFlow();
+    assertEquals(100_000L, cf.inflows(), "tiền vào 1111");
+    assertEquals(0L, cf.outflows());
+    assertEquals(100_000L, cf.netCashFlow());
+    assertEquals(100_000L, cf.closingCash());
+    assertTrue(cf.isConsistent());
+    // 1111 line
+    var l = cf.byAccount().stream().filter(x -> "1111".equals(x.code())).findFirst().orElseThrow();
+    assertEquals(100_000L, l.inflow());
+    assertEquals(100_000L, l.net());
+  }
+
+  @Test
+  void cashFlow_withdrawOutflow() {
+    ledger.receiveTopUp(new TopUpReceiveCmd(500_000L, "CFW-R", null));
+    ledger.confirmTopUp(new TopUpConfirmCmd(500_000L, 0L, "CFW-C", null));
+    ledger.initWithdraw(new WithdrawInitCmd(100_000L, 1_000L, "CFW-I", null));
+    ledger.settleWithdraw(new WithdrawSettleCmd(100_000L, 1_000L, "CFW-S", null));
+    // 1111: +500k (topup) − 100k (settle CR) = 400k
+
+    CashFlow cf = reports.cashFlow();
+    assertEquals(500_000L, cf.inflows());
+    assertEquals(100_000L, cf.outflows(), "rút: tiền ra khỏi 1111");
+    assertEquals(400_000L, cf.netCashFlow());
+    assertEquals(400_000L, cf.closingCash());
+    assertTrue(cf.isConsistent());
+  }
+
+  @Test
+  void cashFlow_ibftNapasOutflow() {
+    ledger.receiveTopUp(new TopUpReceiveCmd(200_000L, "CFI-R", null));
+    ledger.confirmTopUp(new TopUpConfirmCmd(200_000L, 0L, "CFI-C", null));
+    ledger.initIbftTransfer(new IbftInitCmd(40_000L, 1_000L, "CFI-I", null));
+    ledger.settleIbftTransfer(new IbftSettleCmd(40_000L, 1_000L, 500L, "CFI-S", null));
+    // 1111 +200k; 1112 (Napas) −40.5k → closing = 159.5k
+
+    CashFlow cf = reports.cashFlow();
+    assertEquals(200_000L, cf.inflows(), "1111 nạp");
+    assertEquals(40_500L,  cf.outflows(), "1112 Napas outflow 40k+500");
+    assertEquals(159_500L, cf.netCashFlow());
+    assertEquals(159_500L, cf.closingCash());
+    assertTrue(cf.isConsistent());
+  }
+
+  @Test
   void reports_consistentAfterMixedFlows() {
     // Chạy nhiều luồng, kiểm tra 3 báo cáo nhất quán
     ledger.receiveTopUp(new TopUpReceiveCmd(500_000L, "MX-R", null));

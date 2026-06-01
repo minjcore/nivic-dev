@@ -198,6 +198,7 @@ public final class FundFlowApi {
     if ("reports/trial".equals(p)) return ApiResponse.ok(trialJson(reports.trialBalance()));
     if ("reports/sheet".equals(p)) return ApiResponse.ok(sheetJson(reports.balanceSheet()));
     if ("reports/pnl".equals(p))   return ApiResponse.ok(pnlJson(reports.profitAndLoss()));
+    if ("reports/cashflow".equals(p)) return ApiResponse.ok(cashFlowJson(reports.cashFlow()));
     return ApiResponse.error(404, "NOT_FOUND", "unknown route: GET " + p);
   }
 
@@ -256,6 +257,28 @@ public final class FundFlowApi {
         + ",\"netIncome\":" + bs.netIncome()
         + ",\"transit\":" + bs.transit()
         + ",\"balanced\":" + bs.isBalanced() + "}";
+  }
+
+  private static String cashFlowJson(dev.nivic.coa.report.CashFlow cf) {
+    StringBuilder sb = new StringBuilder("{\"openingCash\":").append(cf.openingCash())
+        .append(",\"inflows\":").append(cf.inflows())
+        .append(",\"outflows\":").append(cf.outflows())
+        .append(",\"netCashFlow\":").append(cf.netCashFlow())
+        .append(",\"closingCash\":").append(cf.closingCash())
+        .append(",\"consistent\":").append(cf.isConsistent())
+        .append(",\"byAccount\":[");
+    boolean first = true;
+    for (var l : cf.byAccount()) {
+      if (!first) sb.append(',');
+      first = false;
+      sb.append("{\"code\":").append(MiniJson.str(l.code()))
+        .append(",\"name\":").append(MiniJson.str(l.name()))
+        .append(",\"inflow\":").append(l.inflow())
+        .append(",\"outflow\":").append(l.outflow())
+        .append(",\"net\":").append(l.net())
+        .append('}');
+    }
+    return sb.append("]}").toString();
   }
 
   private static String pnlJson(ProfitAndLoss pl) {
