@@ -203,12 +203,98 @@ class JdbcSavingLedgerTest {
   }
 
   @Test
-  void withdrawal_termLocked_throws() {
+  void withdrawal_termLocked_beforeMaturity_throws() {
     Instant maturity = Instant.now().plus(365, ChronoUnit.DAYS);
     SavAccount acct = ledger.openAccount(OpenAccountCmd.term(OWNER, VND, 650, maturity));
     ledger.deposit(deposit(acct.id(), 500_000L));
 
     assertThrows(TermLockedException.class, () -> ledger.withdrawal(withdrawal(acct.id(), 100_000L)));
+  }
+
+  @Test
+  void withdrawal_termAccount_afterMaturity_succeeds() {
+    // maturity_at ở quá khứ → được rút tiền
+    Instant maturity = Instant.now().minus(1, ChronoUnit.SECONDS);
+    SavAccount acct = ledger.openAccount(OpenAccountCmd.term(OWNER, VND, 650, maturity));
+    ledger.deposit(deposit(acct.id(), 500_000L));
+
+    assertDoesNotThrow(() -> ledger.withdrawal(withdrawal(acct.id(), 200_000L)));
+    assertEquals(300_000L, ledger.findAccount(acct.id()).availableBalance());
+  }
+
+  @Test
+  void withdrawal_termAccount_afterMaturity_clearsTermLockedFlag() {
+    Instant maturity = Instant.now().minus(1, ChronoUnit.SECONDS);
+    SavAccount acct = ledger.openAccount(OpenAccountCmd.term(OWNER, VND, 650, maturity));
+    assertTrue(acct.isTermLocked(), "TERM_LOCKED must be set at open");
+    ledger.deposit(deposit(acct.id(), 500_000L));
+
+    ledger.withdrawal(withdrawal(acct.id(), 100_000L));
+
+    assertFalse(ledger.findAccount(acct.id()).isTermLocked(),
+        "TERM_LOCKED must be cleared after first post-maturity withdrawal");
+  }
+
+  @Test
+  void withdrawal_termAccount_afterMaturity_subsequentWithdrawalsSucceed() {
+    // Flag cleared → tiếp tục rút không cần check maturity nữa
+    Instant maturity = Instant.now().minus(1, ChronoUnit.SECONDS);
+    SavAccount acct = ledger.openAccount(OpenAccountCmd.term(OWNER, VND, 650, maturity));
+    ledger.deposit(deposit(acct.id(), 500_000L));
+
+    ledger.withdrawal(withdrawal(acct.id(), 100_000L)); // clears flag
+    assertDoesNotThrow(() -> ledger.withdrawal(withdrawal(acct.id(), 100_000L)));
+    assertDoesNotThrow(() -> ledger.withdrawal(withdrawal(acct.id(), 100_000L)));
+
+    assertEquals(200_000L, ledger.findAccount(acct.id()).availableBalance());
+  }
+
+  @Test
+  void withdrawal_termAccount_afterMaturity_pendingWithdrawal_succeeds() {
+    // Two-phase withdrawal cũng hoạt động sau khi hết hạn
+    Instant maturity = Instant.now().minus(1, ChronoUnit.SECONDS);
+    SavAccount acct = ledger.openAccount(OpenAccountCmd.term(OWNER, VND, 650, maturity));
+    ledger.deposit(deposit(acct.id(), 500_000L));
+
+    SavTransfer pending = ledger.withdrawal(pendingWithdrawal(acct.id(), 200_000L));
+    assertEquals(SavTransferPhase.PENDING, pending.phase());
+
+    SavTransfer posted = ledger.postPending(pending.id());
+    assertEquals(SavTransferPhase.POSTED, posted.phase());
+    assertEquals(300_000L, ledger.findAccount(acct.id()).availableBalance());
+  }
+
+  @Test
+  void withdrawal_termAccount_afterMaturity_insufficientFunds_stillThrows() {
+    // Balance check vẫn áp dụng dù đã hết hạn
+    Instant maturity = Instant.now().minus(1, ChronoUnit.SECONDS);
+    SavAccount acct = ledger.openAccount(OpenAccountCmd.term(OWNER, VND, 650, maturity));
+    ledger.deposit(deposit(acct.id(), 100_000L));
+
+    assertThrows(InsufficientFundsException.class,
+        () -> ledger.withdrawal(withdrawal(acct.id(), 100_001L)));
+
+    // Rollback: cả balance lẫn flag đều không thay đổi khi throw
+    SavAccount updated = ledger.findAccount(acct.id());
+    assertEquals(100_000L, updated.availableBalance());
+    assertTrue(updated.isTermLocked(), "flag rollback: TERM_LOCKED only cleared on successful withdrawal");
+  }
+
+  @Test
+  void withdrawal_termAccount_afterMaturity_closedFlag_preserved() {
+    // CLOSED flag không bị xoá khi clear TERM_LOCKED
+    Instant maturity = Instant.now().minus(1, ChronoUnit.SECONDS);
+    SavAccount acct = ledger.openAccount(OpenAccountCmd.term(OWNER, VND, 650, maturity));
+    // Set CLOSED thủ công (trường hợp bất thường — test flag isolation)
+    setFlag(acct.id(), SavAccountFlags.CLOSED);
+
+    // CLOSED thắng trước TERM_LOCKED trong validateTransferable()
+    assertThrows(AccountClosedException.class,
+        () -> ledger.withdrawal(withdrawal(acct.id(), 1_000L)));
+
+    // CLOSED flag vẫn còn
+    SavAccount updated = ledger.findAccount(acct.id());
+    assertTrue(updated.isClosed());
   }
 
   @Test

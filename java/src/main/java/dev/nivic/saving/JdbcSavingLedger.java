@@ -150,6 +150,11 @@ public final class JdbcSavingLedger implements SavingLedger {
           + "     version = version + 1"
           + " WHERE id = ?";
 
+  /** Clears a single flag bit: {@code flags = flags & ~bit}. */
+  private static final String CLEAR_FLAG =
+      "UPDATE sav_account SET flags = flags & ~CAST(? AS INTEGER), version = version + 1"
+          + " WHERE id = ?";
+
   private static final String CLOSE_ACCOUNT =
       "UPDATE sav_account SET flags = flags | ?, closed_at = NOW(), version = version + 1"
           + " WHERE id = ? AND owner_mid = ?";
@@ -290,7 +295,14 @@ public final class JdbcSavingLedger implements SavingLedger {
         try {
           SavAccount acct = lockAccount(c, cmd.debitAccountId());
           validateTransferable(acct);
-          if (acct.isTermLocked()) throw new TermLockedException(acct.id(), acct.maturityAt());
+          if (acct.isTermLocked()) {
+            Instant maturity = acct.maturityAt();
+            if (maturity != null && Instant.now().isBefore(maturity)) {
+              throw new TermLockedException(acct.id(), maturity);
+            }
+            // Maturity passed — clear TERM_LOCKED in the same transaction
+            clearFlag(c, acct.id(), SavAccountFlags.TERM_LOCKED);
+          }
           long available = acct.availableBalance();
           if (available < cmd.amountMinor()) {
             throw new InsufficientFundsException(acct.id(), available, cmd.amountMinor());
@@ -564,6 +576,14 @@ public final class JdbcSavingLedger implements SavingLedger {
 
   private void lockAccountById(Connection c, UUID id) throws SQLException {
     lockAccount(c, id);
+  }
+
+  private void clearFlag(Connection c, UUID accountId, int flag) throws SQLException {
+    try (PreparedStatement ps = c.prepareStatement(CLEAR_FLAG)) {
+      ps.setInt(1, flag);
+      ps.setObject(2, accountId);
+      ps.executeUpdate();
+    }
   }
 
   private SavTransfer readTransfer(Connection c, UUID id) throws SQLException {
