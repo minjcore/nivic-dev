@@ -1,9 +1,14 @@
 -- Sevlet wallet — PostgreSQL schema (matches JDBC ensureTable DDL in the WAR).
+--
+-- Table prefixes:
+--   led_*   — ledger projections (append-only wallet row, payment intent lifecycle)
+--   acct_*  — accounting (double-entry journal, account holds)
+--   wallet_* / merchant_* — secrets, idempotency, platform config
+--
 -- Monolithic apply:
 --   psql "$JDBC_URL" -f src/main/resources/db/schema.sql
 -- Modular apply (same objects, numeric order):
---   psql ... -f db/schema/01_wallet_mid_secret.sql
---   ... through 09_merchant_config.sql
+--   psql ... -f db/schema/01_wallet_mid_secret.sql … 11_rename_legacy_led_acct_prefixes.sql
 
 -- HMAC secrets and per-mid payment flags (JdbcMidSecretResolver).
 CREATE TABLE IF NOT EXISTS wallet_mid_secret (
@@ -41,7 +46,7 @@ COMMENT ON TABLE wallet_idempotency IS 'Dedupe (mid, request_id). order_id used 
 COMMENT ON COLUMN wallet_idempotency.order_id IS 'First-seen orderId; mismatched retry under order-payment mode → 409.';
 
 -- Append-only ledger row per accepted payload (JdbcWalletLedger).
-CREATE TABLE IF NOT EXISTS wallet_ledger (
+CREATE TABLE IF NOT EXISTS led_wallet (
   mid BIGINT NOT NULL,
   request_id BIGINT NOT NULL,
   order_id BIGINT NOT NULL,
@@ -55,12 +60,12 @@ CREATE TABLE IF NOT EXISTS wallet_ledger (
   PRIMARY KEY (mid, request_id)
 );
 
-COMMENT ON TABLE wallet_ledger IS 'One row per accepted Sevlet wallet message.';
-COMMENT ON COLUMN wallet_ledger.input IS 'Wire command opcode (u64).';
-COMMENT ON COLUMN wallet_ledger.amount_minor IS 'Amount in ISO 4217 minor units for currency_code.';
+COMMENT ON TABLE led_wallet IS 'One row per accepted Sevlet wallet message (ledger projection).';
+COMMENT ON COLUMN led_wallet.input IS 'Wire command opcode (u64).';
+COMMENT ON COLUMN led_wallet.amount_minor IS 'Amount in ISO 4217 minor units for currency_code.';
 
 -- Order-payment intent (JdbcPaymentLedger); written when payment_check_order mid accepts without immediate journal.
-CREATE TABLE IF NOT EXISTS payment_ledger (
+CREATE TABLE IF NOT EXISTS led_payment (
   mid BIGINT NOT NULL,
   request_id BIGINT NOT NULL,
   order_id BIGINT NOT NULL,
@@ -79,22 +84,22 @@ CREATE TABLE IF NOT EXISTS payment_ledger (
   PRIMARY KEY (mid, request_id)
 );
 
-COMMENT ON TABLE payment_ledger IS 'Initial intent and/or upsert after wallet_ledger settle; ON CONFLICT keeps order_id and created_at.';
-COMMENT ON COLUMN payment_ledger.input IS 'Wire command opcode (u64).';
-COMMENT ON COLUMN payment_ledger.order_id IS 'From initial insert; appendAfterWallet does not replace.';
-COMMENT ON COLUMN payment_ledger.amount_minor IS 'Amount in ISO 4217 minor units for currency_code.';
-COMMENT ON COLUMN payment_ledger.debit IS 'Unset until settle/replay; no accounts at order-payment phase.';
-COMMENT ON COLUMN payment_ledger.credit IS 'Unset until settle/replay.';
-COMMENT ON COLUMN payment_ledger.intent_status IS 'See dev.nivic.ledger.CoreLedgerStatus (VARCHAR = Enum.name()); null = legacy row.';
-COMMENT ON COLUMN payment_ledger.confirm_challenge IS '32-byte value echoed in CONFIRM / REJECT extraData.';
+COMMENT ON TABLE led_payment IS 'Payment intent ledger: initial row or upsert after led_wallet settle; ON CONFLICT keeps order_id and created_at.';
+COMMENT ON COLUMN led_payment.input IS 'Wire command opcode (u64).';
+COMMENT ON COLUMN led_payment.order_id IS 'From initial insert; appendAfterWallet does not replace.';
+COMMENT ON COLUMN led_payment.amount_minor IS 'Amount in ISO 4217 minor units for currency_code.';
+COMMENT ON COLUMN led_payment.debit IS 'Unset until settle/replay; no accounts at order-payment phase.';
+COMMENT ON COLUMN led_payment.credit IS 'Unset until settle/replay.';
+COMMENT ON COLUMN led_payment.intent_status IS 'See dev.nivic.ledger.CoreLedgerStatus (VARCHAR = Enum.name()); null = legacy row.';
+COMMENT ON COLUMN led_payment.confirm_challenge IS '32-byte value echoed in CONFIRM / REJECT extraData.';
 
 -- At most one open order-payment intent per (mid, order_id); aligns with CoreLedgerStatus.isOpenForConfirmation().
-CREATE UNIQUE INDEX IF NOT EXISTS payment_ledger_uidx_open_mid_order
-  ON payment_ledger (mid, order_id)
+CREATE UNIQUE INDEX IF NOT EXISTS led_payment_uidx_open_mid_order
+  ON led_payment (mid, order_id)
   WHERE intent_status IN ('INITIAL','AWAITING_CONFIRM');
 
 -- Soft holds for order intents (JdbcAccountHoldStore).
-CREATE TABLE IF NOT EXISTS wallet_account_hold (
+CREATE TABLE IF NOT EXISTS acct_account_hold (
   mid BIGINT NOT NULL,
   request_id BIGINT NOT NULL,
   account_id INTEGER NOT NULL,
@@ -103,8 +108,10 @@ CREATE TABLE IF NOT EXISTS wallet_account_hold (
   PRIMARY KEY (mid, request_id)
 );
 
+COMMENT ON TABLE acct_account_hold IS 'Reserved amount against account_id until intent completes or is released.';
+
 -- Double-entry journal header (JdbcWalletJournal).
-CREATE TABLE IF NOT EXISTS wallet_journal_entry (
+CREATE TABLE IF NOT EXISTS acct_journal_entry (
   mid BIGINT NOT NULL,
   request_id BIGINT NOT NULL,
   order_id BIGINT NOT NULL,
@@ -115,9 +122,9 @@ CREATE TABLE IF NOT EXISTS wallet_journal_entry (
   PRIMARY KEY (mid, request_id)
 );
 
-COMMENT ON TABLE wallet_journal_entry IS 'Journal voucher header; lines in wallet_journal_line.';
+COMMENT ON TABLE acct_journal_entry IS 'Journal voucher header; lines in acct_journal_line.';
 
-CREATE TABLE IF NOT EXISTS wallet_journal_line (
+CREATE TABLE IF NOT EXISTS acct_journal_line (
   mid BIGINT NOT NULL,
   request_id BIGINT NOT NULL,
   line_no SMALLINT NOT NULL,
@@ -125,9 +132,71 @@ CREATE TABLE IF NOT EXISTS wallet_journal_line (
   debit_minor BIGINT NOT NULL,
   credit_minor BIGINT NOT NULL,
   PRIMARY KEY (mid, request_id, line_no),
-  CONSTRAINT wallet_journal_line_entry_fk
+  CONSTRAINT acct_journal_line_entry_fk
     FOREIGN KEY (mid, request_id)
-    REFERENCES wallet_journal_entry (mid, request_id)
+    REFERENCES acct_journal_entry (mid, request_id)
 );
 
-COMMENT ON TABLE wallet_journal_line IS 'Balanced lines: debit account / credit account for wire amount.';
+COMMENT ON TABLE acct_journal_line IS 'Balanced lines: debit account / credit account for wire amount.';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Savings ledger (TigerBeetle-style: Accounts + immutable Transfers)
+--   sav_*   prefix
+--
+-- Balance invariant (credit-normal): available = credits_posted - debits_posted - debits_pending
+-- Transfer rows are never updated after INSERT.
+-- Two system accounts (owner_mid=0, kind='RESERVE') are upserted by JdbcSavingLedger.ensureTables():
+--   SAV-EXTERNAL  — placeholder for the wallet side of deposit/withdrawal
+--   SAV-RESERVE   — source of interest credits (debit side of INTEREST transfers)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS sav_account (
+  id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_mid         BIGINT      NOT NULL,
+  account_no        VARCHAR(32) NOT NULL UNIQUE,
+  kind              VARCHAR(16) NOT NULL,          -- DEMAND | TERM | RESERVE
+  currency_code     VARCHAR(3)  NOT NULL DEFAULT 'VND',
+  debits_pending    BIGINT      NOT NULL DEFAULT 0,
+  debits_posted     BIGINT      NOT NULL DEFAULT 0,
+  credits_pending   BIGINT      NOT NULL DEFAULT 0,
+  credits_posted    BIGINT      NOT NULL DEFAULT 0,
+  flags             INTEGER     NOT NULL DEFAULT 0, -- 0x01 CLOSED | 0x02 TERM_LOCKED | 0x04 FROZEN
+  interest_rate_bps INTEGER,                        -- basis points, e.g. 650 = 6.5%/year; null for DEMAND
+  maturity_at       TIMESTAMPTZ,                    -- null for DEMAND
+  opened_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  closed_at         TIMESTAMPTZ,
+  version           BIGINT      NOT NULL DEFAULT 0  -- incremented on every balance update
+);
+
+COMMENT ON TABLE sav_account IS 'Savings account with TigerBeetle 4-counter balance model.';
+COMMENT ON COLUMN sav_account.flags IS '0x01=CLOSED, 0x02=TERM_LOCKED (before maturity), 0x04=FROZEN';
+
+CREATE TABLE IF NOT EXISTS sav_transfer (
+  id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  kind              VARCHAR(24) NOT NULL,           -- DEPOSIT | WITHDRAWAL | INTEREST | FEE | PENALTY
+  debit_account_id  UUID        NOT NULL REFERENCES sav_account(id),
+  credit_account_id UUID        NOT NULL REFERENCES sav_account(id),
+  amount_minor      BIGINT      NOT NULL,           -- always positive; direction determined by debit/credit
+  currency_code     VARCHAR(3)  NOT NULL,
+  phase             VARCHAR(16) NOT NULL DEFAULT 'POSTED', -- PENDING | POSTED | VOIDED
+  pending_id        UUID        REFERENCES sav_transfer(id), -- non-null for POSTED/VOIDED settlement rows
+  idempotency_key   UUID        UNIQUE,             -- client-supplied; server deduplicates
+  ref_mid           BIGINT,                         -- link to wallet mid (for deposit/withdrawal context)
+  ref_request_id    BIGINT,                         -- link to wallet request_id
+  linked_batch_id   UUID,                           -- groups atomic-batch transfers (interest accrual)
+  memo              VARCHAR(256),
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE sav_transfer IS 'Immutable transfer log; rows are never updated after INSERT.';
+COMMENT ON COLUMN sav_transfer.pending_id IS 'References the PENDING transfer this row settles (POSTED) or cancels (VOIDED).';
+
+CREATE INDEX IF NOT EXISTS sav_transfer_debit_idx
+  ON sav_transfer (debit_account_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS sav_transfer_credit_idx
+  ON sav_transfer (credit_account_id, created_at DESC);
+
+-- At most one settlement (POSTED or VOIDED) per PENDING transfer.
+CREATE UNIQUE INDEX IF NOT EXISTS sav_transfer_settled_uidx
+  ON sav_transfer (pending_id) WHERE pending_id IS NOT NULL;

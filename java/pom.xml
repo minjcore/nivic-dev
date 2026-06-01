@@ -16,6 +16,12 @@
     <cargo.version>1.10.14</cargo.version>
     <disruptor.version>3.4.4</disruptor.version>
     <undertow.version>2.3.18.Final</undertow.version>
+    <!-- Docker socket for Testcontainers on macOS with Colima.
+         DOCKER_HOST points to the host-side forwarded socket (what Java connects to).
+         TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE is the in-VM path mounted into Ryuk.
+         Override both on CI: -Ddocker.socket.path=... -Ddocker.host.uri=... -->
+    <docker.socket.path>/var/run/docker.sock</docker.socket.path>
+    <docker.host.uri>unix://${user.home}/.colima/default/docker.sock</docker.host.uri>
     <log4j.version>2.24.3</log4j.version>
   </properties>
   <dependencies>
@@ -98,6 +104,18 @@
       <version>5.11.3</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>1.20.4</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <version>1.20.4</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
   <!--
     Deploy: mvn clean package, copy target/sevlet-wallet-1.0.0-SNAPSHOT.war to Tomcat 10.1+ webapps/.
@@ -117,6 +135,12 @@
         <configuration>
           <groups>${test.groups}</groups>
           <excludedGroups>${test.excludedGroups}</excludedGroups>
+          <environmentVariables>
+            <!-- Docker Desktop on macOS symlinks /var/run/docker.sock to a user-specific path;
+                 pass the actual socket so Testcontainers can connect regardless of symlink state. -->
+            <DOCKER_HOST>${docker.host.uri}</DOCKER_HOST>
+            <TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>${docker.socket.path}</TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>
+          </environmentVariables>
         </configuration>
       </plugin>
       <plugin>
