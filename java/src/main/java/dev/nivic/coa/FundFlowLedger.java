@@ -93,6 +93,22 @@ public interface FundFlowLedger {
   CoaTrans settleIbftTransfer(IbftSettleCmd cmd);
 
   /**
+   * Step 1 — VPBank nhận tiền qua QR/POS + ghi chi phí VPBank.
+   * Posts (4 legs): DR 1113 (amount) / CR 3500 (amount) / DR 5100 (vpbankCost) / CR 1113 (vpbankCost).
+   * Net 1113 = amount − vpbankCost. Idempotent on {@link QrPosReceiveCmd#requestRef()}.
+   */
+  CoaTrans receiveQrPos(QrPosReceiveCmd cmd);
+
+  /**
+   * Step 2 — Giải phóng transit, ghi ví merchant (chờ Settlement EOD).
+   * Posts: DR 3500 (amount) / CR 2120 (amount).
+   * Idempotent on {@link QrPosCreditMerchantCmd#settleRef()}.
+   *
+   * @throws InsufficientTransitException if Transit 3500 balance would go below zero
+   */
+  CoaTrans creditMerchantQrPos(QrPosCreditMerchantCmd cmd);
+
+  /**
    * Platform double-entry sanity check: sum of all debits across all transactions
    * must equal sum of all credits. Always true if posting is correct.
    */

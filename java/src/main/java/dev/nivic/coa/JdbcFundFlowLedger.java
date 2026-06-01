@@ -392,6 +392,58 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
   }
 
   @Override
+  public CoaTrans receiveQrPos(QrPosReceiveCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.requestRef());
+      if (existing != null) return existing;
+
+      // 4-leg entry: DR 1113 amount / CR 3500 amount / DR 5100 vpbankCost / CR 1113 vpbankCost
+      // Net 1113 = amount − vpbankCost
+      List<JournalLine> lines = List.of(
+          new JournalLine("1113", cmd.amountMinor(), 0L),
+          new JournalLine("3500", 0L, cmd.amountMinor()),
+          new JournalLine("5100", cmd.vpbankCost(), 0L),
+          new JournalLine("1113", 0L, cmd.vpbankCost()));
+
+      return postJournal(lines, cmd.requestRef(),
+          cmd.memo() != null ? cmd.memo()
+              : "QR/POS — nhận: " + cmd.amountMinor() + " phí VPBank: " + cmd.vpbankCost());
+    } catch (SQLException e) {
+      throw new IllegalStateException("receiveQrPos failed: " + cmd.requestRef(), e);
+    }
+  }
+
+  @Override
+  public CoaTrans creditMerchantQrPos(QrPosCreditMerchantCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.settleRef());
+      if (existing != null) return existing;
+
+      long transitBalance = getBalance("3500");
+      if (transitBalance > -cmd.amountMinor()) {
+        throw new InsufficientTransitException("3500", transitBalance, cmd.amountMinor());
+      }
+
+      // DR 3500 (amount) / CR 2120 (amount)
+      List<JournalLine> lines = List.of(
+          new JournalLine("3500", cmd.amountMinor(), 0L),
+          new JournalLine("2120", 0L, cmd.amountMinor()));
+
+      return postJournal(lines, cmd.settleRef(),
+          cmd.memo() != null ? cmd.memo()
+              : "QR/POS — ghi ví merchant: " + cmd.amountMinor());
+    } catch (InsufficientTransitException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("creditMerchantQrPos failed: " + cmd.settleRef(), e);
+    }
+  }
+
+  @Override
   public long getBalance(String accountCode) {
     Objects.requireNonNull(accountCode, "accountCode");
     try {
