@@ -1,19 +1,19 @@
-package dev.nivic.coa;
+package dev.nivic.coa.cmd;
 
 import java.util.Objects;
 
 /**
- * Step 1 — Trừ ví người gửi, ghi transit nội bộ.
- * Bút toán: DR 2110 (amount + fee) / CR 3300 (Transit Chuyển tiền nội bộ, amount + fee).
+ * Step 1 — User khởi tạo rút tiền.
+ * Bút toán: DR 2110 (Wallet User, amount + fee) / CR 3200 (Transit Rút, amount + fee).
  */
-public record InternalTransferInitCmd(
+public record WithdrawInitCmd(
     long amountMinor,
     long feeMinor,
-    /** Idempotency key for this step. */
+    /** Unique request reference — idempotency key for this step. */
     String requestRef,
     String memo) {
 
-  public InternalTransferInitCmd {
+  public WithdrawInitCmd {
     Objects.requireNonNull(requestRef, "requestRef");
     if (amountMinor <= 0) throw new IllegalArgumentException("amountMinor must be positive");
     if (feeMinor    <  0) throw new IllegalArgumentException("feeMinor must be >= 0");

@@ -2,6 +2,9 @@ package dev.nivic.coa;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.nivic.coa.cmd.*;
+import dev.nivic.coa.error.*;
+
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Connection;

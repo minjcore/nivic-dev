@@ -1,5 +1,7 @@
 package dev.nivic.coa;
 
+import dev.nivic.coa.cmd.*;
+import dev.nivic.coa.error.*;
 import java.util.UUID;
 
 /**

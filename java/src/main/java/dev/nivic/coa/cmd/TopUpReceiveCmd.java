@@ -1,4 +1,4 @@
-package dev.nivic.coa;
+package dev.nivic.coa.cmd;
 
 import java.util.Objects;
 

@@ -1,4 +1,4 @@
-package dev.nivic.coa;
+package dev.nivic.coa.error;
 
 public final class AlreadyReversedException extends RuntimeException {
 
