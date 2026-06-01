@@ -16,12 +16,18 @@ public record InternalTransferSettleCmd(
     long amountMinor,
     long feeMinor,
     String settleRef,
-    String memo) {
+    String memo,
+    /** Ví người nhận (subledger của 2110); null = không gắn party. */
+    Long mid) {
 
   public InternalTransferSettleCmd {
     Objects.requireNonNull(settleRef, "settleRef");
     if (amountMinor <= 0) throw new IllegalArgumentException("amountMinor must be positive");
     if (feeMinor    <  0) throw new IllegalArgumentException("feeMinor must be >= 0");
+  }
+
+  public InternalTransferSettleCmd(long amountMinor, long feeMinor, String settleRef, String memo) {
+    this(amountMinor, feeMinor, settleRef, memo, null);
   }
 
   public long totalTransitRelease() { return amountMinor + feeMinor; }

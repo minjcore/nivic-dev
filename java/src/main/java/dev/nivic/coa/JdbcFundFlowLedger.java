@@ -68,12 +68,30 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
         debit_minor   BIGINT      NOT NULL DEFAULT 0,
         credit_minor  BIGINT      NOT NULL DEFAULT 0,
         currency_code VARCHAR(3)  NOT NULL DEFAULT 'VND',
+        party_mid     BIGINT,
         PRIMARY KEY (trans_id, line_no)
       )
       """;
 
+  /** For DBs created before party_mid existed. */
+  private static final String DDL_TRANS_DATA_ALTER =
+      "ALTER TABLE coa_trans_data ADD COLUMN IF NOT EXISTS party_mid BIGINT";
+
   private static final String DDL_IDX_DATA_ACCOUNT =
       "CREATE INDEX IF NOT EXISTS coa_trans_data_account_idx ON coa_trans_data (account_code)";
+
+  /** Subsidiary-ledger index: per-account, per-party balance scans (e.g. wallet balance of a user). */
+  private static final String DDL_IDX_DATA_PARTY =
+      "CREATE INDEX IF NOT EXISTS coa_trans_data_party_idx"
+          + " ON coa_trans_data (account_code, party_mid) WHERE party_mid IS NOT NULL";
+
+  /** Natural balance of one party on one (credit-normal) control account = Σcredit − Σdebit. */
+  private static final String SELECT_PARTY_BALANCE =
+      "SELECT COALESCE(SUM(credit_minor - debit_minor), 0) FROM coa_trans_data"
+          + " WHERE account_code = ? AND party_mid = ?";
+
+  /** Control account this subledger reconciles against (Wallet Balance - User). */
+  static final String WALLET_CONTROL = "2110";
 
   // ── COA seed data ─────────────────────────────────────────────────────────────
 
@@ -139,8 +157,8 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
           + " WHERE kind IN ('REVENUE','EXPENSE') AND balance_minor <> 0 ORDER BY code";
 
   private static final String INSERT_TRANS_DATA =
-      "INSERT INTO coa_trans_data (trans_id, line_no, account_code, debit_minor, credit_minor)"
-          + " VALUES (?, ?, ?, ?, ?)";
+      "INSERT INTO coa_trans_data (trans_id, line_no, account_code, debit_minor, credit_minor, party_mid)"
+          + " VALUES (?, ?, ?, ?, ?, ?)";
 
   private static final String SELECT_BALANCE =
       "SELECT balance_minor FROM coa_account WHERE code = ?";
@@ -212,7 +230,7 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
       // DR 3100 / CR 2110 (net) / CR 4110 (fee)
       List<JournalLine> lines = List.of(
           new JournalLine("3100", cmd.amountMinor(), 0L),
-          new JournalLine("2110", 0L, netUser),
+          new JournalLine("2110", 0L, netUser).withParty(cmd.mid()),
           new JournalLine("4110", 0L, cmd.feeMinor()));
 
       return postJournal(lines, cmd.confirmRef(),
@@ -243,7 +261,7 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
 
       // DR 2110 (amount + fee) / CR 3200 (amount + fee)
       List<JournalLine> lines = List.of(
-          new JournalLine("2110", cmd.totalDebit(), 0L),
+          new JournalLine("2110", cmd.totalDebit(), 0L).withParty(cmd.mid()),
           new JournalLine("3200", 0L, cmd.totalDebit()));
 
       return postJournal(lines, cmd.requestRef(),
@@ -305,7 +323,7 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
 
       // DR 2110 (amount + fee) / CR 3300 (amount + fee)
       List<JournalLine> lines = List.of(
-          new JournalLine("2110", cmd.totalDebit(), 0L),
+          new JournalLine("2110", cmd.totalDebit(), 0L).withParty(cmd.mid()),
           new JournalLine("3300", 0L, cmd.totalDebit()));
 
       return postJournal(lines, cmd.requestRef(),
@@ -334,7 +352,7 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
       // DR 3300 (amount + fee) / CR 2110 (amount) / CR 4130 (fee)
       List<JournalLine> lines = new java.util.ArrayList<>();
       lines.add(new JournalLine("3300", cmd.totalTransitRelease(), 0L));
-      lines.add(new JournalLine("2110", 0L, cmd.amountMinor()));
+      lines.add(new JournalLine("2110", 0L, cmd.amountMinor()).withParty(cmd.mid()));
       if (cmd.feeMinor() > 0) {
         lines.add(new JournalLine("4130", 0L, cmd.feeMinor()));
       }
@@ -364,7 +382,7 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
 
       // DR 2110 (amount + fee) / CR 3400 (amount + fee)
       List<JournalLine> lines = List.of(
-          new JournalLine("2110", cmd.totalDebit(), 0L),
+          new JournalLine("2110", cmd.totalDebit(), 0L).withParty(cmd.mid()),
           new JournalLine("3400", 0L, cmd.totalDebit()));
 
       return postJournal(lines, cmd.requestRef(),
@@ -481,7 +499,7 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
 
       // DR 2110 / CR 3500
       List<JournalLine> lines = List.of(
-          new JournalLine("2110", cmd.amount(), 0L),
+          new JournalLine("2110", cmd.amount(), 0L).withParty(cmd.mid()),
           new JournalLine("3500", 0L, cmd.amount()));
 
       return postJournal(lines, cmd.requestRef(),
@@ -840,6 +858,24 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
   }
 
   @Override
+  public long walletBalance(long mid) {
+    try {
+      ensureSchema();
+      try (Connection c = dataSource.getConnection();
+          PreparedStatement ps = c.prepareStatement(SELECT_PARTY_BALANCE)) {
+        ps.setString(1, WALLET_CONTROL);
+        ps.setLong(2, mid);
+        try (ResultSet rs = ps.executeQuery()) {
+          rs.next();
+          return rs.getLong(1); // Σ(credit − debit) = natural money the user holds
+        }
+      }
+    } catch (SQLException e) {
+      throw new IllegalStateException("walletBalance failed: mid=" + mid, e);
+    }
+  }
+
+  @Override
   public CoaTrans findTrans(UUID transId) {
     Objects.requireNonNull(transId, "transId");
     try {
@@ -1033,6 +1069,7 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
             ps.setString(3, l.accountCode());
             ps.setLong(4, l.debitMinor());
             ps.setLong(5, l.creditMinor());
+            if (l.partyMid() != null) ps.setLong(6, l.partyMid()); else ps.setNull(6, Types.BIGINT);
             ps.executeUpdate();
           }
           try (PreparedStatement ps = c.prepareStatement(UPDATE_BALANCE)) {
@@ -1066,7 +1103,9 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
         st.execute(DDL_TRANS);
         st.execute(DDL_TRANS_ALTER);
         st.execute(DDL_TRANS_DATA);
+        st.execute(DDL_TRANS_DATA_ALTER);
         st.execute(DDL_IDX_DATA_ACCOUNT);
+        st.execute(DDL_IDX_DATA_PARTY);
       }
       try (Connection c = dataSource.getConnection();
           PreparedStatement ps = c.prepareStatement(UPSERT_ACCOUNT)) {
@@ -1139,7 +1178,15 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
   }
 
   /** Internal line record used only within postJournal. */
-  private record JournalLine(String accountCode, long debitMinor, long creditMinor) {
+  private record JournalLine(String accountCode, long debitMinor, long creditMinor, Long partyMid) {
+    /** No analytic party (most lines). */
+    JournalLine(String accountCode, long debitMinor, long creditMinor) {
+      this(accountCode, debitMinor, creditMinor, null);
+    }
     long netDelta() { return debitMinor - creditMinor; }
+    /** Same line tagged with a party (user/merchant) for the subsidiary ledger. */
+    JournalLine withParty(Long mid) {
+      return new JournalLine(accountCode, debitMinor, creditMinor, mid);
+    }
   }
 }

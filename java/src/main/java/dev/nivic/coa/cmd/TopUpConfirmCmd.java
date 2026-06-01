@@ -16,12 +16,19 @@ public record TopUpConfirmCmd(
     long feeMinor,
     /** Idempotency key for this confirmation step. */
     String confirmRef,
-    String memo) {
+    String memo,
+    /** Ví cá nhân nhận tiền (subledger của 2110); null = không gắn party. */
+    Long mid) {
 
   public TopUpConfirmCmd {
     Objects.requireNonNull(confirmRef, "confirmRef");
     if (amountMinor <= 0) throw new IllegalArgumentException("amountMinor must be positive");
     if (feeMinor < 0)     throw new IllegalArgumentException("feeMinor must be >= 0");
     if (feeMinor >= amountMinor) throw new IllegalArgumentException("feeMinor must be < amountMinor");
+  }
+
+  /** Without analytic party (aggregate-only). */
+  public TopUpConfirmCmd(long amountMinor, long feeMinor, String confirmRef, String memo) {
+    this(amountMinor, feeMinor, confirmRef, memo, null);
   }
 }

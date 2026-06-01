@@ -36,6 +36,13 @@ public interface FundFlowLedger {
   /** Current balance of one account (debit − credit). */
   long getBalance(String accountCode);
 
+  /**
+   * Số dư ví cá nhân của một user — sổ chi tiết (subsidiary ledger) của control account 2110.
+   * Bằng Σ(credit − debit) trên các dòng bút toán 2110 mang {@code party_mid = mid}.
+   * Bất biến: Σ {@code walletBalance(mọi mid)} = natural liability của 2110.
+   */
+  long walletBalance(long mid);
+
   /** Full journal transaction with bút toán lines. Returns null if not found. */
   CoaTrans findTrans(UUID transId);
 

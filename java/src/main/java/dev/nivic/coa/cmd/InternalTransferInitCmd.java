@@ -11,12 +11,18 @@ public record InternalTransferInitCmd(
     long feeMinor,
     /** Idempotency key for this step. */
     String requestRef,
-    String memo) {
+    String memo,
+    /** Ví người gửi (subledger của 2110); null = không gắn party. */
+    Long mid) {
 
   public InternalTransferInitCmd {
     Objects.requireNonNull(requestRef, "requestRef");
     if (amountMinor <= 0) throw new IllegalArgumentException("amountMinor must be positive");
     if (feeMinor    <  0) throw new IllegalArgumentException("feeMinor must be >= 0");
+  }
+
+  public InternalTransferInitCmd(long amountMinor, long feeMinor, String requestRef, String memo) {
+    this(amountMinor, feeMinor, requestRef, memo, null);
   }
 
   public long totalDebit() { return amountMinor + feeMinor; }

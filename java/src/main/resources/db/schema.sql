@@ -253,12 +253,18 @@ CREATE TABLE IF NOT EXISTS coa_trans_data (
   debit_minor   BIGINT      NOT NULL DEFAULT 0,
   credit_minor  BIGINT      NOT NULL DEFAULT 0,
   currency_code VARCHAR(3)  NOT NULL DEFAULT 'VND',
+  party_mid     BIGINT,      -- analytic dimension: ví/đối tác (subledger của control account, vd 2110)
   PRIMARY KEY (trans_id, line_no)
 );
 
 COMMENT ON TABLE coa_trans_data IS 'Bút toán: double-entry lines. Invariant: Σdebit_minor = Σcredit_minor per trans_id.';
+COMMENT ON COLUMN coa_trans_data.party_mid IS 'Sổ chi tiết: số dư ví user X = Σ(credit−debit) dòng 2110 có party_mid=X; tổng mọi party = số dư 2110.';
 
 CREATE INDEX IF NOT EXISTS coa_trans_data_account_idx ON coa_trans_data (account_code);
+
+-- Subsidiary-ledger scans (số dư ví theo party).
+CREATE INDEX IF NOT EXISTS coa_trans_data_party_idx
+  ON coa_trans_data (account_code, party_mid) WHERE party_mid IS NOT NULL;
 
 -- ── COA seed — 23 accounts from GtelPay Fund Flow document ───────────────────
 INSERT INTO coa_account (code, name, kind) VALUES
