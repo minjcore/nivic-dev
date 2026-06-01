@@ -9,6 +9,15 @@ import dev.nivic.coa.report.FundFlowReports;
 import dev.nivic.coa.report.ProfitAndLoss;
 import dev.nivic.coa.report.TrialBalance;
 import dev.nivic.db.Postgres;
+import dev.nivic.saving.AccrueInterestCmd;
+import dev.nivic.saving.DepositCmd;
+import dev.nivic.saving.JdbcSavingLedger;
+import dev.nivic.saving.OpenAccountCmd;
+import dev.nivic.saving.SavAccount;
+import dev.nivic.saving.SavInterestCalc;
+import dev.nivic.saving.SavingLedger;
+import dev.nivic.saving.WithdrawalCmd;
+import java.util.UUID;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -38,28 +47,35 @@ public final class ControlPlaneServer {
 
   private static final int PORT = Integer.getInteger("CONTROL_PLANE_PORT", 8095);
 
+  /** owner_mid dùng cho mọi sổ tiết kiệm tạo từ control-plane. */
+  private static final long DEMO_SAVING_MID = 1001L;
+
   private final DataSource ds;
   private final JdbcFundFlowLedger ledger;
   private final FundFlowReports reports;
+  private final SavingLedger saving;
 
   private ControlPlaneServer(DataSource ds) {
     this.ds = ds;
     this.ledger = new JdbcFundFlowLedger(ds);
     this.reports = new FundFlowReports(ds);
+    this.saving = new JdbcSavingLedger(ds);
   }
 
   public static void main(String[] args) throws Exception {
     DataSource ds = Postgres.open(Postgres.Config.fromEnvironment());
     Postgres.verifyConnectivity(ds);
     ControlPlaneServer app = new ControlPlaneServer(ds);
-    // Touch the ledger once to ensure schema + COA seed exist.
+    // Touch each ledger once to ensure schema + seed exist.
     app.ledger.isDoubleEntryBalanced();
+    app.saving.findAccount(UUID.randomUUID()); // triggers savings ensureTables + system accounts
 
     HttpServer server = HttpServer.create(new InetSocketAddress("0.0.0.0", PORT), 0);
     server.createContext("/", app::handleIndex);
     server.createContext("/api/state", app::handleState);
     server.createContext("/api/demo/", app::handleDemo);
     server.createContext("/api/reset", app::handleReset);
+    server.createContext("/api/trans", app::handleTrans);
     server.setExecutor(null);
     server.start();
 
@@ -91,8 +107,14 @@ public final class ControlPlaneServer {
   private void handleReset(HttpExchange ex) throws IOException {
     if (!"POST".equals(ex.getRequestMethod())) { send(ex, 405, "text/plain", "method not allowed"); return; }
     try (Connection c = ds.getConnection(); var st = c.createStatement()) {
+      // COA fund-flow
       st.execute("TRUNCATE coa_trans_data, coa_trans CASCADE");
       st.execute("UPDATE coa_account SET balance_minor = 0, version = 0");
+      // Savings (separate subsystem): drop journals + user accounts, keep system accounts
+      st.execute("TRUNCATE sav_trans_data, sav_trans CASCADE");
+      st.execute("DELETE FROM sav_account WHERE owner_mid <> 0");
+      st.execute("UPDATE sav_account SET debits_pending = 0, debits_posted = 0,"
+          + " credits_pending = 0, credits_posted = 0, version = 0 WHERE owner_mid = 0");
       send(ex, 200, "application/json", "{\"ok\":true}");
     } catch (SQLException e) {
       send(ex, 500, "application/json", "{\"error\":" + jsonStr(e.getMessage()) + "}");
@@ -108,6 +130,88 @@ public final class ControlPlaneServer {
       send(ex, 200, "application/json", "{\"ok\":true,\"flow\":" + jsonStr(flow) + ",\"msg\":" + jsonStr(msg) + "}");
     } catch (RuntimeException e) {
       send(ex, 400, "application/json", "{\"ok\":false,\"flow\":" + jsonStr(flow) + ",\"error\":" + jsonStr(e.getMessage()) + "}");
+    }
+  }
+
+  /**
+   * Tra cứu một giao dịch COA theo trans_id (UUID) hoặc ref_id, trả về trạng thái + bút toán.
+   * {@code GET /api/trans?id=<uuid>} hoặc {@code /api/trans?ref=<ref_id>}.
+   */
+  private void handleTrans(HttpExchange ex) throws IOException {
+    if (!"GET".equals(ex.getRequestMethod())) { send(ex, 405, "text/plain", "method not allowed"); return; }
+    String q = ex.getRequestURI().getQuery();
+    String id = paramOf(q, "id");
+    String ref = paramOf(q, "ref");
+    try {
+      dev.nivic.coa.CoaTrans t = null;
+      if (id != null && !id.isBlank()) {
+        t = ledger.findTrans(UUID.fromString(id.trim()));
+      } else if (ref != null && !ref.isBlank()) {
+        t = ledger.findTransByRefId(ref.trim());
+      }
+      if (t == null) {
+        send(ex, 404, "application/json", "{\"found\":false}");
+        return;
+      }
+      send(ex, 200, "application/json; charset=utf-8", transJson(t));
+    } catch (IllegalArgumentException e) {
+      send(ex, 400, "application/json", "{\"found\":false,\"error\":" + jsonStr("id không hợp lệ (UUID)") + "}");
+    } catch (RuntimeException e) {
+      send(ex, 500, "application/json", "{\"found\":false,\"error\":" + jsonStr(e.getMessage()) + "}");
+    }
+  }
+
+  private static String transJson(dev.nivic.coa.CoaTrans t) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("{\"found\":true")
+      .append(",\"id\":").append(jsonStr(t.id().toString()))
+      .append(",\"ref\":").append(jsonStr(t.refId()))
+      .append(",\"memo\":").append(jsonStr(t.memo()))
+      .append(",\"at\":").append(jsonStr(String.valueOf(t.createdAt())))
+      .append(",\"debitTotal\":").append(t.debitTotal())
+      .append(",\"creditTotal\":").append(t.creditTotal())
+      // "đủ bút toán": cân bằng DR=CR và có ít nhất 2 chân
+      .append(",\"balanced\":").append(t.isBalanced())
+      .append(",\"status\":").append(jsonStr(t.isBalanced() && t.lines().size() >= 2 ? "SUCCESS" : "INVALID"))
+      .append(",\"lines\":[");
+    boolean first = true;
+    for (dev.nivic.coa.CoaTransLine l : t.lines()) {
+      if (!first) sb.append(',');
+      first = false;
+      sb.append('{')
+        .append("\"lineNo\":").append(l.lineNo()).append(',')
+        .append("\"account\":").append(jsonStr(l.accountCode())).append(',')
+        .append("\"name\":").append(jsonStr(l.accountName())).append(',')
+        .append("\"debit\":").append(l.debitMinor()).append(',')
+        .append("\"credit\":").append(l.creditMinor())
+        .append('}');
+    }
+    sb.append("]}");
+    return sb.toString();
+  }
+
+  private static String paramOf(String query, String key) {
+    if (query == null) return null;
+    for (String kv : query.split("&")) {
+      int eq = kv.indexOf('=');
+      if (eq > 0 && kv.substring(0, eq).equals(key)) {
+        return java.net.URLDecoder.decode(kv.substring(eq + 1), StandardCharsets.UTF_8);
+      }
+    }
+    return null;
+  }
+
+  /** Sổ tiết kiệm user mới nhất chưa đóng (flag CLOSED = 0x01); null nếu chưa có. */
+  private UUID currentSavingAccount() {
+    try (Connection c = ds.getConnection();
+        PreparedStatement ps = c.prepareStatement(
+            "SELECT id FROM sav_account WHERE owner_mid <> 0 AND (flags & 1) = 0"
+                + " ORDER BY opened_at DESC LIMIT 1")) {
+      try (ResultSet rs = ps.executeQuery()) {
+        return rs.next() ? rs.getObject(1, UUID.class) : null;
+      }
+    } catch (SQLException e) {
+      throw new IllegalStateException("currentSavingAccount failed", e);
     }
   }
 
@@ -172,6 +276,33 @@ public final class ControlPlaneServer {
         ledger.closePeriod(new PeriodCloseCmd(ref + "-CLOSE", null));
         yield "Khoá sổ — kết chuyển lãi/lỗ " + fmt(pl.netProfit()) + "đ → 6100";
       }
+      // ── Savings ──
+      case "sav_open" -> {
+        SavAccount a = saving.openAccount(OpenAccountCmd.demand(DEMO_SAVING_MID, "VND"));
+        yield "Mở sổ tiết kiệm " + a.accountNo();
+      }
+      case "sav_deposit" -> {
+        UUID id = currentSavingAccount();
+        if (id == null) id = saving.openAccount(OpenAccountCmd.demand(DEMO_SAVING_MID, "VND")).id();
+        saving.deposit(new DepositCmd(id, 1_000_000L, "VND", null, null, null, "Gửi tiết kiệm"));
+        yield "Gửi tiết kiệm 1,000,000đ";
+      }
+      case "sav_withdraw" -> {
+        UUID id = currentSavingAccount();
+        if (id == null) yield "Chưa có sổ tiết kiệm — bấm Gửi tiền trước";
+        saving.withdrawal(new WithdrawalCmd(id, 300_000L, "VND", false, null, null, null, "Rút tiết kiệm"));
+        yield "Rút tiết kiệm 300,000đ";
+      }
+      case "sav_interest" -> {
+        UUID id = currentSavingAccount();
+        if (id == null) yield "Chưa có sổ tiết kiệm để tính lãi";
+        long bal = saving.findAccount(id).availableBalance();
+        long interest = SavInterestCalc.compute(bal, 650, 30); // 6.5%/năm × 30 ngày
+        if (interest <= 0) yield "Số dư quá nhỏ, lãi 30 ngày = 0";
+        saving.accrueInterest(java.util.List.of(
+            new AccrueInterestCmd(id, interest, "VND", UUID.randomUUID())));
+        yield "Tính lãi 30 ngày @6.5%: +" + fmt(interest) + "đ";
+      }
       default -> throw new IllegalArgumentException("unknown flow: " + flow);
     };
   }
@@ -220,6 +351,29 @@ public final class ControlPlaneServer {
           .append("\"memo\":").append(jsonStr(rs.getString("memo"))).append(',')
           .append("\"amount\":").append(rs.getLong("amt")).append(',')
           .append("\"at\":").append(jsonStr(String.valueOf(rs.getTimestamp("created_at").toInstant())))
+          .append('}');
+      }
+    }
+    sb.append("]");
+
+    // Savings accounts (sav_account, user-owned only).
+    sb.append(",\"savings\":[");
+    try (Connection c = ds.getConnection();
+        PreparedStatement ps = c.prepareStatement(
+            "SELECT account_no, kind, (credits_posted - debits_posted - debits_pending) AS avail,"
+                + " debits_pending, flags FROM sav_account"
+                + " WHERE owner_mid <> 0 ORDER BY opened_at");
+        ResultSet rs = ps.executeQuery()) {
+      boolean first = true;
+      while (rs.next()) {
+        if (!first) sb.append(',');
+        first = false;
+        sb.append('{')
+          .append("\"accountNo\":").append(jsonStr(rs.getString("account_no"))).append(',')
+          .append("\"kind\":").append(jsonStr(rs.getString("kind"))).append(',')
+          .append("\"available\":").append(rs.getLong("avail")).append(',')
+          .append("\"pending\":").append(rs.getLong("debits_pending")).append(',')
+          .append("\"closed\":").append((rs.getInt("flags") & 1) != 0)
           .append('}');
       }
     }
@@ -339,6 +493,23 @@ public final class ControlPlaneServer {
         .rpt .eq{font-size:11px;color:var(--mut);margin-top:6px;font-family:ui-monospace,monospace}
         .rpt .chk{font-size:11px;margin-top:4px}
         .rpt .chk.ok{color:var(--green)} .rpt .chk.bad{color:var(--red)}
+        .sav{font-size:12px;border-top:1px solid var(--line);padding:8px 0;display:flex;
+          justify-content:space-between;align-items:center}
+        .sav:first-child{border-top:0}
+        .sav .no{font-family:ui-monospace,monospace;color:var(--txt)}
+        .sav .k{font-size:10px;color:var(--mut)}
+        .sav .av{font-variant-numeric:tabular-nums;color:var(--green);font-weight:600}
+        .sav .pend{font-size:10px;color:var(--amber)}
+        .txr{font-size:12px}
+        .txr .st{display:inline-block;padding:3px 10px;border-radius:999px;font-weight:600;font-size:12px}
+        .txr .st.ok{background:rgba(63,185,80,.15);color:var(--green);border:1px solid var(--green)}
+        .txr .st.bad{background:rgba(248,81,73,.15);color:var(--red);border:1px solid var(--red)}
+        .txr table{width:100%;border-collapse:collapse;margin-top:8px}
+        .txr th,.txr td{text-align:right;padding:3px 4px;font-variant-numeric:tabular-nums}
+        .txr th:first-child,.txr td:first-child{text-align:left;font-family:ui-monospace,monospace}
+        .txr th{color:var(--mut);font-weight:600;border-bottom:1px solid var(--line)}
+        .txr .meta{color:var(--mut);margin-top:6px;font-size:11px}
+        .tx{cursor:pointer} .tx:hover .memo{color:var(--blue)}
         #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card);
           border:1px solid var(--blue);border-radius:8px;padding:10px 18px;opacity:0;transition:.3s;pointer-events:none}
         #toast.show{opacity:1}
@@ -366,6 +537,27 @@ public final class ControlPlaneServer {
               <button class="wide" onclick="run('close')">📕 Khoá sổ cuối kỳ</button>
               <button class="wide reset" onclick="reset()">⟲ Reset toàn bộ</button>
             </div>
+          </div>
+          <div class="panel">
+            <h2>Tiết kiệm <span style="color:var(--mut);font-weight:400">· phân hệ riêng (sav_*)</span></h2>
+            <div class="btns" style="margin-bottom:12px">
+              <button onclick="run('sav_open')">Mở sổ</button>
+              <button onclick="run('sav_deposit')">Gửi tiền</button>
+              <button onclick="run('sav_withdraw')">Rút tiền</button>
+              <button onclick="run('sav_interest')">Tính lãi</button>
+            </div>
+            <div id="savings"></div>
+          </div>
+          <div class="panel">
+            <h2>Tra cứu giao dịch</h2>
+            <div style="display:flex;gap:8px">
+              <input id="txq" placeholder="trans_id (UUID) hoặc ref_id"
+                style="flex:1;background:#0d1117;border:1px solid var(--line);border-radius:8px;
+                color:var(--txt);padding:8px 10px;font-size:12px;font-family:ui-monospace,monospace"
+                onkeydown="if(event.key==='Enter')lookupTx()">
+              <button onclick="lookupTx()">Tra</button>
+            </div>
+            <div id="txresult" style="margin-top:12px"></div>
           </div>
           <div class="panel">
             <h2>Báo cáo kế toán</h2>
@@ -404,11 +596,14 @@ public final class ControlPlaneServer {
             sec.appendChild(cards); g.appendChild(sec);
           }
           renderReports(r.reports);
+          renderSavings(r.savings);
           const rc=document.getElementById('recent');
           rc.innerHTML=r.recent.length?'':'<span style="color:var(--mut);font-size:12px">Chưa có giao dịch</span>';
           for(const t of r.recent){
             const d=document.createElement('div'); d.className='tx';
             const at=t.at?new Date(t.at).toLocaleTimeString('vi-VN'):'';
+            d.title='Bấm để tra cứu bút toán';
+            d.onclick=()=>{ if(t.ref){ document.getElementById('txq').value=t.ref; lookupTx(); } };
             d.innerHTML='<div class="memo">'+(t.memo||t.ref||'')+'</div>'+
               '<div class="meta"><span>'+at+'</span><span class="amt">'+fmt(t.amount)+' đ</span></div>';
             rc.appendChild(d);
@@ -449,6 +644,42 @@ public final class ControlPlaneServer {
           h+=row('Chi phí (5xxx)',p.expense);
           h+=row('Lãi/lỗ thuần',p.net,{tot:true,sign:true});
           el.innerHTML=h;
+        }
+        function renderSavings(list){
+          const el=document.getElementById('savings');
+          if(!list||!list.length){el.innerHTML='<span style="color:var(--mut);font-size:12px">Chưa có sổ tiết kiệm</span>';return;}
+          let h='';
+          for(const s of list){
+            h+='<div class="sav"><div><div class="no">'+s.accountNo+'</div>'+
+               '<div class="k">'+s.kind+(s.closed?' · ĐÃ ĐÓNG':'')+'</div></div>'+
+               '<div style="text-align:right"><div class="av">'+fmt(s.available)+' đ</div>'+
+               (s.pending?'<div class="pend">giữ '+fmt(s.pending)+' đ</div>':'')+'</div></div>';
+          }
+          el.innerHTML=h;
+        }
+        async function lookupTx(){
+          const q=document.getElementById('txq').value.trim();
+          const out=document.getElementById('txresult');
+          if(!q){out.innerHTML='';return;}
+          const isUuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q);
+          const url='/api/trans?'+(isUuid?'id=':'ref=')+encodeURIComponent(q);
+          let r; try{r=await(await fetch(url)).json();}catch(e){out.innerHTML='<span class="chk bad">lỗi mạng</span>';return;}
+          if(!r.found){out.innerHTML='<span class="txr"><span class="st bad">NOT FOUND</span> '+
+            (r.error?'<span style="color:var(--mut)">'+r.error+'</span>':'')+'</span>';return;}
+          const ok=r.status==='SUCCESS';
+          let h='<div class="txr"><span class="st '+(ok?'ok':'bad')+'">'+
+            (ok?'✓ SUCCESS — đủ bút toán':'✗ '+r.status)+'</span>';
+          h+='<table><tr><th>TK</th><th>Tên</th><th>Nợ</th><th>Có</th></tr>';
+          for(const l of r.lines){
+            h+='<tr><td>'+l.account+'</td><td style="text-align:left;color:var(--mut)">'+l.name+'</td>'+
+               '<td>'+(l.debit?fmt(l.debit):'')+'</td><td>'+(l.credit?fmt(l.credit):'')+'</td></tr>';
+          }
+          h+='<tr><td colspan="2" style="text-align:left;color:var(--mut)">Tổng</td>'+
+             '<td>'+fmt(r.debitTotal)+'</td><td>'+fmt(r.creditTotal)+'</td></tr></table>';
+          h+='<div class="meta">'+(r.ref||'')+(r.memo?' · '+r.memo:'')+'</div>';
+          h+='<div class="chk '+(r.balanced?'ok':'bad')+'">'+
+             (r.balanced?'✓ ΣNợ = ΣCó = '+fmt(r.debitTotal):'✗ lệch bút toán')+'</div></div>';
+          out.innerHTML=h;
         }
         async function run(flow){
           const r=await(await fetch('/api/demo/'+flow,{method:'POST'})).json();
