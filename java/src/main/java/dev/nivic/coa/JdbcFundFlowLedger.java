@@ -271,6 +271,65 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
   }
 
   @Override
+  public CoaTrans initInternalTransfer(InternalTransferInitCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.requestRef());
+      if (existing != null) return existing;
+
+      long walletBalance = getBalance("2110");
+      if (walletBalance > -cmd.totalDebit()) {
+        throw new InsufficientWalletException("2110", walletBalance, cmd.totalDebit());
+      }
+
+      // DR 2110 (amount + fee) / CR 3300 (amount + fee)
+      List<JournalLine> lines = List.of(
+          new JournalLine("2110", cmd.totalDebit(), 0L),
+          new JournalLine("3300", 0L, cmd.totalDebit()));
+
+      return postJournal(lines, cmd.requestRef(),
+          cmd.memo() != null ? cmd.memo()
+              : "Chuyển tiền nội bộ — trừ ví: " + cmd.amountMinor() + " phí: " + cmd.feeMinor());
+    } catch (InsufficientWalletException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("initInternalTransfer failed: " + cmd.requestRef(), e);
+    }
+  }
+
+  @Override
+  public CoaTrans settleInternalTransfer(InternalTransferSettleCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.settleRef());
+      if (existing != null) return existing;
+
+      long transitBalance = getBalance("3300");
+      if (transitBalance > -cmd.totalTransitRelease()) {
+        throw new InsufficientTransitException("3300", transitBalance, cmd.totalTransitRelease());
+      }
+
+      // DR 3300 (amount + fee) / CR 2110 (amount) / CR 4130 (fee)
+      List<JournalLine> lines = new java.util.ArrayList<>();
+      lines.add(new JournalLine("3300", cmd.totalTransitRelease(), 0L));
+      lines.add(new JournalLine("2110", 0L, cmd.amountMinor()));
+      if (cmd.feeMinor() > 0) {
+        lines.add(new JournalLine("4130", 0L, cmd.feeMinor()));
+      }
+
+      return postJournal(lines, cmd.settleRef(),
+          cmd.memo() != null ? cmd.memo()
+              : "Chuyển tiền nội bộ — cộng ví: " + cmd.amountMinor() + " phí: " + cmd.feeMinor());
+    } catch (InsufficientTransitException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("settleInternalTransfer failed: " + cmd.settleRef(), e);
+    }
+  }
+
+  @Override
   public long getBalance(String accountCode) {
     Objects.requireNonNull(accountCode, "accountCode");
     try {

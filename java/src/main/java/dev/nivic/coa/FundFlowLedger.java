@@ -56,6 +56,24 @@ public interface FundFlowLedger {
   CoaTrans settleWithdraw(WithdrawSettleCmd cmd);
 
   /**
+   * Step 1 — Trừ ví người gửi, ghi transit nội bộ.
+   * Posts: DR 2110 (amount + fee) / CR 3300 (Transit Nội bộ, amount + fee).
+   * Idempotent on {@link InternalTransferInitCmd#requestRef()}.
+   *
+   * @throws InsufficientWalletException if Wallet User (2110) balance is insufficient
+   */
+  CoaTrans initInternalTransfer(InternalTransferInitCmd cmd);
+
+  /**
+   * Step 2 — Cộng ví người nhận, giải phóng transit nội bộ.
+   * Posts: DR 3300 (amount + fee) / CR 2110 (amount) / CR 4130 (fee).
+   * Không phát sinh tài khoản NH. Idempotent on {@link InternalTransferSettleCmd#settleRef()}.
+   *
+   * @throws InsufficientTransitException if Transit 3300 balance would go below zero
+   */
+  CoaTrans settleInternalTransfer(InternalTransferSettleCmd cmd);
+
+  /**
    * Platform double-entry sanity check: sum of all debits across all transactions
    * must equal sum of all credits. Always true if posting is correct.
    */
