@@ -181,6 +181,23 @@ public final class JdbcSavingLedger implements SavingLedger {
           + " FROM sav_trans t JOIN sav_trans_data d ON t.id = d.trans_id"
           + " WHERE t.id = ? ORDER BY d.line_no";
 
+  /**
+   * Full bút toán view: adds account_no and account_kind from sav_account.
+   * Columns: 10 trans + 3 data+account (line_no, account_id, account_no, account_kind,
+   *          debit_minor, credit_minor, currency_code) = 17 total.
+   */
+  private static final String SELECT_TRANS_VIEW =
+      "SELECT"
+          + "  t.id, t.kind, t.phase, t.pending_id, t.idempotency_key,"
+          + "  t.ref_mid, t.ref_request_id, t.linked_batch_id, t.memo, t.created_at,"
+          + "  d.line_no, d.account_id, a.account_no, a.kind AS account_kind,"
+          + "  d.debit_minor, d.credit_minor, d.currency_code"
+          + " FROM sav_trans t"
+          + " JOIN sav_trans_data d ON t.id = d.trans_id"
+          + " JOIN sav_account   a ON d.account_id = a.id"
+          + " WHERE t.id = ?"
+          + " ORDER BY d.line_no";
+
   private static final String SELECT_TRANS_BY_IDEMPOTENCY =
       "SELECT " + TRANS_JOIN_COLS
           + " FROM sav_trans t JOIN sav_trans_data d ON t.id = d.trans_id"
@@ -447,6 +464,23 @@ public final class JdbcSavingLedger implements SavingLedger {
       }
     } catch (SQLException e) {
       throw new IllegalStateException("findAccount failed: " + id, e);
+    }
+  }
+
+  @Override
+  public SavTransView findTransfer(UUID transId) {
+    Objects.requireNonNull(transId, "transId");
+    try {
+      ensureTables();
+      try (Connection c = dataSource.getConnection();
+          PreparedStatement ps = c.prepareStatement(SELECT_TRANS_VIEW)) {
+        ps.setObject(1, transId);
+        try (ResultSet rs = ps.executeQuery()) {
+          return collectTransView(rs);
+        }
+      }
+    } catch (SQLException e) {
+      throw new IllegalStateException("findTransfer failed: " + transId, e);
     }
   }
 
@@ -724,6 +758,49 @@ public final class JdbcSavingLedger implements SavingLedger {
           lineMap.get(id)));
     }
     return result;
+  }
+
+  /**
+   * Collects SELECT_TRANS_VIEW rows into a {@link SavTransView}.
+   * Returns {@code null} if no rows (transfer not found).
+   * Columns: 1-10 = sav_trans; 11=line_no, 12=account_id, 13=account_no, 14=account_kind,
+   *          15=debit_minor, 16=credit_minor, 17=currency_code.
+   */
+  private static SavTransView collectTransView(ResultSet rs) throws SQLException {
+    UUID id = null;
+    SavTransferKind kind = null;
+    SavTransferPhase phase = null;
+    UUID pendingId = null, idempotencyKey = null, linkedBatchId = null;
+    Long refMid = null, refRequestId = null;
+    String memo = null;
+    Instant createdAt = null;
+    List<SavTransLineView> lines = new ArrayList<>();
+
+    while (rs.next()) {
+      if (id == null) {
+        id              = rs.getObject(1, UUID.class);
+        kind            = SavTransferKind.valueOf(rs.getString(2));
+        phase           = SavTransferPhase.valueOf(rs.getString(3));
+        pendingId       = rs.getObject(4, UUID.class);
+        idempotencyKey  = rs.getObject(5, UUID.class);
+        refMid          = (Long) rs.getObject(6);
+        refRequestId    = (Long) rs.getObject(7);
+        linkedBatchId   = rs.getObject(8, UUID.class);
+        memo            = rs.getString(9);
+        createdAt       = rs.getTimestamp(10).toInstant();
+      }
+      lines.add(new SavTransLineView(
+          rs.getInt(11),                                      // line_no
+          rs.getObject(12, UUID.class),                       // account_id
+          rs.getString(13),                                   // account_no
+          SavAccountKind.valueOf(rs.getString(14)),           // account_kind
+          rs.getLong(15),                                     // debit_minor
+          rs.getLong(16),                                     // credit_minor
+          rs.getString(17)));                                 // currency_code
+    }
+    if (id == null) return null;
+    return new SavTransView(id, kind, phase, pendingId, idempotencyKey,
+        refMid, refRequestId, linkedBatchId, memo, createdAt, lines);
   }
 
   private static void validateTransferable(SavAccount acct) {

@@ -1,0 +1,2819 @@
+Date: Mon, 1 Jun 2026 10:18:29 +0000 (UTC)
+Message-ID: <2141531445.57.1780309109798@ea5179bddf3d>
+Subject: Exported From Confluence
+MIME-Version: 1.0
+Content-Type: multipart/related; 
+	boundary="----=_Part_56_2112162926.1780309109798"
+
+------=_Part_56_2112162926.1780309109798
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+Content-Location: file:///C:/exported.html
+
+<html xmlns:o=3D'urn:schemas-microsoft-com:office:office'
+      xmlns:w=3D'urn:schemas-microsoft-com:office:word'
+      xmlns:v=3D'urn:schemas-microsoft-com:vml'
+      xmlns=3D'urn:w3-org-ns:HTML'>
+<head>
+    <meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3Dutf-8=
+">
+    <title>Fund Flow</title>
+    <!--[if gte mso 9]>
+    <xml>
+        <o:OfficeDocumentSettings>
+            <o:TargetScreenSize>1024x640</o:TargetScreenSize>
+            <o:PixelsPerInch>72</o:PixelsPerInch>
+            <o:AllowPNG/>
+        </o:OfficeDocumentSettings>
+        <w:WordDocument>
+            <w:View>Print</w:View>
+            <w:Zoom>90</w:Zoom>
+            <w:DoNotOptimizeForBrowser/>
+        </w:WordDocument>
+    </xml>
+    <![endif]-->
+    <style>
+                <!--
+        @page Section1 {
+            size: 8.5in 11.0in;
+            margin: 1.0in;
+            mso-header-margin: .5in;
+            mso-footer-margin: .5in;
+            mso-paper-source: 0;
+        }
+
+        table {
+            border: solid 1px;
+            border-collapse: collapse;
+        }
+
+        table td, table th {
+            border: solid 1px;
+            padding: 5px;
+        }
+
+        td {
+            page-break-inside: avoid;
+        }
+
+        tr {
+            page-break-after: avoid;
+        }
+
+        div.Section1 {
+            page: Section1;
+        }
+
+        /* Confluence print stylesheet. Common to all themes for print medi=
+a */
+/* Full of !important until we improve batching for print CSS */
+
+@media print {
+    #main {
+        padding-bottom: 1em !important; /* The default padding of 6em is to=
+o much for printouts */
+    }
+
+    body {
+        font: var(--ds-font-body-small, Arial, Helvetica, FreeSans, sans-se=
+rif);
+    }
+
+    body, #full-height-container, #main, #page, #content, .has-personal-sid=
+ebar #content {
+        background: var(--ds-surface, #fff) !important;
+        color: var(--ds-text, #000) !important;
+        border: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        display: block !important;
+    }
+
+    a, a:link, a:visited, a:focus, a:hover, a:active {
+        color: var(--ds-text, #000);
+    }
+
+    #content h1,
+    #content h2,
+    #content h3,
+    #content h4,
+    #content h5,
+    #content h6 {
+        page-break-after: avoid;
+    }
+
+    pre {
+        font: var(--ds-font-code, Monaco, "Courier New", monospace);
+    }
+
+    #header,
+    .aui-header-inner,
+    #navigation,
+    #sidebar,
+    .sidebar,
+    #personal-info-sidebar,
+    .ia-fixed-sidebar,
+    .page-actions,
+    .navmenu,
+    .ajs-menu-bar,
+    .noprint,
+    .inline-control-link,
+    .inline-control-link a,
+    a.show-labels-editor,
+    .global-comment-actions,
+    .comment-actions,
+    .quick-comment-container,
+    #addcomment {
+        display: none !important;
+    }
+
+    /* CONF-28544 cannot print multiple pages in IE */
+    #splitter-content {
+        position: relative !important;
+    }
+
+    .comment .date::before {
+        content: none !important; /* remove middot for print view */
+    }
+
+    h1.pagetitle img {
+        height: auto;
+        width: auto;
+    }
+
+    .print-only {
+        display: block;
+    }
+
+    #footer {
+        position: relative !important; /* CONF-17506 Place the footer at en=
+d of the content */
+        margin: 0;
+        padding: 0;
+        background: none;
+        clear: both;
+    }
+
+    #poweredby {
+        border-top: none;
+        background: none;
+    }
+
+    #poweredby li.print-only {
+        display: list-item;
+        font-style: italic;
+    }
+
+    #poweredby li.noprint {
+        display: none;
+    }
+
+    /* no width controls in print */
+    .wiki-content .table-wrap,
+    .wiki-content p,
+    .panel .codeContent,
+    .panel .codeContent pre,
+    .image-wrap {
+        overflow: visible !important;
+    }
+
+    /* TODO - should this work? */
+    #children-section,
+    #comments-section .comment,
+    #comments-section .comment .comment-body,
+    #comments-section .comment .comment-content,
+    #comments-section .comment p {
+        page-break-inside: avoid;
+    }
+
+    #page-children a {
+        text-decoration: none;
+    }
+
+    /**
+     hide twixies
+
+     the specificity here is a hack because print styles
+     are getting loaded before the base styles. */
+    #comments-section.pageSection .section-header,
+    #comments-section.pageSection .section-title,
+    #children-section.pageSection .section-header,
+    #children-section.pageSection .section-title,
+    .children-show-hide {
+        padding-left: 0;
+        margin-left: 0;
+    }
+
+    .children-show-hide.icon {
+        display: none;
+    }
+
+    /* personal sidebar */
+    .has-personal-sidebar #content {
+        margin-right: 0px;
+    }
+
+    .has-personal-sidebar #content .pageSection {
+        margin-right: 0px;
+    }
+
+    .no-print, .no-print * {
+        display: none !important;
+    }
+}
+-->
+    </style>
+</head>
+<body>
+    <h1>Fund Flow</h1>
+    <div class=3D"Section1">
+        <p local-id=3D"e71a87f89c5d"><em>(M=E1=BA=ABu: 100,000=C4=91/giao d=
+=E1=BB=8Bch | Ph=C3=AD d=E1=BB=8Bch v=E1=BB=A5: 1,000=C4=91 | Ph=C3=AD Napa=
+s/NH: 500=C4=91)</em></p>
+<hr local-id=3D"d4e29ed9-b646-4660-89ea-21c7f31b490f">
+<h2 local-id=3D"0c4f0dd02b3e" id=3D"FundFlow-1.ChartofAccounts(COA)">1. Cha=
+rt of Accounts (COA)</h2>
+<div class=3D"table-wrap">
+<table data-table-width=3D"760" data-layout=3D"default" data-local-id=3D"c5=
+3077e9-285e-4fa9-a8ea-9a5f8ed795b3" class=3D"confluenceTable">
+<tbody>
+<tr data-local-id=3D"87e8b987-9eed-4dfc-b044-951080147a2d">
+<th data-local-id=3D"fd0ca482-8f56-4d9e-a80f-024f7ad9eb9f" class=3D"conflue=
+nceTh">
+<p local-id=3D"31ec82694250">M=C3=A3 TK</p></th>
+<th data-local-id=3D"85f5de42-e690-421d-85f6-ef4005fc0103" class=3D"conflue=
+nceTh">
+<p local-id=3D"36fa0f7a48ca">T=C3=AAn T=C3=A0i Kho=E1=BA=A3n</p></th>
+<th data-local-id=3D"4bdf8367-65a2-48a0-a170-1fd62d7e5946" class=3D"conflue=
+nceTh">
+<p local-id=3D"b994138fd811">Lo=E1=BA=A1i</p></th>
+</tr>
+<tr data-local-id=3D"1eff90ad-b399-46f5-aa47-84badbad258f">
+<td data-local-id=3D"3d54c19b-95e4-4722-9079-0cefcd09bec3" class=3D"conflue=
+nceTd">
+<p local-id=3D"c3bf0ba8a8b9"><strong>NH=C3=93M 1 =E2=80=94 T=C3=80I S=E1=BA=
+=A2N</strong></p></td>
+<td data-local-id=3D"69010c2c-4ce3-44c1-9acb-5b449bb6f0f4" class=3D"conflue=
+nceTd">
+<p local-id=3D"1a9b6c479b15"></p></td>
+<td data-local-id=3D"a58ed376-adbd-4c4b-859e-4598b4c3f451" class=3D"conflue=
+nceTd">
+<p local-id=3D"68dbf49109a5"></p></td>
+</tr>
+<tr data-local-id=3D"c8d2470e-3d39-4262-b6f6-f38bd568c089">
+<td data-local-id=3D"d9566284-9304-449e-af73-697359e13157" class=3D"conflue=
+nceTd">
+<p local-id=3D"d1fc0344eecd">1111</p></td>
+<td data-local-id=3D"924562d7-3b4d-4348-a78e-440ee7b1c349" class=3D"conflue=
+nceTd">
+<p local-id=3D"a60cb2dd0686">TK Vietinbank - Chuy=C3=AAn d=C3=B9ng</p></td>
+<td data-local-id=3D"af0ed989-bf50-46f1-a5ea-c9e546760af1" class=3D"conflue=
+nceTd">
+<p local-id=3D"a2d0a9ce08a3">T=C3=A0i s=E1=BA=A3n</p></td>
+</tr>
+<tr data-local-id=3D"e4656161-c426-4586-8a8d-6c59af6fca3b">
+<td data-local-id=3D"9df2a5ed-132c-44c7-86cd-1d62e2ce9bb5" class=3D"conflue=
+nceTd">
+<p local-id=3D"bb5d01df74a3">1112</p></td>
+<td data-local-id=3D"77a5f885-1b07-477e-8f1d-364ff586cdab" class=3D"conflue=
+nceTd">
+<p local-id=3D"d7d3097f55c3">TK Napas Clearing</p></td>
+<td data-local-id=3D"2f2f50dc-5780-481f-a8e6-08d5e83494c0" class=3D"conflue=
+nceTd">
+<p local-id=3D"a867c4052eac">T=C3=A0i s=E1=BA=A3n</p></td>
+</tr>
+<tr data-local-id=3D"e9855a40-3ebc-426e-a8d5-fdac63af2baf">
+<td data-local-id=3D"5d97beef-794b-4988-9305-97da3590f856" class=3D"conflue=
+nceTd">
+<p local-id=3D"b6c6d2a8b1d9">1113</p></td>
+<td data-local-id=3D"429cf87a-4160-457b-a489-9ee39260ff30" class=3D"conflue=
+nceTd">
+<p local-id=3D"00994b41a7bb">TK VPBank - QR/POS</p></td>
+<td data-local-id=3D"6be204be-5e0b-44d7-935e-99ecb7552aa3" class=3D"conflue=
+nceTd">
+<p local-id=3D"3c3cbea1aa63">T=C3=A0i s=E1=BA=A3n</p></td>
+</tr>
+<tr data-local-id=3D"9f04c6fa-38a6-4528-af96-f6dcadbf8980">
+<td data-local-id=3D"cb48f8ec-bc9c-43f8-9055-0b832c85d573" class=3D"conflue=
+nceTd">
+<p local-id=3D"2aa3b5229481"><strong>NH=C3=93M 2 =E2=80=94 N=E1=BB=A2 PH=E1=
+=BA=A2I TR=E1=BA=A2</strong></p></td>
+<td data-local-id=3D"c16eb8d6-15cf-4c4e-b169-cd80ef454ae9" class=3D"conflue=
+nceTd">
+<p local-id=3D"c0e4b1ab5dcb"></p></td>
+<td data-local-id=3D"87e250c6-42d2-4799-bd8d-eac57717d87c" class=3D"conflue=
+nceTd">
+<p local-id=3D"9352122f344b"></p></td>
+</tr>
+<tr data-local-id=3D"1672c4f1-3410-4211-9de6-8b3b3f96ec06">
+<td data-local-id=3D"9f151e48-1a39-4474-aa33-7db84a0a2d11" class=3D"conflue=
+nceTd">
+<p local-id=3D"1e9cf53534e1">2110</p></td>
+<td data-local-id=3D"e39bb4b3-28cc-4c67-87c4-c857c54bc643" class=3D"conflue=
+nceTd">
+<p local-id=3D"a0ea22bca94f">Wallet Balance - User</p></td>
+<td data-local-id=3D"ea261499-6037-4464-92b2-0b3e98886031" class=3D"conflue=
+nceTd">
+<p local-id=3D"cb78347e3ef2">N=E1=BB=A3 ph=E1=BA=A3i tr=E1=BA=A3</p></td>
+</tr>
+<tr data-local-id=3D"abf94dd9-1abb-4a23-9a05-073852a598ee">
+<td data-local-id=3D"3cc0573e-5de4-4b25-a5e7-aff1fad12e84" class=3D"conflue=
+nceTd">
+<p local-id=3D"7c0c9be9b85b">2120</p></td>
+<td data-local-id=3D"4b534beb-0180-4fcf-9a04-05e9817f518f" class=3D"conflue=
+nceTd">
+<p local-id=3D"978377da41b3">Wallet Balance - Merchant</p></td>
+<td data-local-id=3D"7cd11866-1aeb-494b-8f80-68e6fdefa9d2" class=3D"conflue=
+nceTd">
+<p local-id=3D"7da3bcf57970">N=E1=BB=A3 ph=E1=BA=A3i tr=E1=BA=A3</p></td>
+</tr>
+<tr data-local-id=3D"27676bd8-4f9a-453d-a521-e531860d127d">
+<td data-local-id=3D"d9a54830-f8ad-4cdd-b598-c3819c7ac46d" class=3D"conflue=
+nceTd">
+<p local-id=3D"3336ca8e80bf">2130</p></td>
+<td data-local-id=3D"b5517a3a-3dee-417b-a871-0b9e6b6941cb" class=3D"conflue=
+nceTd">
+<p local-id=3D"e0967b840f13">K=C3=BD qu=E1=BB=B9 - =C4=90=E1=BB=91i t=C3=A1=
+c Chi h=E1=BB=99</p></td>
+<td data-local-id=3D"abeb12ce-8003-4805-9563-0b2f0aff1932" class=3D"conflue=
+nceTd">
+<p local-id=3D"ed21fd9f6b26">N=E1=BB=A3 ph=E1=BA=A3i tr=E1=BA=A3</p></td>
+</tr>
+<tr data-local-id=3D"b0cd1d8d-f484-43e4-a533-67b1f409400c">
+<td data-local-id=3D"d55394e8-7278-4806-9b25-be2957cf6317" class=3D"conflue=
+nceTd">
+<p local-id=3D"c3e84e37af5e"><strong>NH=C3=93M 3 =E2=80=94 TRANSIT</strong>=
+</p></td>
+<td data-local-id=3D"8b539b77-bef4-4b40-929d-9dcdf1dca73f" class=3D"conflue=
+nceTd">
+<p local-id=3D"055f321fde87"></p></td>
+<td data-local-id=3D"2a3e75b1-01cc-4356-af05-960a1bd409eb" class=3D"conflue=
+nceTd">
+<p local-id=3D"b034a36a0118"></p></td>
+</tr>
+<tr data-local-id=3D"3d0d693b-25c7-4cef-8b59-cf5421ce2c49">
+<td data-local-id=3D"bd6d20be-6c53-4777-8c47-b999a215b2a2" class=3D"conflue=
+nceTd">
+<p local-id=3D"91adc715e7e4">3100</p></td>
+<td data-local-id=3D"bc00399f-8a4a-4cf5-828e-dec5bd91fddb" class=3D"conflue=
+nceTd">
+<p local-id=3D"7a00cdbc8990">Transit - N=E1=BA=A1p ti=E1=BB=81n</p></td>
+<td data-local-id=3D"a06505cb-1c92-4d70-8d93-4c1313a9ce54" class=3D"conflue=
+nceTd">
+<p local-id=3D"33d6065f0522">Transit</p></td>
+</tr>
+<tr data-local-id=3D"3c042db6-508c-48f4-ba5f-ab94e8028f7f">
+<td data-local-id=3D"179a13ce-da05-4c2a-8905-7d56d8e40523" class=3D"conflue=
+nceTd">
+<p local-id=3D"28c93adf6dae">3200</p></td>
+<td data-local-id=3D"86221e64-3c76-4cb7-887b-7c62dc987eda" class=3D"conflue=
+nceTd">
+<p local-id=3D"6b042c594488">Transit - R=C3=BAt ti=E1=BB=81n</p></td>
+<td data-local-id=3D"f8793778-bfaa-4b49-906f-2e91ec1535dd" class=3D"conflue=
+nceTd">
+<p local-id=3D"b0f095838b84">Transit</p></td>
+</tr>
+<tr data-local-id=3D"3a1e2efe-c473-4e7f-8b65-440fa55b9e45">
+<td data-local-id=3D"59d74d35-a71b-4ddf-ad18-3d3534b6db7b" class=3D"conflue=
+nceTd">
+<p local-id=3D"4c64dbd089ac">3300</p></td>
+<td data-local-id=3D"d6549a8d-f858-443f-be10-5ca5d4221094" class=3D"conflue=
+nceTd">
+<p local-id=3D"7d373d3e4dae">Transit - Chuy=E1=BB=83n ti=E1=BB=81n n=E1=BB=
+=99i b=E1=BB=99</p></td>
+<td data-local-id=3D"0cd30749-1fd6-4f9c-8341-1b8f93ccc285" class=3D"conflue=
+nceTd">
+<p local-id=3D"0b1665a2ff3b">Transit</p></td>
+</tr>
+<tr data-local-id=3D"07c40a4f-6471-4eaa-80c9-1b3ab9074fcc">
+<td data-local-id=3D"8864da01-d8d0-4652-8e3a-ba81f310f887" class=3D"conflue=
+nceTd">
+<p local-id=3D"2f1e7e6982b0">3400</p></td>
+<td data-local-id=3D"4f837aba-d412-44b1-a1a6-4a82dc0398fa" class=3D"conflue=
+nceTd">
+<p local-id=3D"375d15be9889">Transit - IBFT</p></td>
+<td data-local-id=3D"18169269-514e-4070-9412-26311cca991a" class=3D"conflue=
+nceTd">
+<p local-id=3D"23e595490383">Transit</p></td>
+</tr>
+<tr data-local-id=3D"c62f9ad1-22cb-4dcf-b64e-0de0e87e77d3">
+<td data-local-id=3D"0f89c39a-5a19-4f57-9218-54299748a67a" class=3D"conflue=
+nceTd">
+<p local-id=3D"1f49bf0a459d">3500</p></td>
+<td data-local-id=3D"751705bc-3524-4d90-ab12-5a53f04f5dac" class=3D"conflue=
+nceTd">
+<p local-id=3D"11bacee51753">Transit - Thanh to=C3=A1n</p></td>
+<td data-local-id=3D"db4fb6f0-9f32-4692-8f4f-746873736e16" class=3D"conflue=
+nceTd">
+<p local-id=3D"3572fdeeb693">Transit</p></td>
+</tr>
+<tr data-local-id=3D"f2986f57-b52b-46b8-98cc-d6ca3903a6e1">
+<td data-local-id=3D"2a3c25dd-bd3e-4dcb-be5d-2b072eb86092" class=3D"conflue=
+nceTd">
+<p local-id=3D"7e72a52c51b5">3600</p></td>
+<td data-local-id=3D"632df048-d3f1-491e-b06f-f83d81dd0c0b" class=3D"conflue=
+nceTd">
+<p local-id=3D"f23d852c48d8">Transit - Chi L=C6=B0=C6=A1ng</p></td>
+<td data-local-id=3D"e8faa89e-325d-44e4-9fe2-950416b46f4e" class=3D"conflue=
+nceTd">
+<p local-id=3D"0f01c1828419">Transit</p></td>
+</tr>
+<tr data-local-id=3D"db7ed8b9-f077-444f-873b-1532804f6118">
+<td data-local-id=3D"46265aa8-b449-46ae-b769-c55af91aecfd" class=3D"conflue=
+nceTd">
+<p local-id=3D"26628e955b62">3700</p></td>
+<td data-local-id=3D"1a4bad8b-8074-45ff-8357-d6b51abe8430" class=3D"conflue=
+nceTd">
+<p local-id=3D"441abe7df7f6">Transit - Chi h=E1=BB=99</p></td>
+<td data-local-id=3D"aece8184-4c23-4908-8aa3-960b9c4157aa" class=3D"conflue=
+nceTd">
+<p local-id=3D"978a76721b2b">Transit</p></td>
+</tr>
+<tr data-local-id=3D"f7d3c02c-15a9-4021-a422-5dcd77d3f79c">
+<td data-local-id=3D"a636027a-943d-4e70-ae3e-8458f0b29502" class=3D"conflue=
+nceTd">
+<p local-id=3D"7a92f82d0ae7">3800</p></td>
+<td data-local-id=3D"c49372da-3863-4139-92ed-9af10568a835" class=3D"conflue=
+nceTd">
+<p local-id=3D"6935b0afc252">Transit - Clearing</p></td>
+<td data-local-id=3D"33f367e4-fafe-41bc-b1a2-f8eba8feda31" class=3D"conflue=
+nceTd">
+<p local-id=3D"5727e3ff17cb">Transit</p></td>
+</tr>
+<tr data-local-id=3D"09093039-c0d1-4b25-a086-db43689d045a">
+<td data-local-id=3D"31fe67f6-01a7-400c-ad4b-59c998cbc536" class=3D"conflue=
+nceTd">
+<p local-id=3D"7cbeb8a03b1d">3810</p></td>
+<td data-local-id=3D"a0c66938-ada7-4861-8edf-0ae7be8c8a85" class=3D"conflue=
+nceTd">
+<p local-id=3D"7e01b8375d36">Transit - Settlement Outbound</p></td>
+<td data-local-id=3D"03f27ca2-37d6-4f8b-8518-7d6955f03e4f" class=3D"conflue=
+nceTd">
+<p local-id=3D"8d70c0017b9b">Transit</p></td>
+</tr>
+<tr data-local-id=3D"db55b3f9-d1f2-4fb1-be61-73b442b61ac5">
+<td data-local-id=3D"33e2e97a-beea-4d08-974f-427c851d862a" class=3D"conflue=
+nceTd">
+<p local-id=3D"7e1050732f5f">3820</p></td>
+<td data-local-id=3D"995b5c3a-8415-4504-85fe-75702f8a05bd" class=3D"conflue=
+nceTd">
+<p local-id=3D"424c2417da69">Transit - MDR Holdback</p></td>
+<td data-local-id=3D"107f984f-4abb-4f61-87c7-fbe600a8374a" class=3D"conflue=
+nceTd">
+<p local-id=3D"d4d415c4a73c">Transit</p></td>
+</tr>
+<tr data-local-id=3D"4c22a73b-09fb-4f00-b069-b328e014cf18">
+<td data-local-id=3D"cf2341af-00fd-47f9-8b46-3bb159504c99" class=3D"conflue=
+nceTd">
+<p local-id=3D"1220e55fc279"><strong>NH=C3=93M 4 =E2=80=94 DOANH THU</stron=
+g></p></td>
+<td data-local-id=3D"9cd4b39b-a7e6-4ee2-b804-f6035056879b" class=3D"conflue=
+nceTd">
+<p local-id=3D"916ac0574468"></p></td>
+<td data-local-id=3D"20f3a99b-86c4-4861-8b1f-89689d9ece61" class=3D"conflue=
+nceTd">
+<p local-id=3D"f3646bcbc1bf"></p></td>
+</tr>
+<tr data-local-id=3D"3d6e1eb3-f938-4800-9457-d8551de6c832">
+<td data-local-id=3D"e9781e14-e565-4f35-9d26-cc3d7a2f61b6" class=3D"conflue=
+nceTd">
+<p local-id=3D"0a7c751a2c12">4110</p></td>
+<td data-local-id=3D"c2318367-be54-44ef-a2d8-7e0e480371d9" class=3D"conflue=
+nceTd">
+<p local-id=3D"273de624f181">Doanh thu Ph=C3=AD n=E1=BA=A1p ti=E1=BB=81n</p=
+></td>
+<td data-local-id=3D"8113968d-4270-46f1-a685-797fb7a9b8bc" class=3D"conflue=
+nceTd">
+<p local-id=3D"533ae80c5098">Doanh thu</p></td>
+</tr>
+<tr data-local-id=3D"bdf2ee5a-7ed0-4189-b4d6-8ee3e6162886">
+<td data-local-id=3D"f7a7460d-1f63-4b40-8cf7-85ccf977b88c" class=3D"conflue=
+nceTd">
+<p local-id=3D"3bfc12c026f0">4120</p></td>
+<td data-local-id=3D"b90bc8a5-c525-4495-a09a-eb71a8025768" class=3D"conflue=
+nceTd">
+<p local-id=3D"3ebaba095075">Doanh thu Ph=C3=AD r=C3=BAt ti=E1=BB=81n</p></=
+td>
+<td data-local-id=3D"baa0d6a3-a379-45fe-8ef5-b231b197870d" class=3D"conflue=
+nceTd">
+<p local-id=3D"73afe9398f2b">Doanh thu</p></td>
+</tr>
+<tr data-local-id=3D"c2aff3a7-139c-4eb8-a3e3-7c04af906175">
+<td data-local-id=3D"b0072e48-bda2-4189-8702-23d913d63552" class=3D"conflue=
+nceTd">
+<p local-id=3D"a5cec8438fc5">4130</p></td>
+<td data-local-id=3D"c0d7f96b-84b4-4bc1-8858-537f9cdf802f" class=3D"conflue=
+nceTd">
+<p local-id=3D"24c06d2496f3">Doanh thu Ph=C3=AD chuy=E1=BB=83n ti=E1=BB=81n=
+</p></td>
+<td data-local-id=3D"129586b3-e37a-43b8-9e0d-e3c5852b943a" class=3D"conflue=
+nceTd">
+<p local-id=3D"810589a10400">Doanh thu</p></td>
+</tr>
+<tr data-local-id=3D"16962112-c140-4344-ab1c-684bb165acbb">
+<td data-local-id=3D"03f64dcc-18ff-4f86-a0f0-080b8f54ea6c" class=3D"conflue=
+nceTd">
+<p local-id=3D"955c042ebe65">4140</p></td>
+<td data-local-id=3D"b619a202-3093-4a96-acc9-29c953d7ec0a" class=3D"conflue=
+nceTd">
+<p local-id=3D"3a77c96e4932">Doanh thu Ph=C3=AD MDR</p></td>
+<td data-local-id=3D"60c74a29-131b-46ad-b708-80576e240299" class=3D"conflue=
+nceTd">
+<p local-id=3D"0e0e3ef222a2">Doanh thu</p></td>
+</tr>
+<tr data-local-id=3D"1d652b4e-6d69-474c-b158-ebe3af886c02">
+<td data-local-id=3D"756dac40-e8d8-4259-b4ae-28bcf6e394b1" class=3D"conflue=
+nceTd">
+<p local-id=3D"a04dabe61d99">4150</p></td>
+<td data-local-id=3D"476574fa-cbc5-4269-a7ba-0009dbef7d1a" class=3D"conflue=
+nceTd">
+<p local-id=3D"6a2c295461c8">Doanh thu Ph=C3=AD Chi L=C6=B0=C6=A1ng / Chi h=
+=E1=BB=99</p></td>
+<td data-local-id=3D"e4988900-fbbe-46d6-8049-bf2cabd1edbf" class=3D"conflue=
+nceTd">
+<p local-id=3D"dae076432c37">Doanh thu</p></td>
+</tr>
+<tr data-local-id=3D"c1520281-e17c-4a48-8484-58e292e9af7d">
+<td data-local-id=3D"6dc0dbae-7626-41f8-8304-eac4cafcfdeb" class=3D"conflue=
+nceTd">
+<p local-id=3D"5e9c378a8a55"><strong>NH=C3=93M 5 =E2=80=94 CHI PH=C3=8D</st=
+rong></p></td>
+<td data-local-id=3D"53d37cdf-50c4-4261-a2e3-0ef4fcf18183" class=3D"conflue=
+nceTd">
+<p local-id=3D"d676db8ef25e"></p></td>
+<td data-local-id=3D"555c3c68-ead8-464f-8d28-e7cbe0d67656" class=3D"conflue=
+nceTd">
+<p local-id=3D"229c0bcd23f4"></p></td>
+</tr>
+<tr data-local-id=3D"6d09008a-2442-410c-ba2e-636a516099a2">
+<td data-local-id=3D"8ef09356-303a-4d19-8ec6-7aa228aae473" class=3D"conflue=
+nceTd">
+<p local-id=3D"5c2af98a3bd2">5100</p></td>
+<td data-local-id=3D"3daf9701-cb29-487d-b1b9-8baf3a12fc0e" class=3D"conflue=
+nceTd">
+<p local-id=3D"35657b525612">Chi ph=C3=AD Ph=C3=AD NH / Napas</p></td>
+<td data-local-id=3D"b053e115-9433-4d3f-88f5-1e7740c6e33d" class=3D"conflue=
+nceTd">
+<p local-id=3D"983ae8b42d2e">Chi ph=C3=AD</p></td>
+</tr>
+<tr data-local-id=3D"ec8d4fca-041b-488f-ae58-45dd11dccf60">
+<td data-local-id=3D"c8eae806-4429-45fe-90d5-5cd2d4e9e679" class=3D"conflue=
+nceTd">
+<p local-id=3D"6c98e08601ad"><strong>NH=C3=93M 6 =E2=80=94 V=E1=BB=90N</str=
+ong></p></td>
+<td data-local-id=3D"a316bf77-2ddf-41ed-8232-221f323de818" class=3D"conflue=
+nceTd">
+<p local-id=3D"fc407a85c7d3"></p></td>
+<td data-local-id=3D"fa05acb2-d97b-489a-861f-9381bc091669" class=3D"conflue=
+nceTd">
+<p local-id=3D"6b6a6307ea80"></p></td>
+</tr>
+<tr data-local-id=3D"463508cf-04be-4788-8479-1280fb448632">
+<td data-local-id=3D"68c979a2-c4fc-4ffe-a264-aa221b0296e0" class=3D"conflue=
+nceTd">
+<p local-id=3D"32b7ba812f9f">6000</p></td>
+<td data-local-id=3D"00ebcfbe-c3f3-484c-98eb-1df93f8adcda" class=3D"conflue=
+nceTd">
+<p local-id=3D"9259fca55840">V=E1=BB=91n ch=E1=BB=A7 s=E1=BB=9F h=E1=BB=AFu=
+</p></td>
+<td data-local-id=3D"ea205b0a-9cea-4ed1-97d9-88e2c778557a" class=3D"conflue=
+nceTd">
+<p local-id=3D"baf6bd9220aa">V=E1=BB=91n</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr local-id=3D"32eb11cf-8b8f-4e2e-8182-28dab6d6e63b">
+<h2 local-id=3D"063ed520db86" id=3D"FundFlow-2.Kh=E1=BB=9FiT=E1=BA=A1oH=E1=
+=BB=87Th=E1=BB=91ng=E2=80=94Tr=C6=B0=E1=BB=9BcKhiV=E1=BA=ADnH=C3=A0nh">2. K=
+h=E1=BB=9Fi T=E1=BA=A1o H=E1=BB=87 Th=E1=BB=91ng =E2=80=94 Tr=C6=B0=E1=BB=
+=9Bc Khi V=E1=BA=ADn H=C3=A0nh</h2>
+<h3 local-id=3D"992d58435188" id=3D"FundFlow-B=C3=BAtto=C3=A1nv=E1=BB=91nba=
+n=C4=91=E1=BA=A7u">B=C3=BAt to=C3=A1n v=E1=BB=91n ban =C4=91=E1=BA=A7u</h3>
+<div class=3D"table-wrap">
+<table data-table-width=3D"760" data-layout=3D"default" data-local-id=3D"bc=
+c7e73c-b1d3-4944-adcf-37cf09ad22ec" class=3D"confluenceTable">
+<tbody>
+<tr data-local-id=3D"5dbd9d0d-b0a8-458a-bf46-a803e42e88fe">
+<th data-local-id=3D"c2b8f9f0-b6dc-48ee-96c6-de613c4022a9" class=3D"conflue=
+nceTh">
+<p local-id=3D"67809a9e0a97">Nh=C3=B3m</p></th>
+<th data-local-id=3D"4063b3a5-c375-464f-9e3e-190accecf665" class=3D"conflue=
+nceTh">
+<p local-id=3D"200d326e621f">Step</p></th>
+<th data-local-id=3D"45588c18-099c-45a2-87e1-d41b37614912" class=3D"conflue=
+nceTh">
+<p local-id=3D"aedd760df14d">Account</p></th>
+<th data-local-id=3D"3f7a9a11-1128-4d01-8ec4-eaf6bfd4cc7f" class=3D"conflue=
+nceTh">
+<p local-id=3D"a3bf21168c9a">DR/CR</p></th>
+<th data-local-id=3D"9872e69d-e141-4996-882c-7fc843a49650" class=3D"conflue=
+nceTh">
+<p local-id=3D"64ac617bdb0e">Amount</p></th>
+</tr>
+<tr data-local-id=3D"54781232-bf15-4788-9276-9eae71eecce8">
+<td data-local-id=3D"ac116cb1-42b3-4fd0-807a-790ca2242dfa" class=3D"conflue=
+nceTd">
+<p local-id=3D"e2e2a104110f">[V=E1=BB=91n]</p></td>
+<td data-local-id=3D"ffc5b3d0-9bec-4198-8afe-57c27694fb59" class=3D"conflue=
+nceTd">
+<p local-id=3D"20e195eaf8a2">Chuy=E1=BB=83n v=E1=BB=91n v=C3=A0o TK Vietinb=
+ank</p></td>
+<td data-local-id=3D"8654fca0-9fc5-47fb-a900-45e131022b71" class=3D"conflue=
+nceTd">
+<p local-id=3D"896946b3ce7e">1111 - TK Vietinbank</p></td>
+<td data-local-id=3D"2cfc6f9e-65ab-4328-ab88-313c56dda596" class=3D"conflue=
+nceTd">
+<p local-id=3D"8ef960d159b7">DR</p></td>
+<td data-local-id=3D"0b39e113-612d-45a7-952d-6e2b854a16d3" class=3D"conflue=
+nceTd">
+<p local-id=3D"392887dce869">1,000,000,000</p></td>
+</tr>
+<tr data-local-id=3D"21ba220e-0606-4709-9bc4-b03ab77f8142">
+<td data-local-id=3D"692f5e88-8777-43d1-b577-b02597d2f0a9" class=3D"conflue=
+nceTd">
+<p local-id=3D"a89f513d531b">[V=E1=BB=91n]</p></td>
+<td data-local-id=3D"e31a069e-53a9-4ab5-8bc7-963c978170f3" class=3D"conflue=
+nceTd">
+<p local-id=3D"55c96efa9234">Ghi nh=E1=BA=ADn v=E1=BB=91n =C4=91i=E1=BB=81u=
+ l=E1=BB=87</p></td>
+<td data-local-id=3D"75fea7ac-7a68-4021-8b27-04ed29e0b970" class=3D"conflue=
+nceTd">
+<p local-id=3D"2bd64050dc3f">6000 - V=E1=BB=91n CSH</p></td>
+<td data-local-id=3D"2618fe85-de3e-4604-b40e-e67a04edfa08" class=3D"conflue=
+nceTd">
+<p local-id=3D"e756cda89c68">CR</p></td>
+<td data-local-id=3D"497f1095-ba62-4186-bfe6-489d8e9ae7f6" class=3D"conflue=
+nceTd">
+<p local-id=3D"3da68996f9d8">1,000,000,000</p></td>
+</tr>
+<tr data-local-id=3D"3ad0a4b8-d5f5-4730-81cc-3fc52361d155">
+<td data-local-id=3D"f923ac0a-e5c5-400d-a290-aa606d2910bf" class=3D"conflue=
+nceTd">
+<p local-id=3D"cd422b4342d6">[V=E1=BB=91n]</p></td>
+<td data-local-id=3D"169bf77f-41f5-441d-a73e-d4e69b794726" class=3D"conflue=
+nceTd">
+<p local-id=3D"73828d17bf75">Chuy=E1=BB=83n v=E1=BB=91n v=C3=A0o TK VPBank<=
+/p></td>
+<td data-local-id=3D"6205e0e3-b9e5-4450-8c67-51692e721c2f" class=3D"conflue=
+nceTd">
+<p local-id=3D"d4285593961a">1113 - TK VPBank</p></td>
+<td data-local-id=3D"45845635-ca7b-4954-b676-1d547f4ca2eb" class=3D"conflue=
+nceTd">
+<p local-id=3D"0bfa4de3544c">DR</p></td>
+<td data-local-id=3D"92752245-0833-43fd-9d11-40fcbac9f70a" class=3D"conflue=
+nceTd">
+<p local-id=3D"860fb8a2066f">500,000,000</p></td>
+</tr>
+<tr data-local-id=3D"e89439ca-b4c7-4b61-a13f-825544ba31c4">
+<td data-local-id=3D"b44232f1-672d-4e10-bf4a-6e54e4343e7d" class=3D"conflue=
+nceTd">
+<p local-id=3D"4584bf3dcacc">[V=E1=BB=91n]</p></td>
+<td data-local-id=3D"0d1e8f96-bba1-4d3f-8ca0-6d58020b8671" class=3D"conflue=
+nceTd">
+<p local-id=3D"a0523d83ec88">Ghi nh=E1=BA=ADn v=E1=BB=91n =C4=91i=E1=BB=81u=
+ l=E1=BB=87</p></td>
+<td data-local-id=3D"162dbff0-cbab-49ab-85a8-6ee51f630aa0" class=3D"conflue=
+nceTd">
+<p local-id=3D"8331fd63dd52">6000 - V=E1=BB=91n CSH</p></td>
+<td data-local-id=3D"bb03b9f6-176c-4c34-bb9d-97eb45be9b89" class=3D"conflue=
+nceTd">
+<p local-id=3D"1495c12810d2">CR</p></td>
+<td data-local-id=3D"d2fe9e88-2ebe-4e36-b82d-44d13f3f6ba2" class=3D"conflue=
+nceTd">
+<p local-id=3D"060fac2817aa">500,000,000</p></td>
+</tr>
+<tr data-local-id=3D"5d22ddf1-3d13-4027-8ca1-f2b22438f833">
+<td data-local-id=3D"71efb83d-fa6e-494c-a1af-71862a1df5f7" class=3D"conflue=
+nceTd">
+<p local-id=3D"262c5cc97df3">[V=E1=BB=91n]</p></td>
+<td data-local-id=3D"61868fa7-7153-4274-a531-6c28814c5035" class=3D"conflue=
+nceTd">
+<p local-id=3D"18a6b336f3b8">N=E1=BA=A1p qu=E1=BB=B9 v=C3=A0o TK Napas Clea=
+ring</p></td>
+<td data-local-id=3D"0b6433e5-ee05-4dd4-aec7-c07e14595e51" class=3D"conflue=
+nceTd">
+<p local-id=3D"6c10dbc20598">1112 - TK Napas</p></td>
+<td data-local-id=3D"8ae28982-b9f2-4a18-9a1f-3906af7e5354" class=3D"conflue=
+nceTd">
+<p local-id=3D"efd1d564256b">DR</p></td>
+<td data-local-id=3D"0c86e4ef-a612-4498-ad00-6d6e322659b3" class=3D"conflue=
+nceTd">
+<p local-id=3D"936377fee3cc">500,000,000</p></td>
+</tr>
+<tr data-local-id=3D"bf877f33-f56c-4b49-aee1-6445e07af56d">
+<td data-local-id=3D"ed80f930-e71e-4b48-bd74-47d30d826691" class=3D"conflue=
+nceTd">
+<p local-id=3D"b7324701efe9">[V=E1=BB=91n]</p></td>
+<td data-local-id=3D"75d6d017-1903-4ed8-bf8d-d911382bafd2" class=3D"conflue=
+nceTd">
+<p local-id=3D"5f484f361536">Ghi nh=E1=BA=ADn v=E1=BB=91n =C4=91i=E1=BB=81u=
+ l=E1=BB=87</p></td>
+<td data-local-id=3D"2209ebe4-275b-46e2-8c97-6222b6a34471" class=3D"conflue=
+nceTd">
+<p local-id=3D"a6985feaf5a8">6000 - V=E1=BB=91n CSH</p></td>
+<td data-local-id=3D"4fc385db-83f8-46f4-a4e8-8c49de192106" class=3D"conflue=
+nceTd">
+<p local-id=3D"c4316a957ba3">CR</p></td>
+<td data-local-id=3D"91c03ef8-b0e4-4e67-b0d7-a8db1dd83339" class=3D"conflue=
+nceTd">
+<p local-id=3D"3cfef43e292a">500,000,000</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<blockquote local-id=3D"a77ea136-22a6-4a45-8844-5d1bba8dfb57">
+<p local-id=3D"e22f63919108"><strong>Nguy=C3=AAn t=E1=BA=AFc c=C3=A2n b=E1=
+=BA=B1ng b=E1=BA=AFt bu=E1=BB=99c t=E1=BA=A1i m=E1=BB=8Di th=E1=BB=9Di =C4=
+=91i=E1=BB=83m:</strong></p>
+<div class=3D"code panel pdl" style=3D"border-width: 1px;">
+<div class=3D"codeContent panelContent pdl">
+<pre class=3D"syntaxhighlighter-pre" data-syntaxhighlighter-params=3D"brush=
+: java; gutter: false; theme: Confluence" data-theme=3D"Confluence">( 1111 =
++ 1112 + 1113 ) =3D ( 2110 + 2120 + 2130 ) =20
+  TK NH th=E1=BB=B1c           =3D   T=E1=BB=95ng Wallet Balance =20
+</pre>
+</div>
+</div>
+<p local-id=3D"ee14d6cd885d">V=E1=BB=91n TGTT l=C3=A0 buffer ban =C4=91=E1=
+=BA=A7u. H=E1=BB=87 th=E1=BB=91ng v=E1=BA=ADn h=C3=A0nh th=E1=BB=B1c b=E1=
+=BA=B1ng ti=E1=BB=81n user n=E1=BA=A1p v=C3=A0o.<br>
+M=E1=BB=97i 100,000=C4=91 user n=E1=BA=A1p =E2=86=92 TK NH +100,000 =E2=86=
+=92 Wallet Balance +100,000 =E2=86=92 C=C3=A2n b=E1=BA=B1ng duy tr=C3=AC.</=
+p>
+</blockquote>
+<hr local-id=3D"59f869e0-8ed7-434b-b3e8-fbc0e224af16">
+<h2 local-id=3D"9dd2f0b21320" id=3D"FundFlow-3.N=E1=BA=A1pTi=E1=BB=81n">3. =
+N=E1=BA=A1p Ti=E1=BB=81n</h2>
+<div class=3D"table-wrap">
+<table data-table-width=3D"760" data-layout=3D"default" data-local-id=3D"9e=
+48aad2-776c-445a-a71f-be23cadb4771" class=3D"confluenceTable">
+<colgroup>
+<col style=3D"width: 66.0px;">
+<col style=3D"width: 237.0px;">
+<col style=3D"width: 152.0px;">
+<col style=3D"width: 152.0px;">
+<col style=3D"width: 152.0px;">
+</colgroup>
+<tbody>
+<tr data-local-id=3D"2dee82ff-b3c9-4c6c-8dac-4a03368c7e0f">
+<th data-local-id=3D"cd3048c5-e099-4e14-a3c2-0b43fc1f437e" class=3D"conflue=
+nceTh">
+<p local-id=3D"862fb002bf63">Nh=C3=B3m</p></th>
+<th data-local-id=3D"48072ffa-4ad3-4c54-bf89-a7da611ac2c7" class=3D"conflue=
+nceTh">
+<p local-id=3D"b3aa55dab962">Step</p></th>
+<th data-local-id=3D"f7aded07-645b-4256-b10b-c7d86ccd58b8" class=3D"conflue=
+nceTh">
+<p local-id=3D"9b8d9fd2c118">Account</p></th>
+<th data-local-id=3D"c067f5b6-7e79-4058-922e-aa117a95636c" class=3D"conflue=
+nceTh">
+<p local-id=3D"e6aaff860852">DR/CR</p></th>
+<th data-local-id=3D"33b09642-793c-4d3b-ab67-cb0d0aedf9e9" class=3D"conflue=
+nceTh">
+<p local-id=3D"cce816d09247">Amount</p></th>
+</tr>
+<tr data-local-id=3D"ae273774-8365-41f2-be20-9ebc4ef2dfe4">
+<td data-local-id=3D"96ebe420-68d7-437d-879c-5681da375408" class=3D"conflue=
+nceTd">
+<p local-id=3D"a3fe7ce830a4">[NH]</p></td>
+<td data-local-id=3D"ba17e3a3-5f63-4cfd-9e70-2f668a9a996b" class=3D"conflue=
+nceTd">
+<p local-id=3D"bae62e54b429">Vietinbank nh=E1=BA=ADn ti=E1=BB=81n t=E1=BB=
+=AB TK ng=C3=A2n h=C3=A0ng user</p></td>
+<td data-local-id=3D"9f928691-cba0-41bb-813c-6b0c28561768" class=3D"conflue=
+nceTd">
+<p local-id=3D"fb813d77b4f8">1111 - TK Vietinbank</p></td>
+<td data-local-id=3D"fe7b66ec-93da-4760-b503-325978a22a38" class=3D"conflue=
+nceTd">
+<p local-id=3D"8e7f000e760a">DR</p></td>
+<td data-local-id=3D"f39ac99f-87a1-4ebf-a02e-557fb2db0e76" class=3D"conflue=
+nceTd">
+<p local-id=3D"b9da1904b6ea">100,000</p></td>
+</tr>
+<tr data-local-id=3D"7afcc65b-587e-40cb-9dcb-e027d0b29062">
+<td data-local-id=3D"5782a6c2-27cb-420d-aaf3-9ea22e814cce" class=3D"conflue=
+nceTd">
+<p local-id=3D"8544394f3558">[NH]</p></td>
+<td data-local-id=3D"21f4d54c-404e-4f13-8996-b24daeb60ec9" class=3D"conflue=
+nceTd">
+<p local-id=3D"2d22d4ee00c0">Ghi transit ch=E1=BB=9D x=C3=A1c nh=E1=BA=ADn<=
+/p></td>
+<td data-local-id=3D"caba249d-1ee4-4929-9ca1-0a43d10b2d4c" class=3D"conflue=
+nceTd">
+<p local-id=3D"b3fa0fb0043b">3100 - Transit N=E1=BA=A1p</p></td>
+<td data-local-id=3D"b1ce71b5-9879-42a1-b202-6ea8580d8a8a" class=3D"conflue=
+nceTd">
+<p local-id=3D"c5787f0a89ad">CR</p></td>
+<td data-local-id=3D"240d93cf-cd72-4d50-8317-da6cfb3531fa" class=3D"conflue=
+nceTd">
+<p local-id=3D"2d7364e109bf">100,000</p></td>
+</tr>
+<tr data-local-id=3D"ed685a25-e30c-4e00-b246-5bbdf5709a27">
+<td data-local-id=3D"d469ea45-a648-48be-a9a3-161a500fd2c2" class=3D"conflue=
+nceTd">
+<p local-id=3D"98760d5e9017">[NH]</p></td>
+<td data-local-id=3D"680eb6c8-29ef-4526-9cdf-d24a082af394" class=3D"conflue=
+nceTd">
+<p local-id=3D"72541b491a31">X=C3=A1c nh=E1=BA=ADn th=C3=A0nh c=C3=B4ng, gi=
+=E1=BA=A3i ph=C3=B3ng transit</p></td>
+<td data-local-id=3D"e01cbf5f-d6ea-4e87-b239-f6951faad985" class=3D"conflue=
+nceTd">
+<p local-id=3D"4fab6d68f812">3100 - Transit N=E1=BA=A1p</p></td>
+<td data-local-id=3D"781728e5-fbb8-4760-8154-621d3de89ba1" class=3D"conflue=
+nceTd">
+<p local-id=3D"b9c9c830d1fd">DR</p></td>
+<td data-local-id=3D"89bbef8a-e659-4299-902f-be26c0b989c2" class=3D"conflue=
+nceTd">
+<p local-id=3D"2a09d06d5700">100,000</p></td>
+</tr>
+<tr data-local-id=3D"aa2903fb-733a-474a-b112-413835bdcb44">
+<td data-local-id=3D"fc7c4d94-6ad5-4619-aacd-cf45d9753fc2" class=3D"conflue=
+nceTd">
+<p local-id=3D"4e9467c77181">[User]</p></td>
+<td data-local-id=3D"8fae2f56-2874-4c92-b777-5f9d260378d9" class=3D"conflue=
+nceTd">
+<p local-id=3D"fa62ae0b5f37">C=E1=BB=99ng s=E1=BB=91 d=C6=B0 v=C3=AD user</=
+p></td>
+<td data-local-id=3D"9ac27bad-0d35-4be3-aee9-02f64a06ab0d" class=3D"conflue=
+nceTd">
+<p local-id=3D"10553534c576">2110 - Wallet User</p></td>
+<td data-local-id=3D"89836c2b-5533-4e18-9f00-faeeb200c013" class=3D"conflue=
+nceTd">
+<p local-id=3D"dcc8ebb90324">CR</p></td>
+<td data-local-id=3D"b5609720-8625-4ddd-8f5b-54eb75ff9b12" class=3D"conflue=
+nceTd">
+<p local-id=3D"62fd077a5f90">100,000</p></td>
+</tr>
+<tr data-local-id=3D"122713b9-6a08-460a-a118-04f49d5b4f9b">
+<td data-local-id=3D"d1abc067-c954-4489-9f9f-7b96c2dcb3bb" class=3D"conflue=
+nceTd">
+<p local-id=3D"4ec63c513f43">[User]</p></td>
+<td data-local-id=3D"2e4185d5-cde1-4f5e-86b5-e94caee973aa" class=3D"conflue=
+nceTd">
+<p local-id=3D"ec913c2632a8">Tr=E1=BB=AB ph=C3=AD n=E1=BA=A1p ti=E1=BB=81n<=
+/p></td>
+<td data-local-id=3D"52423d5b-0847-4de9-8092-36028b60ec0b" class=3D"conflue=
+nceTd">
+<p local-id=3D"faabbc2bc087">2110 - Wallet User</p></td>
+<td data-local-id=3D"8af1a655-0a4d-41b9-a147-47276d1bfd18" class=3D"conflue=
+nceTd">
+<p local-id=3D"fb4452a6b1f7">DR</p></td>
+<td data-local-id=3D"fcb332f5-4e37-40d5-9b8a-57615a41faa1" class=3D"conflue=
+nceTd">
+<p local-id=3D"17a6013cd873">1,000</p></td>
+</tr>
+<tr data-local-id=3D"044edab4-583a-4ace-a720-aa273ae5a730">
+<td data-local-id=3D"7aea5908-fbc8-4df0-be7c-bd774d98675d" class=3D"conflue=
+nceTd">
+<p local-id=3D"61110192b3e3">[User]</p></td>
+<td data-local-id=3D"a4a62cb0-80ed-4b4b-ad32-4c2c9a1e140a" class=3D"conflue=
+nceTd">
+<p local-id=3D"5a111c640328">Ghi nh=E1=BA=ADn doanh thu ph=C3=AD</p></td>
+<td data-local-id=3D"6cab05b4-58da-426e-a240-be8cc285e7e9" class=3D"conflue=
+nceTd">
+<p local-id=3D"71e982c90368">4110 - Ph=C3=AD n=E1=BA=A1p</p></td>
+<td data-local-id=3D"610dacc5-3fee-42ae-9a86-87e2adc78622" class=3D"conflue=
+nceTd">
+<p local-id=3D"7c4fa122d4f4">CR</p></td>
+<td data-local-id=3D"735b3739-24d3-42f8-b839-bc0cc7f14755" class=3D"conflue=
+nceTd">
+<p local-id=3D"3a220997f360">1,000</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<blockquote local-id=3D"57b6ef24-d03d-4145-b7d4-0a4a4c330be5">
+<p local-id=3D"4805acb688a2"><strong>K=E1=BA=BFt qu=E1=BA=A3:</strong> <cod=
+e>1111 +100,000</code> | <code>2110 +99,000</code> | <code>4110 +1,000</cod=
+e><br>
+=E2=9C=85 Transit 3100 =3D 0</p>
+</blockquote>
+<hr local-id=3D"fdc17068-c121-46fe-a3b4-45b95d04ecac">
+<h2 local-id=3D"e27a006643f8" id=3D"FundFlow-4.R=C3=BAtTi=E1=BB=81n">4. R=
+=C3=BAt Ti=E1=BB=81n</h2>
+<div class=3D"table-wrap">
+<table data-table-width=3D"760" data-layout=3D"default" data-local-id=3D"54=
+2989b0-9e24-4817-8d25-c1f62307e46f" class=3D"confluenceTable">
+<colgroup>
+<col style=3D"width: 84.0px;">
+<col style=3D"width: 219.0px;">
+<col style=3D"width: 152.0px;">
+<col style=3D"width: 152.0px;">
+<col style=3D"width: 152.0px;">
+</colgroup>
+<tbody>
+<tr data-local-id=3D"4fdbf738-3c63-46a8-abd7-9e9bf40d30c9">
+<th data-local-id=3D"7262a1f6-01ef-4835-85cb-353313a5be5c" class=3D"conflue=
+nceTh">
+<p local-id=3D"afbd0d9c4f8d">Nh=C3=B3m</p></th>
+<th data-local-id=3D"19ba0eb3-3fc5-4db7-9cd9-82dc4bcdea11" class=3D"conflue=
+nceTh">
+<p local-id=3D"a65334cdb195">Step</p></th>
+<th data-local-id=3D"7b68655d-f3d1-42ac-a808-47bfa371ca2a" class=3D"conflue=
+nceTh">
+<p local-id=3D"775e61259535">Account</p></th>
+<th data-local-id=3D"44da6b20-a618-4ad7-909b-77f4d4d0d17d" class=3D"conflue=
+nceTh">
+<p local-id=3D"076a9e8e8313">DR/CR</p></th>
+<th data-local-id=3D"83b9ef43-476a-4e17-b4e0-9148aacdaa20" class=3D"conflue=
+nceTh">
+<p local-id=3D"9837014a8715">Amount</p></th>
+</tr>
+<tr data-local-id=3D"02169515-587e-4d92-8bc1-c43d8d84c5c3">
+<td data-local-id=3D"c92c28ca-272a-478f-91cd-8ae44ba2107b" class=3D"conflue=
+nceTd">
+<p local-id=3D"3a932ecde8cc">[User]</p></td>
+<td data-local-id=3D"032ee2a8-9fe6-45f8-b1d7-ae4800e3e011" class=3D"conflue=
+nceTd">
+<p local-id=3D"1c6c7cdae699">Tr=E1=BB=AB v=C3=AD user (ti=E1=BB=81n g=E1=BB=
+=91c + ph=C3=AD)</p></td>
+<td data-local-id=3D"0d4776d3-fa31-4c34-af4e-e1b913f61806" class=3D"conflue=
+nceTd">
+<p local-id=3D"6a3a58d53174">2110 - Wallet User</p></td>
+<td data-local-id=3D"f528b9af-6755-4a38-aec5-68940b45fafa" class=3D"conflue=
+nceTd">
+<p local-id=3D"fdb19ef9887e">DR</p></td>
+<td data-local-id=3D"7ae70127-7e5c-4c7b-b38d-54ebdd919155" class=3D"conflue=
+nceTd">
+<p local-id=3D"8a1a54fedfa0">101,000</p></td>
+</tr>
+<tr data-local-id=3D"611a3f0d-d01b-4900-bbd4-b8c95f8e13ac">
+<td data-local-id=3D"c1ac2c76-826d-4424-8143-04a8711b0efd" class=3D"conflue=
+nceTd">
+<p local-id=3D"619ac5014e01">[User]</p></td>
+<td data-local-id=3D"1ce72eb9-62a8-4e8c-a6b6-88805a4dd5b4" class=3D"conflue=
+nceTd">
+<p local-id=3D"a7310377bea3">Ghi transit ch=E1=BB=9D x=E1=BB=AD l=C3=BD</p>=
+</td>
+<td data-local-id=3D"7ae26ac3-e12c-4608-a42d-79eb34b32f8c" class=3D"conflue=
+nceTd">
+<p local-id=3D"879eb58a9c76">3200 - Transit R=C3=BAt</p></td>
+<td data-local-id=3D"a1c01e87-03df-4344-8a9f-d70dca2b4179" class=3D"conflue=
+nceTd">
+<p local-id=3D"e0bef3f967c7">CR</p></td>
+<td data-local-id=3D"750aa494-bae4-4e26-bbd7-4733d15c7d25" class=3D"conflue=
+nceTd">
+<p local-id=3D"3aa0977291a5">101,000</p></td>
+</tr>
+<tr data-local-id=3D"c03a1360-cb9c-4be9-a4f4-540fab8d1055">
+<td data-local-id=3D"7af1c637-f1a9-4fea-881c-1b7a831f2cd9" class=3D"conflue=
+nceTd">
+<p local-id=3D"b0fa78e87fb1">[NH]</p></td>
+<td data-local-id=3D"e611227d-ca18-4afd-b019-ff4f5ba3db18" class=3D"conflue=
+nceTd">
+<p local-id=3D"a11d6f81779b">Gi=E1=BA=A3i ph=C3=B3ng transit =E2=80=94 ph=
+=E1=BA=A7n ti=E1=BB=81n g=E1=BB=91c</p></td>
+<td data-local-id=3D"f3bef03f-c95b-4505-87dd-0e1ce40c324f" class=3D"conflue=
+nceTd">
+<p local-id=3D"1ceb46eb037e">3200 - Transit R=C3=BAt</p></td>
+<td data-local-id=3D"27dd6fef-e4d3-4568-a565-ea959fc4249d" class=3D"conflue=
+nceTd">
+<p local-id=3D"7539b3d081e4">DR</p></td>
+<td data-local-id=3D"32f04525-3443-4571-967c-198f3559b42d" class=3D"conflue=
+nceTd">
+<p local-id=3D"231f78fa53e2">100,000</p></td>
+</tr>
+<tr data-local-id=3D"79ee3e5c-5011-4dba-9f3e-83f29166db54">
+<td data-local-id=3D"63c039fb-3963-4fa8-9c4c-1ec647aaa4e4" class=3D"conflue=
+nceTd">
+<p local-id=3D"1b280009d24e">[NH]</p></td>
+<td data-local-id=3D"3e5c802c-9dd8-49c0-bafe-1713ecfcbcb8" class=3D"conflue=
+nceTd">
+<p local-id=3D"f2a06ba07a1f">NH th=E1=BB=B1c hi=E1=BB=87n chuy=E1=BB=83n v=
+=E1=BB=81 TK user</p></td>
+<td data-local-id=3D"62f5a8de-01e4-42f8-a1f9-a66554e13b17" class=3D"conflue=
+nceTd">
+<p local-id=3D"db17769bba79">1111 - TK Vietinbank</p></td>
+<td data-local-id=3D"dcc157fc-cd42-4521-be17-3927df1fb58b" class=3D"conflue=
+nceTd">
+<p local-id=3D"a8e8329db279">CR</p></td>
+<td data-local-id=3D"a3c13599-adf5-443a-8c76-cf25eafd494b" class=3D"conflue=
+nceTd">
+<p local-id=3D"6f622224747d">100,000</p></td>
+</tr>
+<tr data-local-id=3D"9dd995f9-6453-46b5-9ca9-29785c5600ae">
+<td data-local-id=3D"c03e1789-df9a-4324-b266-634c332f38f8" class=3D"conflue=
+nceTd">
+<p local-id=3D"fe7757f55d24">[NH]</p></td>
+<td data-local-id=3D"67b2d798-ad08-4a65-8d80-a2be63788841" class=3D"conflue=
+nceTd">
+<p local-id=3D"6f465ef2d341">Gi=E1=BA=A3i ph=C3=B3ng transit =E2=80=94 ph=
+=E1=BA=A7n ph=C3=AD</p></td>
+<td data-local-id=3D"06f53a87-821c-4438-8050-e1f2edce887d" class=3D"conflue=
+nceTd">
+<p local-id=3D"f3aa59299b6b">3200 - Transit R=C3=BAt</p></td>
+<td data-local-id=3D"a8df336a-9d03-4520-b633-790a935f8a61" class=3D"conflue=
+nceTd">
+<p local-id=3D"f857b419a0fe">DR</p></td>
+<td data-local-id=3D"674ffd03-262a-4681-98ae-2e6aebf389e3" class=3D"conflue=
+nceTd">
+<p local-id=3D"e90abcd1dc4d">1,000</p></td>
+</tr>
+<tr data-local-id=3D"c5fd80be-ba18-433a-a7d5-41dc1c610825">
+<td data-local-id=3D"a4095b17-8751-4981-b9b4-159afdd66e23" class=3D"conflue=
+nceTd">
+<p local-id=3D"70aba9beb7a2">[NH]</p></td>
+<td data-local-id=3D"35eec848-19c5-41d1-a8cb-559fe5c98802" class=3D"conflue=
+nceTd">
+<p local-id=3D"fb4ec23cc986">Ghi nh=E1=BA=ADn doanh thu ph=C3=AD r=C3=BAt</=
+p></td>
+<td data-local-id=3D"b51dcce2-22b0-476e-83c5-e6a9d37222a6" class=3D"conflue=
+nceTd">
+<p local-id=3D"7b7edb3d4a97">4120 - Ph=C3=AD r=C3=BAt</p></td>
+<td data-local-id=3D"ebde889f-5a4f-4a3c-8bd3-3c8d7cf694a1" class=3D"conflue=
+nceTd">
+<p local-id=3D"a21f3c14d617">CR</p></td>
+<td data-local-id=3D"3921dab9-4b62-4fd3-9a22-fcab9adda57c" class=3D"conflue=
+nceTd">
+<p local-id=3D"ec4512613282">1,000</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<blockquote local-id=3D"b3921632-4dbf-4101-9dd5-95df69548cea">
+<p local-id=3D"684a7af07222"><strong>K=E1=BA=BFt qu=E1=BA=A3:</strong> <cod=
+e>2110 -101,000</code> | <code>1111 -100,000</code> | <code>4120 +1,000</co=
+de><br>
+=E2=9C=85 Transit 3200 =3D 0</p>
+</blockquote>
+<hr local-id=3D"5590c928-ce35-4aa6-ae81-cda0d66a9814">
+<h2 local-id=3D"adbae1848484" id=3D"FundFlow-5.Chuy=E1=BB=83nTi=E1=BB=81nV=
+=C3=AD=E2=86=92V=C3=AD(Internal)">5. Chuy=E1=BB=83n Ti=E1=BB=81n V=C3=AD =
+=E2=86=92 V=C3=AD (Internal)</h2>
+<div class=3D"table-wrap">
+<table data-table-width=3D"760" data-layout=3D"default" data-local-id=3D"94=
+adbf74-3df2-4519-ac3a-c4178b7fc5f3" class=3D"confluenceTable">
+<colgroup>
+<col style=3D"width: 92.0px;">
+<col style=3D"width: 211.0px;">
+<col style=3D"width: 152.0px;">
+<col style=3D"width: 152.0px;">
+<col style=3D"width: 152.0px;">
+</colgroup>
+<tbody>
+<tr data-local-id=3D"a1483acb-d776-4a23-af51-408542d327c0">
+<th data-local-id=3D"5c3936b6-e601-4c20-826e-7e3e174062e1" class=3D"conflue=
+nceTh">
+<p local-id=3D"a88923bed568">Nh=C3=B3m</p></th>
+<th data-local-id=3D"0b2be3a7-057f-41f3-afcc-e3f7fb20a011" class=3D"conflue=
+nceTh">
+<p local-id=3D"c52b43a8fea6">Step</p></th>
+<th data-local-id=3D"e1afa9d3-4b22-4b59-bf56-bfe23ac5d5bd" class=3D"conflue=
+nceTh">
+<p local-id=3D"7229049f6c5e">Account</p></th>
+<th data-local-id=3D"5f5bd58f-a1d8-4dae-9bb7-d1c08bc08bfc" class=3D"conflue=
+nceTh">
+<p local-id=3D"22d092d87e17">DR/CR</p></th>
+<th data-local-id=3D"579bf1ef-8016-4ded-ab2a-a13190aed063" class=3D"conflue=
+nceTh">
+<p local-id=3D"4516be41333c">Amount</p></th>
+</tr>
+<tr data-local-id=3D"25bf7f26-04c6-468d-b9d8-aa149184ebcb">
+<td data-local-id=3D"28073c30-d344-4802-842f-cabacb166aa5" class=3D"conflue=
+nceTd">
+<p local-id=3D"febf247e6655">[User A]</p></td>
+<td data-local-id=3D"fc763313-c1b7-423d-8508-ac4f9b973548" class=3D"conflue=
+nceTd">
+<p local-id=3D"b55b10d57482">Tr=E1=BB=AB v=C3=AD ng=C6=B0=E1=BB=9Di g=E1=BB=
+=ADi (g=E1=BB=91c + ph=C3=AD)</p></td>
+<td data-local-id=3D"5181bd5b-7217-4f5e-b454-98c601064033" class=3D"conflue=
+nceTd">
+<p local-id=3D"739317e1bf8a">2110 - Wallet User A</p></td>
+<td data-local-id=3D"9ef83084-392d-4e62-9318-b6bb1f3ffe0a" class=3D"conflue=
+nceTd">
+<p local-id=3D"ed4c77279a6c">DR</p></td>
+<td data-local-id=3D"c46f76ee-debf-4dec-9da1-8a33f74c9103" class=3D"conflue=
+nceTd">
+<p local-id=3D"e17c54a91e44">101,000</p></td>
+</tr>
+<tr data-local-id=3D"27e5a047-cccc-49c7-9260-41e56dce986a">
+<td data-local-id=3D"0cae8750-271d-4fe7-a22f-874139eef917" class=3D"conflue=
+nceTd">
+<p local-id=3D"b0a85bf7a7c4">[User A]</p></td>
+<td data-local-id=3D"7afd8f3d-cea6-4397-b2b7-b071f24b56d3" class=3D"conflue=
+nceTd">
+<p local-id=3D"4b8b5c689c3e">Ghi transit n=E1=BB=99i b=E1=BB=99</p></td>
+<td data-local-id=3D"2a073dc2-cf5b-484c-8580-efd927ac0dfe" class=3D"conflue=
+nceTd">
+<p local-id=3D"8c8be0f88d43">3300 - Transit N=E1=BB=99i b=E1=BB=99</p></td>
+<td data-local-id=3D"8024cbbf-c4c6-4ecc-ba16-69f6f5b7c18f" class=3D"conflue=
+nceTd">
+<p local-id=3D"a3f2baaa7458">CR</p></td>
+<td data-local-id=3D"798f4541-1191-4563-a85d-765a3b6572dc" class=3D"conflue=
+nceTd">
+<p local-id=3D"01bd6ebd5012">101,000</p></td>
+</tr>
+<tr data-local-id=3D"337c9191-0ba1-494d-8a32-271a97e7fcc9">
+<td data-local-id=3D"8bc5ce50-2a50-4337-a344-9fd0e4c3a059" class=3D"conflue=
+nceTd">
+<p local-id=3D"b61451373950">[User B]</p></td>
+<td data-local-id=3D"bbc7087d-559f-47ec-8570-cba1973de497" class=3D"conflue=
+nceTd">
+<p local-id=3D"79c98946414b">Gi=E1=BA=A3i ph=C3=B3ng transit =E2=80=94 ph=
+=E1=BA=A7n ti=E1=BB=81n g=E1=BB=91c</p></td>
+<td data-local-id=3D"f7ba1ccf-a0ef-49a0-99a5-921dc17ad7eb" class=3D"conflue=
+nceTd">
+<p local-id=3D"c0235f957d91">3300 - Transit N=E1=BB=99i b=E1=BB=99</p></td>
+<td data-local-id=3D"41dda595-15a8-428f-9f1e-02287978d3f1" class=3D"conflue=
+nceTd">
+<p local-id=3D"fa08269f2e80">DR</p></td>
+<td data-local-id=3D"98c86f39-5194-4cfa-86c0-c8f160fddaf0" class=3D"conflue=
+nceTd">
+<p local-id=3D"4107c9b45428">100,000</p></td>
+</tr>
+<tr data-local-id=3D"94af28d1-0281-490a-a974-077d0438dd57">
+<td data-local-id=3D"112f8d6b-de6e-4e76-b61b-2de5452fe308" class=3D"conflue=
+nceTd">
+<p local-id=3D"10282b802679">[User B]</p></td>
+<td data-local-id=3D"5e74d1bc-ebac-4f38-88bd-867ca643e674" class=3D"conflue=
+nceTd">
+<p local-id=3D"9bcb072e0d77">C=E1=BB=99ng v=C3=AD ng=C6=B0=E1=BB=9Di nh=E1=
+=BA=ADn</p></td>
+<td data-local-id=3D"36331643-229a-4473-b4ec-dd7af5a6ca62" class=3D"conflue=
+nceTd">
+<p local-id=3D"d7208927f217">2110 - Wallet User B</p></td>
+<td data-local-id=3D"79ac435d-47f3-4c7b-aaa8-e16c5aa7538c" class=3D"conflue=
+nceTd">
+<p local-id=3D"8b4c04919787">CR</p></td>
+<td data-local-id=3D"3f283f43-2f92-4e39-988e-daba1c2013c2" class=3D"conflue=
+nceTd">
+<p local-id=3D"33a094194cba">100,000</p></td>
+</tr>
+<tr data-local-id=3D"71d6dce3-1522-49df-958d-ece53bc8db8b">
+<td data-local-id=3D"e9dc22b0-6473-4a5c-978d-da8409894381" class=3D"conflue=
+nceTd">
+<p local-id=3D"de30cdadcc09">[User A]</p></td>
+<td data-local-id=3D"aef193c6-7252-4348-92c8-61c683fdd04f" class=3D"conflue=
+nceTd">
+<p local-id=3D"79350fb521ec">Gi=E1=BA=A3i ph=C3=B3ng transit =E2=80=94 ph=
+=E1=BA=A7n ph=C3=AD</p></td>
+<td data-local-id=3D"557e886b-b823-4261-8727-61a31ce72168" class=3D"conflue=
+nceTd">
+<p local-id=3D"237c9911e225">3300 - Transit N=E1=BB=99i b=E1=BB=99</p></td>
+<td data-local-id=3D"58f77fe8-7ab0-4fea-8aa9-dcdb89b3a038" class=3D"conflue=
+nceTd">
+<p local-id=3D"76f786830077">DR</p></td>
+<td data-local-id=3D"dbfa4366-92b9-4f83-9c99-14b927460aab" class=3D"conflue=
+nceTd">
+<p local-id=3D"7621f1cf77e4">1,000</p></td>
+</tr>
+<tr data-local-id=3D"eccb0631-eadf-43bb-86dd-5abcb3ba8e23">
+<td data-local-id=3D"6bf510e0-58ec-479e-a1d0-a058cfa33b89" class=3D"conflue=
+nceTd">
+<p local-id=3D"957a033ec653">[User A]</p></td>
+<td data-local-id=3D"763c85ab-a6e1-4207-a2a5-37e785bca517" class=3D"conflue=
+nceTd">
+<p local-id=3D"635531ce1b09">Ghi nh=E1=BA=ADn doanh thu ph=C3=AD</p></td>
+<td data-local-id=3D"89f21679-1e24-42d2-9646-bef21115644e" class=3D"conflue=
+nceTd">
+<p local-id=3D"ed63e1a84b35">4130 - Ph=C3=AD chuy=E1=BB=83n</p></td>
+<td data-local-id=3D"08166a98-9d97-4432-a117-bc1e6c80e44a" class=3D"conflue=
+nceTd">
+<p local-id=3D"85c116fb3928">CR</p></td>
+<td data-local-id=3D"59dad7b5-cb73-44b7-a46c-c7d2775a7ae0" class=3D"conflue=
+nceTd">
+<p local-id=3D"b22d831414f0">1,000</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<blockquote local-id=3D"1382c86f-73c1-4ac8-83b8-2363592416c1">
+<p local-id=3D"8ab15dfcf049"><strong>K=E1=BA=BFt qu=E1=BA=A3:</strong> <cod=
+e>2110A -101,000</code> | <code>2110B +100,000</code> | <code>4130 +1,000</=
+code> | Kh=C3=B4ng ph=C3=A1t sinh TK NH<br>
+=E2=9C=85 Transit 3300 =3D 0</p>
+</blockquote>
+<hr local-id=3D"304206fe-50fb-48fe-bf32-ec18255d19ca">
+<h2 local-id=3D"8b5d833d6812" id=3D"FundFlow-6.Chuy=E1=BB=83nTi=E1=BB=81nIB=
+FT(Li=C3=AAnNg=C3=A2nH=C3=A0ng)">6. Chuy=E1=BB=83n Ti=E1=BB=81n IBFT (Li=C3=
+=AAn Ng=C3=A2n H=C3=A0ng)</h2>
+<div class=3D"table-wrap">
+<table data-table-width=3D"760" data-layout=3D"default" data-local-id=3D"18=
+4806cf-f397-410f-b8ff-1cc7fc719ebb" class=3D"confluenceTable">
+<colgroup>
+<col style=3D"width: 74.0px;">
+<col style=3D"width: 229.0px;">
+<col style=3D"width: 152.0px;">
+<col style=3D"width: 152.0px;">
+<col style=3D"width: 152.0px;">
+</colgroup>
+<tbody>
+<tr data-local-id=3D"859fc96f-dc5a-4d51-a93f-4a0aa7ab6d69">
+<th data-local-id=3D"1d42a009-ff67-4656-83c3-9ac30eff85db" class=3D"conflue=
+nceTh">
+<p local-id=3D"93b61f71766b">Nh=C3=B3m</p></th>
+<th data-local-id=3D"0feb7c2b-c7df-4386-adce-7141ef09e802" class=3D"conflue=
+nceTh">
+<p local-id=3D"482e2b6b0906">Step</p></th>
+<th data-local-id=3D"f4bc4220-72d2-4e8c-a385-922bf2dbdbeb" class=3D"conflue=
+nceTh">
+<p local-id=3D"2f44ec542eb8">Account</p></th>
+<th data-local-id=3D"40cab0e7-eb79-417a-b995-13b39f83abfd" class=3D"conflue=
+nceTh">
+<p local-id=3D"8ef4c132dfa0">DR/CR</p></th>
+<th data-local-id=3D"5b4c1f62-a002-4832-9529-71496b64f73c" class=3D"conflue=
+nceTh">
+<p local-id=3D"ffef5bfb3597">Amount</p></th>
+</tr>
+<tr data-local-id=3D"35d5542e-9576-4dbc-8f32-fb32ed8620e6">
+<td data-local-id=3D"43c6f4d0-a0c0-412b-a1f0-85286d288fe0" class=3D"conflue=
+nceTd">
+<p local-id=3D"02aff606ef6c">[User]</p></td>
+<td data-local-id=3D"a855a973-ebb5-446a-87b3-90948d331503" class=3D"conflue=
+nceTd">
+<p local-id=3D"a8f48cec4755">Tr=E1=BB=AB v=C3=AD ng=C6=B0=E1=BB=9Di g=E1=BB=
+=ADi (g=E1=BB=91c + ph=C3=AD)</p></td>
+<td data-local-id=3D"50162705-cc81-46a9-aaa1-287bff30f8c1" class=3D"conflue=
+nceTd">
+<p local-id=3D"728a795bb7e6">2110 - Wallet User</p></td>
+<td data-local-id=3D"e4732f0d-e2b5-47b7-b74f-46f47d09e1d0" class=3D"conflue=
+nceTd">
+<p local-id=3D"769b8bb3292e">DR</p></td>
+<td data-local-id=3D"06c95617-bfe3-400c-9ab2-110621692a84" class=3D"conflue=
+nceTd">
+<p local-id=3D"70e8a2166ae2">101,000</p></td>
+</tr>
+<tr data-local-id=3D"09687dc8-d8fc-4c4b-85a1-96ac69a2136e">
+<td data-local-id=3D"68fade7b-0b90-481f-a6d7-3d059da5ee0c" class=3D"conflue=
+nceTd">
+<p local-id=3D"7a438e28088c">[User]</p></td>
+<td data-local-id=3D"ba9f96af-4644-476c-92e7-47900bb29192" class=3D"conflue=
+nceTd">
+<p local-id=3D"fd5feb96e4e5">Ghi transit IBFT</p></td>
+<td data-local-id=3D"78f756b1-0ea5-4b5c-85e2-4576672bddf8" class=3D"conflue=
+nceTd">
+<p local-id=3D"a9e6f73ee9dc">3400 - Transit IBFT</p></td>
+<td data-local-id=3D"35da8707-bf09-47db-b1e6-cb4180452684" class=3D"conflue=
+nceTd">
+<p local-id=3D"2cbf086be5dd">CR</p></td>
+<td data-local-id=3D"d5aff7c8-9c3a-47fa-b97a-bd9400af5a6e" class=3D"conflue=
+nceTd">
+<p local-id=3D"ba78e04755da">101,000</p></td>
+</tr>
+<tr data-local-id=3D"6aa590cf-7f45-410f-b98a-07dc86d86fba">
+<td data-local-id=3D"975324c2-08fa-4364-a226-c3cfa4c59bf1" class=3D"conflue=
+nceTd">
+<p local-id=3D"a8753a8f395d">[User]</p></td>
+<td data-local-id=3D"45433e6b-7b65-4088-8fe6-45cb6295e037" class=3D"conflue=
+nceTd">
+<p local-id=3D"bd815853bbd7">Gi=E1=BA=A3i ph=C3=B3ng transit =E2=80=94 ph=
+=E1=BA=A7n ph=C3=AD</p></td>
+<td data-local-id=3D"86723522-8b7d-4412-a733-6792014fa5ac" class=3D"conflue=
+nceTd">
+<p local-id=3D"339fb0f53736">3400 - Transit IBFT</p></td>
+<td data-local-id=3D"4b6f7fa7-7014-481a-a23d-2a15e35cd762" class=3D"conflue=
+nceTd">
+<p local-id=3D"f27537665834">DR</p></td>
+<td data-local-id=3D"8a1ea9b4-74df-44c1-9953-93a8fc650cdd" class=3D"conflue=
+nceTd">
+<p local-id=3D"234229ab799e">1,000</p></td>
+</tr>
+<tr data-local-id=3D"9a05b345-d35e-42b6-8fb1-484975765d14">
+<td data-local-id=3D"2ab039a8-c510-45b0-bc83-41644b36bbb6" class=3D"conflue=
+nceTd">
+<p local-id=3D"d6302752ee18">[User]</p></td>
+<td data-local-id=3D"997c21fd-b709-439a-8347-97c9d316725e" class=3D"conflue=
+nceTd">
+<p local-id=3D"de62e3df05d1">Ghi nh=E1=BA=ADn doanh thu ph=C3=AD IBFT</p></=
+td>
+<td data-local-id=3D"8118de12-490c-46db-bb3e-43f8be6d9465" class=3D"conflue=
+nceTd">
+<p local-id=3D"cf955d935fb4">4130 - Ph=C3=AD chuy=E1=BB=83n</p></td>
+<td data-local-id=3D"6fbb31a1-cdd7-4a14-944b-affce158e1a2" class=3D"conflue=
+nceTd">
+<p local-id=3D"49cc1596ecc1">CR</p></td>
+<td data-local-id=3D"c29537a2-4f22-4772-9bc8-f0f968c1a09d" class=3D"conflue=
+nceTd">
+<p local-id=3D"6e1851bd3cba">1,000</p></td>
+</tr>
+<tr data-local-id=3D"fbd97199-7362-48eb-ab82-2ea274e797ee">
+<td data-local-id=3D"70fdf905-e6ff-4deb-8b07-0585cec459ce" class=3D"conflue=
+nceTd">
+<p local-id=3D"6f9d41617059">[NH]</p></td>
+<td data-local-id=3D"740fc954-836d-45f5-ba25-981e22cc391d" class=3D"conflue=
+nceTd">
+<p local-id=3D"2e7d407f18dd">Gi=E1=BA=A3i ph=C3=B3ng transit =E2=80=94 ph=
+=E1=BA=A7n ti=E1=BB=81n g=E1=BB=91c</p></td>
+<td data-local-id=3D"3d9586f7-7460-4d68-bae3-a4936e3e83a5" class=3D"conflue=
+nceTd">
+<p local-id=3D"aec01a1e5c4d">3400 - Transit IBFT</p></td>
+<td data-local-id=3D"bf5fda47-08ac-4255-a297-6fc1649cef68" class=3D"conflue=
+nceTd">
+<p local-id=3D"97d23ee6fe44">DR</p></td>
+<td data-local-id=3D"fde1f0db-cac2-4ab8-8b62-527064a24aea" class=3D"conflue=
+nceTd">
+<p local-id=3D"892e112b3613">100,000</p></td>
+</tr>
+<tr data-local-id=3D"bbf87a78-f873-44ad-a823-7b83d1ca4081">
+<td data-local-id=3D"96021572-fa46-45a7-9a7c-e4c28e836b6d" class=3D"conflue=
+nceTd">
+<p local-id=3D"453dc07e5530">[NH]</p></td>
+<td data-local-id=3D"2ea5bf55-f20d-4366-ab18-5fa91647ef6c" class=3D"conflue=
+nceTd">
+<p local-id=3D"a3cfdb5aa316">Gi=E1=BA=A3m TK Napas, g=E1=BB=ADi =C4=91=E1=
+=BA=BFn NH =C4=91=C3=ADch</p></td>
+<td data-local-id=3D"2f46e1fa-1f9c-44b7-855a-7c478f4232f5" class=3D"conflue=
+nceTd">
+<p local-id=3D"4fa980b157e1">1112 - TK Napas</p></td>
+<td data-local-id=3D"6a83ace7-dfd8-4ec4-9e81-6674bf4b4f96" class=3D"conflue=
+nceTd">
+<p local-id=3D"395054e35337">CR</p></td>
+<td data-local-id=3D"3a98fc39-d509-4d55-8207-76ef77a18995" class=3D"conflue=
+nceTd">
+<p local-id=3D"91a6f29bb51e">100,000</p></td>
+</tr>
+<tr data-local-id=3D"fdfa2037-cb36-45ca-b796-e5eeea3bba8c">
+<td data-local-id=3D"b872412f-5a3b-4e92-a6f9-2f8053377992" class=3D"conflue=
+nceTd">
+<p local-id=3D"65834fffbd5d">[NH]</p></td>
+<td data-local-id=3D"b48ba9f3-edae-4f5f-8a46-f0aacaaa64f9" class=3D"conflue=
+nceTd">
+<p local-id=3D"c4e75476d2c7">Napas x=C3=A1c nh=E1=BA=ADn NH =C4=91=C3=ADch =
+=C4=91=C3=A3 nh=E1=BA=ADn ti=E1=BB=81n</p></td>
+<td data-local-id=3D"064c89ca-ad69-4883-bdbc-cbbb06788643" class=3D"conflue=
+nceTd">
+<p local-id=3D"d27455dacb2b"><em>(Settled T+0)</em></p></td>
+<td data-local-id=3D"dfe73b9f-90b5-4281-aa86-d80a67f2dcc9" class=3D"conflue=
+nceTd">
+<p local-id=3D"2e941f33a855">=E2=80=94</p></td>
+<td data-local-id=3D"bf362766-dde4-4bb6-8f20-922d3b98692e" class=3D"conflue=
+nceTd">
+<p local-id=3D"7ed493840f0b">=E2=80=94</p></td>
+</tr>
+<tr data-local-id=3D"d531f14a-3d58-4352-a39f-0e470284a905">
+<td data-local-id=3D"9bf4e453-1d20-4243-834c-4eee1aefa4dd" class=3D"conflue=
+nceTd">
+<p local-id=3D"38482ae7e11a">[NH]</p></td>
+<td data-local-id=3D"c90e7e3d-d17e-4d38-adc0-dfbdd1b454bf" class=3D"conflue=
+nceTd">
+<p local-id=3D"115f5b407249">Chi ph=C3=AD Napas (TGTT ch=E1=BB=8Bu)</p></td=
+>
+<td data-local-id=3D"3fc913fb-7dbe-43fd-ac40-4a2be3b2ba0d" class=3D"conflue=
+nceTd">
+<p local-id=3D"270410264ddc">5100 - Ph=C3=AD Napas</p></td>
+<td data-local-id=3D"1ff1018f-e722-44c6-95b7-19ba52096d87" class=3D"conflue=
+nceTd">
+<p local-id=3D"717b40f81e33">DR</p></td>
+<td data-local-id=3D"19ec49bb-9e0e-4904-bf84-c970d4bfc150" class=3D"conflue=
+nceTd">
+<p local-id=3D"2ad6818e6b10">500</p></td>
+</tr>
+<tr data-local-id=3D"298afc5a-d1c6-4984-bc61-b9276b048f15">
+<td data-local-id=3D"162101e2-afa7-4886-a2a4-e42dd48d435e" class=3D"conflue=
+nceTd">
+<p local-id=3D"51c3b3c7771d">[NH]</p></td>
+<td data-local-id=3D"3ab6386d-225b-42cb-90bf-5f05806b3c1d" class=3D"conflue=
+nceTd">
+<p local-id=3D"adfa0d736044">Gi=E1=BA=A3m TK Napas =C4=91=E1=BB=83 tr=E1=BA=
+=A3 ph=C3=AD Napas</p></td>
+<td data-local-id=3D"4bddf2ad-e3a1-4847-a423-9c83268f2ecb" class=3D"conflue=
+nceTd">
+<p local-id=3D"bcc70ef563e4">1112 - TK Napas</p></td>
+<td data-local-id=3D"3b7cdc69-9ce0-4ae5-892d-82c3724001ab" class=3D"conflue=
+nceTd">
+<p local-id=3D"7d94d91166e9">CR</p></td>
+<td data-local-id=3D"99971d79-5a04-4a0d-bb3d-14eca9c96d5f" class=3D"conflue=
+nceTd">
+<p local-id=3D"b98ce6077068">500</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<blockquote local-id=3D"83d1e418-858c-4474-bc14-922b90647ea2">
+<p local-id=3D"e1246c040783"><strong>K=E1=BA=BFt qu=E1=BA=A3:</strong> <cod=
+e>2110 -101,000</code> | <code>1112 -100,500</code> | <code>4130 +1,000</co=
+de> | <code>5100 +500</code> | <strong>L=C3=A3i thu=E1=BA=A7n +500</strong>=
+<br>
+=E2=9C=85 Transit 3400 =3D 0</p>
+</blockquote>
+<hr local-id=3D"4ddac794-c896-4328-96ef-8e7b90954f6f">
+<h2 local-id=3D"e5cb788bd867" id=3D"FundFlow-7.ThanhTo=C3=A1nQuaNH=E2=80=94=
+QR/POS">7. Thanh To=C3=A1n Qua NH =E2=80=94 QR / POS</h2>
+<blockquote local-id=3D"ee7b7287-dc58-4bbc-bf0d-53e6f9d0782f">
+<p local-id=3D"98d142e94d26"><strong>L=C6=B0u =C3=BD:</strong> B=C6=B0=E1=
+=BB=9Bc Settle/MDR trong use case n=C3=A0y ch=E1=BB=89 ghi nh=E1=BA=ADn ti=
+=E1=BB=81n v=C3=A0o <code>2120 - Wallet Merchant</code>. Vi=E1=BB=87c chuy=
+=E1=BB=83n ti=E1=BB=81n th=E1=BB=B1c v=E1=BB=81 NH merchant =C4=91=C6=B0=E1=
+=BB=A3c x=E1=BB=AD l=C3=BD <strong>ri=C3=AAng</strong> t=E1=BA=A1i Use Case=
+ 10 =E2=80=94 Settlement &amp; Clearing.</p>
+</blockquote>
+<div class=3D"table-wrap">
+<table data-table-width=3D"760" data-layout=3D"default" data-local-id=3D"83=
+8fb889-0274-4124-92ec-0313e4b06331" class=3D"confluenceTable">
+<colgroup>
+<col style=3D"width: 77.0px;">
+<col style=3D"width: 226.0px;">
+<col style=3D"width: 152.0px;">
+<col style=3D"width: 152.0px;">
+<col style=3D"width: 152.0px;">
+</colgroup>
+<tbody>
+<tr data-local-id=3D"12e63fdb-f4af-4058-871e-153c6b5d0811">
+<th data-local-id=3D"e3d0f110-42f5-46f1-985d-99902548a396" class=3D"conflue=
+nceTh">
+<p local-id=3D"a02257b2c3b7">Nh=C3=B3m</p></th>
+<th data-local-id=3D"f78d1ba9-fff0-497f-8907-f104306c0a45" class=3D"conflue=
+nceTh">
+<p local-id=3D"f8211cd9c05c">Step</p></th>
+<th data-local-id=3D"1d610354-1afc-4ce3-8999-ad8457f42fe1" class=3D"conflue=
+nceTh">
+<p local-id=3D"3c81fbd64e91">Account</p></th>
+<th data-local-id=3D"14e75728-7b3c-49dc-92bc-b96120c4eebb" class=3D"conflue=
+nceTh">
+<p local-id=3D"d3bd6b8d552c">DR/CR</p></th>
+<th data-local-id=3D"62c50386-da17-41f7-9b79-bc1cf02e02e5" class=3D"conflue=
+nceTh">
+<p local-id=3D"79bf650e4794">Amount</p></th>
+</tr>
+<tr data-local-id=3D"bc82e18d-7be5-4ea7-9db1-d945437a0bed">
+<td data-local-id=3D"07dd98f7-4d5c-425d-9e4b-ad8d7bd4a8d4" class=3D"conflue=
+nceTd">
+<p local-id=3D"543d1d823651">[NH]</p></td>
+<td data-local-id=3D"1db629e7-eed8-4a4f-8a0c-45b24aa9dacc" class=3D"conflue=
+nceTd">
+<p local-id=3D"ec7638862c72">VPBank nh=E1=BA=ADn ti=E1=BB=81n t=E1=BB=AB us=
+er qua QR/POS</p></td>
+<td data-local-id=3D"9aa95cb8-d010-4b09-9f16-9d60d645a108" class=3D"conflue=
+nceTd">
+<p local-id=3D"2a36eb04b0f8">1113 - TK VPBank</p></td>
+<td data-local-id=3D"7a17602f-7062-4235-90fe-d5171ac4e2b1" class=3D"conflue=
+nceTd">
+<p local-id=3D"dcf4ff1910bb">DR</p></td>
+<td data-local-id=3D"d30a5e06-cecb-42a2-bff9-0808e219fd12" class=3D"conflue=
+nceTd">
+<p local-id=3D"ddbf71fb226e">100,000</p></td>
+</tr>
+<tr data-local-id=3D"fe0b643e-c75e-463a-a416-87dd43a19373">
+<td data-local-id=3D"945835a3-18c7-4d74-80af-4737cbe2e257" class=3D"conflue=
+nceTd">
+<p local-id=3D"8bfe21a35525">[NH]</p></td>
+<td data-local-id=3D"5a4b5aea-b5f9-4841-94bf-8c19d5875b20" class=3D"conflue=
+nceTd">
+<p local-id=3D"ea3a357e4951">Ghi transit thanh to=C3=A1n ch=E1=BB=9D x=E1=
+=BB=AD l=C3=BD</p></td>
+<td data-local-id=3D"f3473262-ec94-466c-81c0-ad65a23e06ae" class=3D"conflue=
+nceTd">
+<p local-id=3D"9992be244723">3500 - Transit TT</p></td>
+<td data-local-id=3D"f01a836b-6a1d-4d61-b968-9c5afec4a6d2" class=3D"conflue=
+nceTd">
+<p local-id=3D"687a69d148ff">CR</p></td>
+<td data-local-id=3D"df7f626a-7f6e-4316-9bed-6d4f99267e98" class=3D"conflue=
+nceTd">
+<p local-id=3D"f14dd16c3ef3">100,000</p></td>
+</tr>
+<tr data-local-id=3D"bad799b7-aeab-433b-ae38-4264dda67c78">
+<td data-local-id=3D"854266d6-ab03-4da1-9479-168050ca08f2" class=3D"conflue=
+nceTd">
+<p local-id=3D"8e23cdce58e7">[NH]</p></td>
+<td data-local-id=3D"1a722d7c-cc63-461b-8111-ef951f9a7310" class=3D"conflue=
+nceTd">
+<p local-id=3D"8201e3004c1e">Chi ph=C3=AD ph=C3=AD VPBank (TGTT ch=E1=BB=8B=
+u)</p></td>
+<td data-local-id=3D"ca997852-ee11-459e-af76-5dd816630a99" class=3D"conflue=
+nceTd">
+<p local-id=3D"84a21af9456c">5100 - Ph=C3=AD NH</p></td>
+<td data-local-id=3D"e87c6dc6-01e8-4ee8-8cb7-9bff3f5a5b37" class=3D"conflue=
+nceTd">
+<p local-id=3D"d27e26a1d9d1">DR</p></td>
+<td data-local-id=3D"bc00dbbb-1136-4060-aec1-ea9364fa00e0" class=3D"conflue=
+nceTd">
+<p local-id=3D"88b1098d27c3">500</p></td>
+</tr>
+<tr data-local-id=3D"a7f5577e-8252-46bf-9ae1-6129e018a9a8">
+<td data-local-id=3D"dba0e60b-eea1-4d72-9d93-2a37de3d8b6b" class=3D"conflue=
+nceTd">
+<p local-id=3D"914e64aaa147">[NH]</p></td>
+<td data-local-id=3D"0f77e809-473c-42b5-a12e-a98d1396a1ae" class=3D"conflue=
+nceTd">
+<p local-id=3D"0d90a95c4a21">Gi=E1=BA=A3m TK VPBank =C4=91=E1=BB=83 tr=E1=
+=BA=A3 ph=C3=AD</p></td>
+<td data-local-id=3D"8ba5dd04-d42e-461a-9f03-b894b51661d0" class=3D"conflue=
+nceTd">
+<p local-id=3D"968418c2ecf5">1113 - TK VPBank</p></td>
+<td data-local-id=3D"bbea1f55-2be4-46cd-bacd-d28e40f0f526" class=3D"conflue=
+nceTd">
+<p local-id=3D"9c738ee37e67">CR</p></td>
+<td data-local-id=3D"b4cfe01c-de84-4d59-8622-bb0666e84dd1" class=3D"conflue=
+nceTd">
+<p local-id=3D"ba19572d83f5">500</p></td>
+</tr>
+<tr data-local-id=3D"dfd8e7f0-75cd-4f91-84a7-16340105c980">
+<td data-local-id=3D"6725a9d1-0872-4282-b495-b2ee3f53f1af" class=3D"conflue=
+nceTd">
+<p local-id=3D"8faf26139dc8">[Merchant]</p></td>
+<td data-local-id=3D"96bc9910-9bd5-4560-9df8-4629b58f43e3" class=3D"conflue=
+nceTd">
+<p local-id=3D"1f18cace011a">Gi=E1=BA=A3i ph=C3=B3ng transit, ghi v=C3=AD m=
+erchant</p></td>
+<td data-local-id=3D"c49721fe-d892-41d6-b379-8e69aebfe7c3" class=3D"conflue=
+nceTd">
+<p local-id=3D"f67494cc2c59">3500 - Transit TT</p></td>
+<td data-local-id=3D"3371672a-0485-4223-a213-b86087f3ce33" class=3D"conflue=
+nceTd">
+<p local-id=3D"9c78d9294ecc">DR</p></td>
+<td data-local-id=3D"d9253c42-a4cd-4290-9c07-536f24985ca2" class=3D"conflue=
+nceTd">
+<p local-id=3D"d6879ca4f9eb">100,000</p></td>
+</tr>
+<tr data-local-id=3D"2eb5f38f-2630-48df-a935-ca74aebd81d9">
+<td data-local-id=3D"18d7d9dc-44e4-4b5f-ac4d-bdb4b4fb1bf0" class=3D"conflue=
+nceTd">
+<p local-id=3D"7cd45fa989b7">[Merchant]</p></td>
+<td data-local-id=3D"4ef46f79-70a0-44b6-aae3-3daf43e760fe" class=3D"conflue=
+nceTd">
+<p local-id=3D"a3a2a13cb455">C=E1=BB=99ng s=E1=BB=91 d=C6=B0 v=C3=AD mercha=
+nt (ch=E1=BB=9D settlement)</p></td>
+<td data-local-id=3D"b08bb8b0-153d-4ffa-be9f-48ec7915cc91" class=3D"conflue=
+nceTd">
+<p local-id=3D"b344958f8f83">2120 - Wallet Merchant</p></td>
+<td data-local-id=3D"e768e019-ed5a-43a9-9d4a-efd690bda23f" class=3D"conflue=
+nceTd">
+<p local-id=3D"0b3993841468">CR</p></td>
+<td data-local-id=3D"9f05232f-b0b1-49ba-82a5-b3754fe3b791" class=3D"conflue=
+nceTd">
+<p local-id=3D"7a05bd8ca7fb">100,000</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<blockquote local-id=3D"32a1a2d1-752c-4ffc-a6bf-082a1a9bb556">
+<p local-id=3D"e17390059d56"><strong>K=E1=BA=BFt qu=E1=BA=A3:</strong> <cod=
+e>1113 +99,500</code> | <code>2120 +100,000</code> | <code>5100 +500</code>=
+<br>
+=E2=9C=85 Transit 3500 =3D 0 | =E2=8F=B3 <code>2120</code> gi=E1=BB=AF ti=
+=E1=BB=81n ch=E1=BB=9D Settlement &amp; Clearing (Use Case 10)</p>
+</blockquote>
+<hr local-id=3D"42d90479-02ad-4f8f-b4e5-01fc2dc57755">
+<h2 local-id=3D"7edbe796e08f" id=3D"FundFlow-8.ThanhTo=C3=A1nB=E1=BA=B1ngV=
+=C3=AD">8. Thanh To=C3=A1n B=E1=BA=B1ng V=C3=AD</h2>
+<blockquote local-id=3D"10bf999f-a3c1-4f0a-9bb9-b27a3b34f191">
+<p local-id=3D"aaba98954803"><strong>L=C6=B0u =C3=BD:</strong> T=C6=B0=C6=
+=A1ng t=E1=BB=B1 Use Case 7, ti=E1=BB=81n v=C3=A0o <code>2120 - Wallet Merc=
+hant</code> v=C3=A0 ch=E1=BB=9D Settlement &amp; Clearing x=E1=BB=AD l=C3=
+=BD ri=C3=AAng.</p>
+</blockquote>
+<div class=3D"table-wrap">
+<table data-table-width=3D"760" data-layout=3D"default" data-local-id=3D"5a=
+bab077-eb78-4704-b4f0-1df444802144" class=3D"confluenceTable">
+<tbody>
+<tr data-local-id=3D"e727524e-f7ee-40dd-a948-b9532d44eb48">
+<th data-local-id=3D"33086761-8403-406c-b1fa-d62a49403d27" class=3D"conflue=
+nceTh">
+<p local-id=3D"0a68ab8e4542">Nh=C3=B3m</p></th>
+<th data-local-id=3D"fee5e54e-f62e-4745-81f9-310729f5ff55" class=3D"conflue=
+nceTh">
+<p local-id=3D"f34da6829672">Step</p></th>
+<th data-local-id=3D"03ee1d97-8506-40b5-be3c-1ffd6d03b9a8" class=3D"conflue=
+nceTh">
+<p local-id=3D"684b6635e167">Account</p></th>
+<th data-local-id=3D"44791f2a-7c26-44f2-871e-0e034b72025b" class=3D"conflue=
+nceTh">
+<p local-id=3D"076e365e1134">DR/CR</p></th>
+<th data-local-id=3D"b03da17f-f445-46e5-bcb5-acf777001659" class=3D"conflue=
+nceTh">
+<p local-id=3D"a6a65affffe8">Amount</p></th>
+</tr>
+<tr data-local-id=3D"f001abf3-1eaa-4531-af5b-3c0e80eb231a">
+<td data-local-id=3D"dfa1c496-d60a-45bb-a2ba-696feacfdf48" class=3D"conflue=
+nceTd">
+<p local-id=3D"fdcd210b97ea">[User]</p></td>
+<td data-local-id=3D"6053717e-b4c4-4986-98d6-f28fd14114c5" class=3D"conflue=
+nceTd">
+<p local-id=3D"acbd0e073ef3">Tr=E1=BB=AB s=E1=BB=91 d=C6=B0 v=C3=AD user</p=
+></td>
+<td data-local-id=3D"b0e33d8f-ee35-4ac5-94c8-639ef35b3a97" class=3D"conflue=
+nceTd">
+<p local-id=3D"8d48be436474">2110 - Wallet User</p></td>
+<td data-local-id=3D"25b14a31-1ea7-4946-9146-0c260ff88ede" class=3D"conflue=
+nceTd">
+<p local-id=3D"025c898aaa75">DR</p></td>
+<td data-local-id=3D"dede86e0-fed2-451e-a96a-444bd181e135" class=3D"conflue=
+nceTd">
+<p local-id=3D"7403da0b9305">100,000</p></td>
+</tr>
+<tr data-local-id=3D"171c43cf-4916-46b7-92a9-ed2bb830fbe4">
+<td data-local-id=3D"a527f8ce-6ab4-409b-8651-d49f5a440494" class=3D"conflue=
+nceTd">
+<p local-id=3D"a41085d10931">[User]</p></td>
+<td data-local-id=3D"b1d418e7-8c63-44e4-baeb-6af806ee007f" class=3D"conflue=
+nceTd">
+<p local-id=3D"d85ed1e20fed">Ghi transit thanh to=C3=A1n</p></td>
+<td data-local-id=3D"8dd34b09-08e9-47bc-94fe-61dcfa8f9e87" class=3D"conflue=
+nceTd">
+<p local-id=3D"e44a1742bb24">3500 - Transit TT</p></td>
+<td data-local-id=3D"87e435ea-dc71-4fa6-9634-110eb1b938a0" class=3D"conflue=
+nceTd">
+<p local-id=3D"76486b559152">CR</p></td>
+<td data-local-id=3D"feded858-3d5b-485b-8840-f143e4ac456d" class=3D"conflue=
+nceTd">
+<p local-id=3D"609b588d89e2">100,000</p></td>
+</tr>
+<tr data-local-id=3D"16e540d6-4b70-4b44-9920-8ba0031bc73b">
+<td data-local-id=3D"c4545285-fbb8-4ed0-96ec-9a56322edd17" class=3D"conflue=
+nceTd">
+<p local-id=3D"47aa624cc613">[Merchant]</p></td>
+<td data-local-id=3D"b943e4ea-c894-468a-bfde-8aab81196099" class=3D"conflue=
+nceTd">
+<p local-id=3D"995bde995940">Gi=E1=BA=A3i ph=C3=B3ng transit, ghi v=C3=AD m=
+erchant</p></td>
+<td data-local-id=3D"9388fbc5-9e63-44f0-a898-ee65d5f54351" class=3D"conflue=
+nceTd">
+<p local-id=3D"e8bc1774965b">3500 - Transit TT</p></td>
+<td data-local-id=3D"eb5ba0fe-e0a8-44a7-9d5c-3e1d6a01fbce" class=3D"conflue=
+nceTd">
+<p local-id=3D"dd6c88a066a7">DR</p></td>
+<td data-local-id=3D"fa72dee9-e930-45ab-bcb0-212b063519ee" class=3D"conflue=
+nceTd">
+<p local-id=3D"c997d0d7ba39">100,000</p></td>
+</tr>
+<tr data-local-id=3D"2a128623-1e84-4e5d-8865-7784ca42e4cb">
+<td data-local-id=3D"a1e72629-e339-40fe-87de-35cb0baa121a" class=3D"conflue=
+nceTd">
+<p local-id=3D"57990ff6f261">[Merchant]</p></td>
+<td data-local-id=3D"0f6b5f2a-f0d6-444e-8c72-ae0e55d3338c" class=3D"conflue=
+nceTd">
+<p local-id=3D"2ee51bcd0462">C=E1=BB=99ng s=E1=BB=91 d=C6=B0 v=C3=AD mercha=
+nt (ch=E1=BB=9D settlement)</p></td>
+<td data-local-id=3D"da5b8a4a-989f-493b-a811-2c97d94c3240" class=3D"conflue=
+nceTd">
+<p local-id=3D"c0293d0c0eda">2120 - Wallet Merchant</p></td>
+<td data-local-id=3D"07add605-409e-4e2a-bca3-c225fea8af21" class=3D"conflue=
+nceTd">
+<p local-id=3D"d13d7c298e4d">CR</p></td>
+<td data-local-id=3D"faaf65a0-80d7-4023-8a06-97a83bb3a4be" class=3D"conflue=
+nceTd">
+<p local-id=3D"b63af172d0b9">100,000</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<blockquote local-id=3D"65731d45-b32c-4cb7-83d7-d8b7c21e407e">
+<p local-id=3D"a5daa659d675"><strong>K=E1=BA=BFt qu=E1=BA=A3:</strong> <cod=
+e>2110 -100,000</code> | <code>2120 +100,000</code> | Kh=C3=B4ng ph=C3=A1t =
+sinh TK NH<br>
+=E2=9C=85 Transit 3500 =3D 0 | =E2=8F=B3 <code>2120</code> gi=E1=BB=AF ti=
+=E1=BB=81n ch=E1=BB=9D Settlement &amp; Clearing (Use Case 10)</p>
+</blockquote>
+<hr local-id=3D"1ed37537-e73b-4943-9002-e5412cac8b12">
+<h2 local-id=3D"df88b9754b98" id=3D"FundFlow-9.ChiL=C6=B0=C6=A1ng(PayrollDi=
+sbursement)">9. Chi L=C6=B0=C6=A1ng (Payroll Disbursement)</h2>
+<blockquote local-id=3D"e5288891-43e0-4e12-b69e-f351eaa686e3">
+<p local-id=3D"6d412cb689f6"><strong>Lu=E1=BB=93ng:</strong> Doanh nghi=E1=
+=BB=87p upload file l=C6=B0=C6=A1ng =E2=86=92 Lock s=E1=BB=91 d=C6=B0 =E2=
+=86=92 Bulk IBFT =C4=91=E1=BA=BFn TK NH t=E1=BB=ABng nh=C3=A2n vi=C3=AAn<br=
+><em>(5 nh=C3=A2n vi=C3=AAn =C3=97 100,000=C4=91 =3D 500,000=C4=91 | Ph=C3=
+=AD 1,000=C4=91 =C3=97 5 =3D 5,000=C4=91)</em></p>
+</blockquote>
+<div class=3D"table-wrap">
+<table data-table-width=3D"760" data-layout=3D"default" data-local-id=3D"75=
+543197-71ee-4972-81bc-a0cb1ff7d13d" class=3D"confluenceTable">
+<tbody>
+<tr data-local-id=3D"cbf63e92-99cb-430e-b983-25a92ea5968e">
+<th data-local-id=3D"2770a354-0ab8-4bbe-a086-4dd8128e5fde" class=3D"conflue=
+nceTh">
+<p local-id=3D"b7bc62426b11">Nh=C3=B3m</p></th>
+<th data-local-id=3D"9ce034c6-c790-464a-997b-b188a99b64b2" class=3D"conflue=
+nceTh">
+<p local-id=3D"b8cfe5b7c415">Step</p></th>
+<th data-local-id=3D"e532da3c-2fce-48b1-9287-8efc0329a1f2" class=3D"conflue=
+nceTh">
+<p local-id=3D"3d12b959f95e">Account</p></th>
+<th data-local-id=3D"0bd626f9-8a2f-443c-8cca-e187c535855b" class=3D"conflue=
+nceTh">
+<p local-id=3D"6de13285c209">DR/CR</p></th>
+<th data-local-id=3D"3a051180-0620-442b-9164-956894b37280" class=3D"conflue=
+nceTh">
+<p local-id=3D"db0015b5cfc8">Amount</p></th>
+</tr>
+<tr data-local-id=3D"ea8a6440-17de-408e-b99f-4f82398564da">
+<td data-local-id=3D"8b92bba2-ff40-4d18-9786-129cf07c337b" class=3D"conflue=
+nceTd">
+<p local-id=3D"7df269a92b96">[Merchant]</p></td>
+<td data-local-id=3D"2e14c697-48b2-4363-a724-aaf42bcc2574" class=3D"conflue=
+nceTd">
+<p local-id=3D"79872a3a7816">Lock t=E1=BB=95ng ti=E1=BB=81n l=C6=B0=C6=A1ng=
+ + ph=C3=AD t=E1=BB=AB v=C3=AD doanh nghi=E1=BB=87p</p></td>
+<td data-local-id=3D"6909165c-0a3a-40f6-8afc-fe52dc05ab81" class=3D"conflue=
+nceTd">
+<p local-id=3D"425cf51a53c1">2120 - Wallet Merchant</p></td>
+<td data-local-id=3D"2984396b-2392-4062-98c6-1cfbc5bab1c0" class=3D"conflue=
+nceTd">
+<p local-id=3D"03b6979289bb">DR</p></td>
+<td data-local-id=3D"9cc8d9b8-195b-44ab-a955-b1da3c3650e2" class=3D"conflue=
+nceTd">
+<p local-id=3D"b476b511c203">505,000</p></td>
+</tr>
+<tr data-local-id=3D"5866496d-c246-41fb-ad99-0717fdcf4138">
+<td data-local-id=3D"8e621949-c057-459d-becb-22bbf919c98b" class=3D"conflue=
+nceTd">
+<p local-id=3D"7dbbbcb2dc40">[Merchant]</p></td>
+<td data-local-id=3D"ba934e7e-efba-4169-a595-4a2baf092c61" class=3D"conflue=
+nceTd">
+<p local-id=3D"31d0ed1a21dd">Ghi transit chi l=C6=B0=C6=A1ng (hold to=C3=A0=
+n b=E1=BB=99)</p></td>
+<td data-local-id=3D"87a0cdd5-cf60-4d7a-92b2-77aed2661ecb" class=3D"conflue=
+nceTd">
+<p local-id=3D"48ec3b777513">3600 - Transit Chi L=C6=B0=C6=A1ng</p></td>
+<td data-local-id=3D"a08ac954-251a-41ef-ad79-e42509dc135b" class=3D"conflue=
+nceTd">
+<p local-id=3D"2fc508b7318a">CR</p></td>
+<td data-local-id=3D"ce23cd1a-4b71-486b-a1d4-2b09e1077199" class=3D"conflue=
+nceTd">
+<p local-id=3D"b4799009ced0">505,000</p></td>
+</tr>
+<tr data-local-id=3D"34550c95-cf24-49ed-856b-9008a579a7d3">
+<td data-local-id=3D"ff8106f2-78ec-4908-9c4c-43daf279a9c4" class=3D"conflue=
+nceTd">
+<p local-id=3D"f5b93e532c3a">[Merchant]</p></td>
+<td data-local-id=3D"b06adb1f-94d7-4b68-ad4e-eace25a1ee86" class=3D"conflue=
+nceTd">
+<p local-id=3D"7fd0f4350a6b">Gi=E1=BA=A3i ph=C3=B3ng transit =E2=80=94 ph=
+=E1=BA=A7n ph=C3=AD d=E1=BB=8Bch v=E1=BB=A5</p></td>
+<td data-local-id=3D"2eec79a7-5880-4261-8fec-c22d7f6940ed" class=3D"conflue=
+nceTd">
+<p local-id=3D"5a2c1d5ef3f5">3600 - Transit Chi L=C6=B0=C6=A1ng</p></td>
+<td data-local-id=3D"59a7beb4-867e-429b-ac8a-55f626c437de" class=3D"conflue=
+nceTd">
+<p local-id=3D"5b87313aacf5">DR</p></td>
+<td data-local-id=3D"21ebb24b-3e6a-447a-8e76-234010e5255c" class=3D"conflue=
+nceTd">
+<p local-id=3D"36424f9c78df">5,000</p></td>
+</tr>
+<tr data-local-id=3D"24d66bc2-82f2-4efe-8ad0-9509bfe8ec79">
+<td data-local-id=3D"59a774d0-2c99-45e8-8c03-fad30d1983dc" class=3D"conflue=
+nceTd">
+<p local-id=3D"cd3b7fa1b926">[Merchant]</p></td>
+<td data-local-id=3D"9aefd435-c3ef-429d-8f08-fe02b2045e54" class=3D"conflue=
+nceTd">
+<p local-id=3D"5458b0d7dac8">Ghi nh=E1=BA=ADn doanh thu ph=C3=AD chi l=C6=
+=B0=C6=A1ng</p></td>
+<td data-local-id=3D"0fe60dc7-b721-4a74-a75c-01c5570eeef0" class=3D"conflue=
+nceTd">
+<p local-id=3D"97377b5b8a68">4150 - Ph=C3=AD Chi L=C6=B0=C6=A1ng</p></td>
+<td data-local-id=3D"8ac4b010-83c1-4287-8fa2-1ff436112205" class=3D"conflue=
+nceTd">
+<p local-id=3D"7553db58a5b1">CR</p></td>
+<td data-local-id=3D"dc1005a2-dd96-44db-8c0e-f2edd8b413aa" class=3D"conflue=
+nceTd">
+<p local-id=3D"7e195cbabca4">5,000</p></td>
+</tr>
+<tr data-local-id=3D"a0c63fbf-9677-459b-ac0f-e9cb56ac0de0">
+<td data-local-id=3D"3249f4e8-4efc-4cf2-9a03-fa2b15921634" class=3D"conflue=
+nceTd">
+<p local-id=3D"d8c3a0e41597">[NH]</p></td>
+<td data-local-id=3D"8760efce-d8aa-4a07-a6dd-c134078781f0" class=3D"conflue=
+nceTd">
+<p local-id=3D"737772113dd2">Gi=E1=BA=A3i ph=C3=B3ng transit =E2=80=94 ph=
+=E1=BA=A7n l=C6=B0=C6=A1ng g=E1=BB=91c</p></td>
+<td data-local-id=3D"63741253-11dd-4d0a-b60d-a161633fef43" class=3D"conflue=
+nceTd">
+<p local-id=3D"86421dee55e3">3600 - Transit Chi L=C6=B0=C6=A1ng</p></td>
+<td data-local-id=3D"b03bb2ad-9907-491f-a134-99eeb18815b6" class=3D"conflue=
+nceTd">
+<p local-id=3D"24e5a5962c3e">DR</p></td>
+<td data-local-id=3D"382dd21a-1928-4d8c-8ff4-3788294912bc" class=3D"conflue=
+nceTd">
+<p local-id=3D"8197c7da5703">500,000</p></td>
+</tr>
+<tr data-local-id=3D"fae3bf4c-b712-4af4-8447-57f960936ed7">
+<td data-local-id=3D"0c3010b9-fb77-4ff4-a810-6771b7036499" class=3D"conflue=
+nceTd">
+<p local-id=3D"e3ee88355b6b">[NH]</p></td>
+<td data-local-id=3D"9fa64739-8c7b-4016-b63f-90067097cd4b" class=3D"conflue=
+nceTd">
+<p local-id=3D"267c508476a1">Gi=E1=BA=A3m TK Napas, g=E1=BB=ADi bulk IBFT 5=
+ giao d=E1=BB=8Bch</p></td>
+<td data-local-id=3D"9021ddda-d688-4c96-8812-253852de9654" class=3D"conflue=
+nceTd">
+<p local-id=3D"b0f2f28615a2">1112 - TK Napas</p></td>
+<td data-local-id=3D"8e78ff43-67e9-4ca9-8ff1-31706989ad0c" class=3D"conflue=
+nceTd">
+<p local-id=3D"7e4d16498890">CR</p></td>
+<td data-local-id=3D"ea03e267-265b-4a6f-bb29-63d01839193f" class=3D"conflue=
+nceTd">
+<p local-id=3D"be3f2ea4587c">500,000</p></td>
+</tr>
+<tr data-local-id=3D"5f6e32f6-00d6-46c0-81e0-456696b98d25">
+<td data-local-id=3D"a176892f-89e3-44bf-9619-24ed48aefd5e" class=3D"conflue=
+nceTd">
+<p local-id=3D"f34add1180f9">[NH]</p></td>
+<td data-local-id=3D"78550f38-4e03-487a-bac1-fc2582496d26" class=3D"conflue=
+nceTd">
+<p local-id=3D"58b681275e4c">Napas settle =C4=91=E1=BA=BFn t=E1=BB=ABng TK =
+NH nh=C3=A2n vi=C3=AAn</p></td>
+<td data-local-id=3D"f22c96c1-0fdd-46e8-aed8-ca7a27be185b" class=3D"conflue=
+nceTd">
+<p local-id=3D"efddfa58f082"><em>(Settled T+0/T+1)</em></p></td>
+<td data-local-id=3D"a81ab728-2b89-4737-bfee-a8e4ceeb7d05" class=3D"conflue=
+nceTd">
+<p local-id=3D"b4a98cfe39ce">=E2=80=94</p></td>
+<td data-local-id=3D"840e235d-f058-4a85-9de6-b32e2a65deb7" class=3D"conflue=
+nceTd">
+<p local-id=3D"ccb2fe498a55">=E2=80=94</p></td>
+</tr>
+<tr data-local-id=3D"6a64c00d-8fb5-4da3-bef6-bfa20560e600">
+<td data-local-id=3D"56c7a5f2-caa0-45c4-ba11-064d2fddbbba" class=3D"conflue=
+nceTd">
+<p local-id=3D"1f56a7616d97">[NH]</p></td>
+<td data-local-id=3D"e59177fa-cbee-4000-aa59-6b1695719d49" class=3D"conflue=
+nceTd">
+<p local-id=3D"451d4f123254">Chi ph=C3=AD Napas (5 giao d=E1=BB=8Bch =C3=97=
+ 500=C4=91)</p></td>
+<td data-local-id=3D"642459d1-0636-4374-8926-7bb86928f92a" class=3D"conflue=
+nceTd">
+<p local-id=3D"aba0f5637d2a">5100 - Ph=C3=AD Napas</p></td>
+<td data-local-id=3D"6b296e20-f326-4041-a93b-ee797c73e734" class=3D"conflue=
+nceTd">
+<p local-id=3D"5bc34c2f7465">DR</p></td>
+<td data-local-id=3D"d944d2ef-d995-470b-bb1c-e4f8235d79b6" class=3D"conflue=
+nceTd">
+<p local-id=3D"8e8b67e41092">2,500</p></td>
+</tr>
+<tr data-local-id=3D"52ee80a1-7495-489f-8298-b66701c0d1f7">
+<td data-local-id=3D"6ff8b575-b9e2-4895-9b03-d1b1e0229817" class=3D"conflue=
+nceTd">
+<p local-id=3D"62add36ea771">[NH]</p></td>
+<td data-local-id=3D"0ae439d6-aae4-42bf-afd5-6fcc6f9f3f5f" class=3D"conflue=
+nceTd">
+<p local-id=3D"c03114ca4bbf">Gi=E1=BA=A3m TK Napas tr=E1=BA=A3 ph=C3=AD</p>=
+</td>
+<td data-local-id=3D"0b7d73c7-0572-42a6-8ec2-887fe6e36047" class=3D"conflue=
+nceTd">
+<p local-id=3D"86d2187a25d2">1112 - TK Napas</p></td>
+<td data-local-id=3D"2176b6e2-e425-4ef7-88af-7fb27a337ec8" class=3D"conflue=
+nceTd">
+<p local-id=3D"63578fc5ed2a">CR</p></td>
+<td data-local-id=3D"d789fa82-a731-42c7-bdcc-400f1fca7e32" class=3D"conflue=
+nceTd">
+<p local-id=3D"f1849dff9fa3">2,500</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<blockquote local-id=3D"2fb545d5-bf82-40b9-be66-0ea0b41a6283">
+<p local-id=3D"6dcd70799fe7"><strong>K=E1=BA=BFt qu=E1=BA=A3:</strong> <cod=
+e>2120 -505,000</code> | <code>1112 -502,500</code> | <code>4150 +5,000</co=
+de> | <code>5100 +2,500</code> | <strong>L=C3=A3i thu=E1=BA=A7n +2,500</str=
+ong><br>
+=E2=9C=85 Transit 3600 =3D 0</p>
+</blockquote>
+<hr local-id=3D"19289653-b31d-417d-ac83-32a76b3b174c">
+<h2 local-id=3D"8b4970f0ad8a" id=3D"FundFlow-10.ChiH=E1=BB=99(Disbursemento=
+nBehalf)">10. Chi H=E1=BB=99 (Disbursement on Behalf)</h2>
+<blockquote local-id=3D"1180eea6-1b5e-4d36-94f2-d725af47a3f0">
+<p local-id=3D"6435715c22ec"><strong>Lu=E1=BB=93ng:</strong> =C4=90=E1=BB=
+=91i t=C3=A1c pre-fund =E2=86=92 G=E1=BB=ADi l=E1=BB=87nh chi h=E1=BB=99 =
+=E2=86=92 TGTT chuy=E1=BB=83n ti=E1=BB=81n =C4=91=E1=BA=BFn b=C3=AAn th=E1=
+=BB=A5 h=C6=B0=E1=BB=9Fng thay =C4=91=E1=BB=91i t=C3=A1c</p>
+</blockquote>
+<h3 local-id=3D"22e164939906" id=3D"FundFlow-B=C6=B0=E1=BB=9Bc0=E2=80=94=C4=
+=90=E1=BB=91iT=C3=A1cPre-fund(N=E1=BA=A1pTi=E1=BB=81nK=C3=BDQu=E1=BB=B9)">B=
+=C6=B0=E1=BB=9Bc 0 =E2=80=94 =C4=90=E1=BB=91i T=C3=A1c Pre-fund (N=E1=BA=A1=
+p Ti=E1=BB=81n K=C3=BD Qu=E1=BB=B9)</h3>
+<div class=3D"table-wrap">
+<table data-table-width=3D"760" data-layout=3D"default" data-local-id=3D"be=
+8e6ce0-a660-4d59-84d6-ff877bd42d96" class=3D"confluenceTable">
+<tbody>
+<tr data-local-id=3D"6a0f3c82-7ecd-4431-b142-e4037077ffad">
+<th data-local-id=3D"dfcba7ba-ba01-4587-b421-362844c8b489" class=3D"conflue=
+nceTh">
+<p local-id=3D"2fed67805cfc">Nh=C3=B3m</p></th>
+<th data-local-id=3D"ff62c0c2-8326-4619-acb6-3c9b80b68eac" class=3D"conflue=
+nceTh">
+<p local-id=3D"6b2b4c2c97bd">Step</p></th>
+<th data-local-id=3D"6080a96c-9c84-411a-b127-c704abf1aac7" class=3D"conflue=
+nceTh">
+<p local-id=3D"5c432f8c7d46">Account</p></th>
+<th data-local-id=3D"e04be36d-0434-4a7e-8d3a-0bbfcb87e226" class=3D"conflue=
+nceTh">
+<p local-id=3D"13424f08c88e">DR/CR</p></th>
+<th data-local-id=3D"b58ea540-8b25-44cb-bbf8-7cdfb78a6d68" class=3D"conflue=
+nceTh">
+<p local-id=3D"2018520f1567">Amount</p></th>
+</tr>
+<tr data-local-id=3D"4d816345-bac0-45c8-9acd-98bf64f81367">
+<td data-local-id=3D"aa6a1ff9-4331-4269-84b3-8c9da7ee2d74" class=3D"conflue=
+nceTd">
+<p local-id=3D"07ec0a761dac">[Pre-fund]</p></td>
+<td data-local-id=3D"59fae26d-c6ea-41da-8d38-0872cafa1b24" class=3D"conflue=
+nceTd">
+<p local-id=3D"aaded0f48b8b">Vietinbank nh=E1=BA=ADn ti=E1=BB=81n k=C3=BD q=
+u=E1=BB=B9 t=E1=BB=AB =C4=91=E1=BB=91i t=C3=A1c</p></td>
+<td data-local-id=3D"bb8a2889-2fc0-4e46-a03e-a910f28d340f" class=3D"conflue=
+nceTd">
+<p local-id=3D"f978bed4a6fd">1111 - TK Vietinbank</p></td>
+<td data-local-id=3D"1db19f28-0cb8-4bab-b31e-c06df6d49cb5" class=3D"conflue=
+nceTd">
+<p local-id=3D"009f9d982a70">DR</p></td>
+<td data-local-id=3D"6bd57cbb-a5c6-4543-ac0e-e6f152d2303a" class=3D"conflue=
+nceTd">
+<p local-id=3D"af02d76ec291">100,000</p></td>
+</tr>
+<tr data-local-id=3D"cb7750ae-1c9b-40e4-84d8-531acb10e0ef">
+<td data-local-id=3D"00386d39-50f0-4b61-8e9c-bcd85996b4ca" class=3D"conflue=
+nceTd">
+<p local-id=3D"609d3be85cb5">[Pre-fund]</p></td>
+<td data-local-id=3D"11a882dc-6d5a-48f5-b82e-053f86561fd5" class=3D"conflue=
+nceTd">
+<p local-id=3D"38a555e41289">Ghi nh=E1=BA=ADn ngh=C4=A9a v=E1=BB=A5 v=E1=BB=
+=9Bi =C4=91=E1=BB=91i t=C3=A1c</p></td>
+<td data-local-id=3D"49145821-4dc4-4768-a9c6-181d976523eb" class=3D"conflue=
+nceTd">
+<p local-id=3D"d779e398b9cb">2130 - K=C3=BD qu=E1=BB=B9 =C4=91=E1=BB=91i t=
+=C3=A1c</p></td>
+<td data-local-id=3D"24a09dd9-fa2a-4b67-8ccf-c70125314916" class=3D"conflue=
+nceTd">
+<p local-id=3D"15d0247969cd">CR</p></td>
+<td data-local-id=3D"2b914ed4-de4d-4e68-aebf-f10c3758eb30" class=3D"conflue=
+nceTd">
+<p local-id=3D"59f8b2d8dec1">100,000</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 local-id=3D"b95eefd4b2ed" id=3D"FundFlow-B=C6=B0=E1=BB=9Bc1=E2=80=94Th=
+=E1=BB=B1cHi=E1=BB=87nChiH=E1=BB=99">B=C6=B0=E1=BB=9Bc 1 =E2=80=94 Th=E1=BB=
+=B1c Hi=E1=BB=87n Chi H=E1=BB=99</h3>
+<div class=3D"table-wrap">
+<table data-table-width=3D"760" data-layout=3D"default" data-local-id=3D"2e=
+80ed82-c749-43f6-ba4e-83d2c6a7f822" class=3D"confluenceTable">
+<tbody>
+<tr data-local-id=3D"2f6a4ca8-09c8-4a7d-9d9e-37306011b9f5">
+<th data-local-id=3D"f5157309-1cab-483c-ba3e-0560d7beba86" class=3D"conflue=
+nceTh">
+<p local-id=3D"6da3df1eeab7">Nh=C3=B3m</p></th>
+<th data-local-id=3D"11b74800-eaab-458a-96b8-bc35e9dd0062" class=3D"conflue=
+nceTh">
+<p local-id=3D"60a24e3406aa">Step</p></th>
+<th data-local-id=3D"16fc3cd1-9bc9-4bc2-92cb-65c415cc97e3" class=3D"conflue=
+nceTh">
+<p local-id=3D"8b62551cbecd">Account</p></th>
+<th data-local-id=3D"cf1f6005-de85-4694-93b1-9316cdae8f78" class=3D"conflue=
+nceTh">
+<p local-id=3D"5c324e25321f">DR/CR</p></th>
+<th data-local-id=3D"b86628ce-f936-40a3-835d-a236e28480b1" class=3D"conflue=
+nceTh">
+<p local-id=3D"06f17f7fb021">Amount</p></th>
+</tr>
+<tr data-local-id=3D"a82a75ac-967c-474d-bfe5-9c508a116f57">
+<td data-local-id=3D"0895b025-65b2-4c6a-831c-ddf0342d508b" class=3D"conflue=
+nceTd">
+<p local-id=3D"4b471ff7d249">[Client]</p></td>
+<td data-local-id=3D"0a827f01-dd85-4537-b98c-1beb8d064f84" class=3D"conflue=
+nceTd">
+<p local-id=3D"93addac80ed5">Tr=E1=BB=AB k=C3=BD qu=E1=BB=B9 =C4=91=E1=BB=
+=91i t=C3=A1c (g=E1=BB=91c + ph=C3=AD)</p></td>
+<td data-local-id=3D"8b04b44e-394f-4a7e-948e-1c55ace917f6" class=3D"conflue=
+nceTd">
+<p local-id=3D"178933fe3eae">2130 - K=C3=BD qu=E1=BB=B9 =C4=91=E1=BB=91i t=
+=C3=A1c</p></td>
+<td data-local-id=3D"c64163d2-0e14-4871-9996-57700abf6a45" class=3D"conflue=
+nceTd">
+<p local-id=3D"27a996d33fc1">DR</p></td>
+<td data-local-id=3D"71d3bb45-9e6f-4947-b527-711f9c9d60ca" class=3D"conflue=
+nceTd">
+<p local-id=3D"4bd3643c6c28">101,000</p></td>
+</tr>
+<tr data-local-id=3D"82672312-c906-4672-a734-3bc64a3c4291">
+<td data-local-id=3D"d26ac75e-c731-423c-90f1-0290411f9d18" class=3D"conflue=
+nceTd">
+<p local-id=3D"15698fdf08ca">[Client]</p></td>
+<td data-local-id=3D"95e49b5b-d340-4a76-8580-6ca9ee30e736" class=3D"conflue=
+nceTd">
+<p local-id=3D"80e421066b8c">Ghi transit chi h=E1=BB=99</p></td>
+<td data-local-id=3D"5fc6259d-4cc4-4fed-be03-a4e954b0386f" class=3D"conflue=
+nceTd">
+<p local-id=3D"232d38a3de27">3700 - Transit Chi h=E1=BB=99</p></td>
+<td data-local-id=3D"da1b0abc-1470-485c-9299-9d140e080763" class=3D"conflue=
+nceTd">
+<p local-id=3D"40e2516b7603">CR</p></td>
+<td data-local-id=3D"adad4c9d-d0b6-4426-8eb2-834d1e36741b" class=3D"conflue=
+nceTd">
+<p local-id=3D"83a94d36ab8f">101,000</p></td>
+</tr>
+<tr data-local-id=3D"f93ac054-c706-44d5-9227-bec6f6788d3a">
+<td data-local-id=3D"3c97a216-9534-431b-9c76-c8470e3f6140" class=3D"conflue=
+nceTd">
+<p local-id=3D"4b0606ca6f8c">[Client]</p></td>
+<td data-local-id=3D"0b754b6f-fa77-466d-ad50-aa9b684bf79c" class=3D"conflue=
+nceTd">
+<p local-id=3D"61d811a7e051">Gi=E1=BA=A3i ph=C3=B3ng transit =E2=80=94 ph=
+=E1=BA=A7n ph=C3=AD d=E1=BB=8Bch v=E1=BB=A5</p></td>
+<td data-local-id=3D"016f7c79-1977-433f-9fab-60321ca217e0" class=3D"conflue=
+nceTd">
+<p local-id=3D"f997efb362e3">3700 - Transit Chi h=E1=BB=99</p></td>
+<td data-local-id=3D"fac8d068-9910-4b95-bf9c-90fb82b58e84" class=3D"conflue=
+nceTd">
+<p local-id=3D"b6bda802ff3f">DR</p></td>
+<td data-local-id=3D"57dce1c6-9fa3-4ffd-a5bf-86e035caf455" class=3D"conflue=
+nceTd">
+<p local-id=3D"f582f98cbd1c">1,000</p></td>
+</tr>
+<tr data-local-id=3D"a05c666c-48b2-4c69-bc77-f58bc2553fc4">
+<td data-local-id=3D"bf22b68d-19ea-466d-988b-29c578001314" class=3D"conflue=
+nceTd">
+<p local-id=3D"e9fd325f0e0c">[Client]</p></td>
+<td data-local-id=3D"58b2fd48-3b5f-4f50-be8c-cf610fd0db13" class=3D"conflue=
+nceTd">
+<p local-id=3D"efe2634dc3d4">Ghi nh=E1=BA=ADn doanh thu ph=C3=AD chi h=E1=
+=BB=99</p></td>
+<td data-local-id=3D"dc3c0b5e-dbdb-4211-8835-4af9887c8f49" class=3D"conflue=
+nceTd">
+<p local-id=3D"8ab60400fc1b">4150 - Ph=C3=AD Chi h=E1=BB=99</p></td>
+<td data-local-id=3D"3a40de2e-de52-44d0-8d3c-788acb9212a2" class=3D"conflue=
+nceTd">
+<p local-id=3D"aaaf62b4e8e1">CR</p></td>
+<td data-local-id=3D"a395da3a-e0fa-4709-aba3-acb83de0db2b" class=3D"conflue=
+nceTd">
+<p local-id=3D"9ea5339090ba">1,000</p></td>
+</tr>
+<tr data-local-id=3D"1bee6504-90fb-4520-93b7-7564e674ec5c">
+<td data-local-id=3D"db368ad3-90dc-43eb-8f2f-af35669b7141" class=3D"conflue=
+nceTd">
+<p local-id=3D"56638290b6ac">[NH]</p></td>
+<td data-local-id=3D"06e27ef3-430a-4c3c-90d3-c4b54e189812" class=3D"conflue=
+nceTd">
+<p local-id=3D"58b043ca6d15">Gi=E1=BA=A3i ph=C3=B3ng transit =E2=80=94 ph=
+=E1=BA=A7n ti=E1=BB=81n g=E1=BB=91c</p></td>
+<td data-local-id=3D"e00eb5ed-9f75-416e-8d9e-6fb681dc93c0" class=3D"conflue=
+nceTd">
+<p local-id=3D"075909649a85">3700 - Transit Chi h=E1=BB=99</p></td>
+<td data-local-id=3D"189f0415-4a24-4606-ac96-d03d7b2dcbee" class=3D"conflue=
+nceTd">
+<p local-id=3D"a5406b8ec166">DR</p></td>
+<td data-local-id=3D"f3d21f08-40ea-46e5-a889-a4cce08a3f1a" class=3D"conflue=
+nceTd">
+<p local-id=3D"43a6e9041d48">100,000</p></td>
+</tr>
+<tr data-local-id=3D"814b367c-7e1c-49aa-a981-b1d2204dda47">
+<td data-local-id=3D"3176f763-0db5-4eb6-ae12-e1a7233f22cf" class=3D"conflue=
+nceTd">
+<p local-id=3D"6f12091d6f19">[NH]</p></td>
+<td data-local-id=3D"599a4c52-6f19-4bd7-9590-9887a1e33aa1" class=3D"conflue=
+nceTd">
+<p local-id=3D"04cc8944f168">Gi=E1=BA=A3m TK Napas, g=E1=BB=ADi =C4=91=E1=
+=BA=BFn TK b=C3=AAn th=E1=BB=A5 h=C6=B0=E1=BB=9Fng</p></td>
+<td data-local-id=3D"985888a1-5bcf-4c52-9cee-4889e1b42fe9" class=3D"conflue=
+nceTd">
+<p local-id=3D"5701961c884e">1112 - TK Napas</p></td>
+<td data-local-id=3D"08b74ba9-4a87-43c1-b548-70fd1f05b0b1" class=3D"conflue=
+nceTd">
+<p local-id=3D"c5b3859630ea">CR</p></td>
+<td data-local-id=3D"db15da0e-245d-4491-aa28-2a45751e22c4" class=3D"conflue=
+nceTd">
+<p local-id=3D"b6ddc4ab5004">100,000</p></td>
+</tr>
+<tr data-local-id=3D"0d89daa6-8ad2-48c9-b64f-bbeb0255ee85">
+<td data-local-id=3D"7dc1263a-d0bc-4dcf-b76d-3e258f87bafe" class=3D"conflue=
+nceTd">
+<p local-id=3D"949376913c22">[NH]</p></td>
+<td data-local-id=3D"024b5585-3086-4572-b68d-e7f8fdd83bb1" class=3D"conflue=
+nceTd">
+<p local-id=3D"1d06ceb03465">B=C3=AAn th=E1=BB=A5 h=C6=B0=E1=BB=9Fng nh=E1=
+=BA=ADn ti=E1=BB=81n th=C3=A0nh c=C3=B4ng</p></td>
+<td data-local-id=3D"b34e851c-e9fd-4206-9b3b-b94e8e1041cb" class=3D"conflue=
+nceTd">
+<p local-id=3D"43e477b69e69"><em>(Settled)</em></p></td>
+<td data-local-id=3D"25406f0a-b945-4722-b7d2-07bf17d0e79c" class=3D"conflue=
+nceTd">
+<p local-id=3D"8d67a7585157">=E2=80=94</p></td>
+<td data-local-id=3D"bc261412-d600-4f2f-b832-d199a5722095" class=3D"conflue=
+nceTd">
+<p local-id=3D"3043bce4e9ce">=E2=80=94</p></td>
+</tr>
+<tr data-local-id=3D"28f65939-c7b4-46c8-8457-e328e5127d25">
+<td data-local-id=3D"9b46e58a-e09b-4d63-8169-5d70aa365bd0" class=3D"conflue=
+nceTd">
+<p local-id=3D"c4cd4724a35e">[NH]</p></td>
+<td data-local-id=3D"45951b37-f395-49b8-9e18-3e191d535084" class=3D"conflue=
+nceTd">
+<p local-id=3D"89468c494376">Chi ph=C3=AD Napas</p></td>
+<td data-local-id=3D"89d961f1-e097-4f9d-95c5-9422392c6f33" class=3D"conflue=
+nceTd">
+<p local-id=3D"ee8e4e6cfd23">5100 - Ph=C3=AD Napas</p></td>
+<td data-local-id=3D"1af85048-1928-4274-a593-c23c994e34c0" class=3D"conflue=
+nceTd">
+<p local-id=3D"d464d214cf1c">DR</p></td>
+<td data-local-id=3D"28812d32-d1d9-4ae5-aa13-3a5ba22ffbdf" class=3D"conflue=
+nceTd">
+<p local-id=3D"45a0155c93dc">500</p></td>
+</tr>
+<tr data-local-id=3D"370f0e51-0b9c-45ed-8650-4cb72be521b2">
+<td data-local-id=3D"e7bad434-aca1-4679-aa8e-5f1d40d5acba" class=3D"conflue=
+nceTd">
+<p local-id=3D"d21e6798f0de">[NH]</p></td>
+<td data-local-id=3D"6c1161c2-09fa-4b53-b3dd-063c0bec3d87" class=3D"conflue=
+nceTd">
+<p local-id=3D"692e3a03c4f7">Gi=E1=BA=A3m TK Napas tr=E1=BA=A3 ph=C3=AD</p>=
+</td>
+<td data-local-id=3D"917b30ba-7449-4063-ab19-4dca4f38fc3c" class=3D"conflue=
+nceTd">
+<p local-id=3D"5111087715a7">1112 - TK Napas</p></td>
+<td data-local-id=3D"c8216505-71dc-45eb-946d-30d69ddc37a9" class=3D"conflue=
+nceTd">
+<p local-id=3D"df6e757f957d">CR</p></td>
+<td data-local-id=3D"5c19af36-3cca-4e5f-83eb-e7d6b48e1e12" class=3D"conflue=
+nceTd">
+<p local-id=3D"8a3b6c8bf8b7">500</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<blockquote local-id=3D"eed484b5-6c78-4570-9576-2ad4a8e1f1e4">
+<p local-id=3D"f67ab9f6b81c"><strong>K=E1=BA=BFt qu=E1=BA=A3:</strong> <cod=
+e>2130 -101,000</code> | <code>1111 +100,000</code> | <code>1112 -100,500</=
+code> | <code>4150 +1,000</code> | <code>5100 +500</code> | <strong>L=C3=A3=
+i thu=E1=BA=A7n +500</strong><br>
+=E2=9C=85 Transit 3700 =3D 0</p>
+</blockquote>
+<hr local-id=3D"a0abfaee-e37d-4ece-b27f-31eed3c43840">
+<h2 local-id=3D"93c056bff6d5" id=3D"FundFlow-11.Settlement&amp;Clearing(Ngh=
+i=E1=BB=87pV=E1=BB=A5=C4=90=E1=BB=99cL=E1=BA=ADp=E2=80=94EOD)">11. Settleme=
+nt &amp; Clearing (Nghi=E1=BB=87p V=E1=BB=A5 =C4=90=E1=BB=99c L=E1=BA=ADp =
+=E2=80=94 EOD)</h2>
+<blockquote local-id=3D"8829b78d-d564-4b3e-a9d1-1244d953ca29">
+<p local-id=3D"76e37923fb59"><strong>B=E1=BB=91i c=E1=BA=A3nh:</strong> Cu=
+=E1=BB=91i ng=C3=A0y (EOD), ti=E1=BB=81n thanh to=C3=A1n t=E1=BB=AB Use Cas=
+e 7 &amp; 8 =C4=91ang t=E1=BB=93n t=E1=BA=A1i t=E1=BA=A1i <code>2120 - Wall=
+et Merchant</code>. TGTT th=E1=BB=B1c hi=E1=BB=87n Clearing (=C4=91=E1=BB=
+=91i so=C3=A1t) v=C3=A0 Settlement (quy=E1=BA=BFt to=C3=A1n) =C4=91=E1=BB=
+=83 chuy=E1=BB=83n ti=E1=BB=81n th=E1=BB=B1c v=E1=BB=81 TK ng=C3=A2n h=C3=
+=A0ng merchant.</p>
+<p local-id=3D"ba5c10c68c14"><em>(V=C3=AD d=E1=BB=A5: Merchant c=C3=B3 t=E1=
+=BB=95ng 200,000=C4=91 trong v=C3=AD =3D 100,000=C4=91 t=E1=BB=AB QR/POS + =
+100,000=C4=91 t=E1=BB=AB thanh to=C3=A1n v=C3=AD)</em></p>
+</blockquote>
+<div class=3D"code panel pdl" style=3D"border-width: 1px;">
+<div class=3D"codeContent panelContent pdl">
+<pre class=3D"syntaxhighlighter-pre" data-syntaxhighlighter-params=3D"brush=
+: java; gutter: false; theme: Confluence" data-theme=3D"Confluence">2120 - =
+Wallet Merchant =20
+        =E2=94=82 =20
+        =E2=96=BC [EOD =E2=80=94 Kh=E1=BB=9Fi t=E1=BA=A1o Clearing] =20
+3800 - Transit Clearing =20
+        =E2=94=82 =20
+        =E2=94=9C=E2=94=80=E2=94=80=E2=96=BA 3820 - Transit MDR Holdback =
+=E2=94=80=E2=94=80=E2=96=BA 4140 - Doanh thu MDR =20
+        =E2=94=82 =20
+        =E2=94=94=E2=94=80=E2=94=80=E2=96=BA 3810 - Transit Settlement Outb=
+ound =20
+                          =E2=94=82 =20
+                          =E2=96=BC =20
+              1112 - TK Napas Clearing =20
+                          =E2=94=82 =20
+                          =E2=96=BC =20
+              TK Ng=C3=A2n h=C3=A0ng Merchant (Settled) =20
+</pre>
+</div>
+</div>
+<h3 local-id=3D"39694dd03cec" id=3D"FundFlow-B=C6=B0=E1=BB=9Bc1=E2=80=94Kh=
+=E1=BB=9FiT=E1=BA=A1oClearing(LockS=E1=BB=91D=C6=B0Merchant)">B=C6=B0=E1=BB=
+=9Bc 1 =E2=80=94 Kh=E1=BB=9Fi T=E1=BA=A1o Clearing (Lock S=E1=BB=91 D=C6=B0=
+ Merchant)</h3>
+<div class=3D"table-wrap">
+<table data-table-width=3D"760" data-layout=3D"default" data-local-id=3D"9c=
+06f996-a027-4e3a-b546-eb72a4006f51" class=3D"confluenceTable">
+<tbody>
+<tr data-local-id=3D"3fb2cebe-ecff-4988-9946-d2953f033ec6">
+<th data-local-id=3D"4758d5e0-b116-426b-8590-2465e3c79148" class=3D"conflue=
+nceTh">
+<p local-id=3D"2104126a6e59">Nh=C3=B3m</p></th>
+<th data-local-id=3D"e09eb1bb-a44d-420c-8b3a-a289d9fb310c" class=3D"conflue=
+nceTh">
+<p local-id=3D"c9ca15920d0f">Step</p></th>
+<th data-local-id=3D"e4078afb-9d18-447a-bd84-850189f2b408" class=3D"conflue=
+nceTh">
+<p local-id=3D"28382f714000">Account</p></th>
+<th data-local-id=3D"7a0851bf-d694-45a4-9778-eccef8646278" class=3D"conflue=
+nceTh">
+<p local-id=3D"be0b10233735">DR/CR</p></th>
+<th data-local-id=3D"b618110a-0062-4764-a594-cc5267163ce4" class=3D"conflue=
+nceTh">
+<p local-id=3D"146f8ccd9af8">Amount</p></th>
+</tr>
+<tr data-local-id=3D"97b44a6e-0cc1-4efe-9d25-dbed1d311a99">
+<td data-local-id=3D"1f3fc00a-208f-4b21-8388-bbb9e43ca380" class=3D"conflue=
+nceTd">
+<p local-id=3D"3618f7e925de">[Clearing]</p></td>
+<td data-local-id=3D"601930f0-740c-4875-9046-e77ce78195f6" class=3D"conflue=
+nceTd">
+<p local-id=3D"bf7f4bad916e">Lock to=C3=A0n b=E1=BB=99 s=E1=BB=91 d=C6=B0 v=
+=C3=AD merchant, ch=E1=BB=9D =C4=91=E1=BB=91i so=C3=A1t</p></td>
+<td data-local-id=3D"7a208222-1703-4f3f-9fe3-48fa29eb868b" class=3D"conflue=
+nceTd">
+<p local-id=3D"9dc9cdca5d6c">2120 - Wallet Merchant</p></td>
+<td data-local-id=3D"efd0ec7d-6ecf-4fcc-baa1-25dc1d11504c" class=3D"conflue=
+nceTd">
+<p local-id=3D"832107e55487">DR</p></td>
+<td data-local-id=3D"bfe5695a-b209-48c7-ac53-4589aac83adb" class=3D"conflue=
+nceTd">
+<p local-id=3D"7a1d207449a2">200,000</p></td>
+</tr>
+<tr data-local-id=3D"0b356ab9-aa0a-4444-bf12-b83ce3a30ccb">
+<td data-local-id=3D"859f058f-0f06-41b1-8684-db9c9ae21a1b" class=3D"conflue=
+nceTd">
+<p local-id=3D"a96b6f20a821">[Clearing]</p></td>
+<td data-local-id=3D"e648bd91-4029-45e4-afc6-f0bcf7e16954" class=3D"conflue=
+nceTd">
+<p local-id=3D"0469b575ab64">Ghi transit clearing (hold ti=E1=BB=81n)</p></=
+td>
+<td data-local-id=3D"5a2b5bc1-dcd0-4903-8ed6-ec0fb742cd54" class=3D"conflue=
+nceTd">
+<p local-id=3D"b27cfd0bd755">3800 - Transit Clearing</p></td>
+<td data-local-id=3D"078ea615-3c12-4720-8522-563d42d2dcb5" class=3D"conflue=
+nceTd">
+<p local-id=3D"9cb03adf9e52">CR</p></td>
+<td data-local-id=3D"c9a2925e-5eaa-4bc6-aafc-af9ec5223aa3" class=3D"conflue=
+nceTd">
+<p local-id=3D"6592879a62f4">200,000</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 local-id=3D"7a28c7d8d9e0" id=3D"FundFlow-B=C6=B0=E1=BB=9Bc2=E2=80=94=C4=
+=90=E1=BB=91iSo=C3=A1t(Reconciliation)">B=C6=B0=E1=BB=9Bc 2 =E2=80=94 =C4=
+=90=E1=BB=91i So=C3=A1t (Reconciliation)</h3>
+<blockquote local-id=3D"af63f8d6-bf3d-4259-aaf1-20515d48bb20">
+<p local-id=3D"ad9f236f2049">H=E1=BB=87 th=E1=BB=91ng =C4=91=E1=BB=91i chi=
+=E1=BA=BFu t=E1=BB=ABng giao d=E1=BB=8Bch gi=E1=BB=AFa TGTT =E2=86=94 NH =
+=E2=86=94 Merchant. T=C3=A1ch MDR ra kh=E1=BB=8Fi s=E1=BB=91 ti=E1=BB=81n g=
+=E1=BB=91c.</p>
+</blockquote>
+<div class=3D"table-wrap">
+<table data-table-width=3D"760" data-layout=3D"default" data-local-id=3D"75=
+589182-70a2-4a3e-89b1-d7753ada5466" class=3D"confluenceTable">
+<tbody>
+<tr data-local-id=3D"b2a44c15-2a3a-4386-9cc3-6bfe9b276ce8">
+<th data-local-id=3D"f360a37b-eab0-44cc-9819-d9567bb0d2ac" class=3D"conflue=
+nceTh">
+<p local-id=3D"f07830f6dcd4">Nh=C3=B3m</p></th>
+<th data-local-id=3D"91176523-5679-4e95-af2b-a9ac1071df26" class=3D"conflue=
+nceTh">
+<p local-id=3D"00af6146150c">Step</p></th>
+<th data-local-id=3D"c2fac81d-546b-4463-9cd1-d2af5771d22e" class=3D"conflue=
+nceTh">
+<p local-id=3D"a93ab8e20919">Account</p></th>
+<th data-local-id=3D"4bf168ee-71e3-4aff-9bc8-2962e282fa20" class=3D"conflue=
+nceTh">
+<p local-id=3D"f45ce6a6f2fe">DR/CR</p></th>
+<th data-local-id=3D"bacea1c9-a601-4ba6-9e81-9861710aaac0" class=3D"conflue=
+nceTh">
+<p local-id=3D"4355a0e338f9">Amount</p></th>
+</tr>
+<tr data-local-id=3D"321883b1-dbd1-4276-8d3d-4e21cf6471f8">
+<td data-local-id=3D"6a8ece94-7d98-4eb9-a083-477b6cf15659" class=3D"conflue=
+nceTd">
+<p local-id=3D"2a14377580e7">[Clearing]</p></td>
+<td data-local-id=3D"56044a39-9f13-47f0-a9cd-50d28236d6e3" class=3D"conflue=
+nceTd">
+<p local-id=3D"0b582246af8d">T=C3=A1ch MDR ra kh=E1=BB=8Fi transit clearing=
+</p></td>
+<td data-local-id=3D"b0f9ff55-6662-4b3c-a70e-7a009929228e" class=3D"conflue=
+nceTd">
+<p local-id=3D"dfb5a057fc81">3800 - Transit Clearing</p></td>
+<td data-local-id=3D"b4e8e74e-2973-4419-a5e6-6ece8ac29f4e" class=3D"conflue=
+nceTd">
+<p local-id=3D"929fc9cd74e3">DR</p></td>
+<td data-local-id=3D"c523be9c-c403-4100-96d9-9a5bb9ae6c97" class=3D"conflue=
+nceTd">
+<p local-id=3D"e3147a8b3329">2,000</p></td>
+</tr>
+<tr data-local-id=3D"323e0cb1-7720-43ab-b5bb-9c99db35e6e5">
+<td data-local-id=3D"6abafe7f-92bf-43cb-af4e-4e955753beb1" class=3D"conflue=
+nceTd">
+<p local-id=3D"c49c43c14c04">[Clearing]</p></td>
+<td data-local-id=3D"9d9bc4a2-2e8f-42f4-a08b-97c2af8e5b81" class=3D"conflue=
+nceTd">
+<p local-id=3D"a1f992a65ce8">Gi=E1=BB=AF MDR t=E1=BA=A1i transit holdback c=
+h=E1=BB=9D confirm</p></td>
+<td data-local-id=3D"9256735c-5180-464d-854a-2d48f134b86e" class=3D"conflue=
+nceTd">
+<p local-id=3D"cb94c233e3a1">3820 - Transit MDR Holdback</p></td>
+<td data-local-id=3D"53fa1e64-6ec8-4e0f-aa30-124ac256d73f" class=3D"conflue=
+nceTd">
+<p local-id=3D"6620b600442e">CR</p></td>
+<td data-local-id=3D"5fa24fba-149c-45df-8e46-842ca051b256" class=3D"conflue=
+nceTd">
+<p local-id=3D"0ea7655998de">2,000</p></td>
+</tr>
+<tr data-local-id=3D"340291f5-c956-47c5-ab84-03744186dbf1">
+<td data-local-id=3D"1fb05374-cf84-46df-8aeb-627a67763447" class=3D"conflue=
+nceTd">
+<p local-id=3D"9c22dba4f572">[Clearing]</p></td>
+<td data-local-id=3D"492852e8-fc74-468a-ac42-c4a40231ea39" class=3D"conflue=
+nceTd">
+<p local-id=3D"52e6e577f170">=C4=90=E1=BB=91i so=C3=A1t kh=E1=BB=9Bp, chuy=
+=E1=BB=83n ti=E1=BB=81n net sang transit settlement</p></td>
+<td data-local-id=3D"ffbd0754-4a36-4144-9488-59c6ffdf57ba" class=3D"conflue=
+nceTd">
+<p local-id=3D"f4e70ed85a2b">3800 - Transit Clearing</p></td>
+<td data-local-id=3D"5a08e878-0fd2-46aa-9dd7-7d187d3ef548" class=3D"conflue=
+nceTd">
+<p local-id=3D"40a80d08cf4b">DR</p></td>
+<td data-local-id=3D"a4fdeb0b-539f-4e28-8d1f-d9cb1d5e6513" class=3D"conflue=
+nceTd">
+<p local-id=3D"503aa7249a20">198,000</p></td>
+</tr>
+<tr data-local-id=3D"a863e5a4-c5e6-4749-978d-56db9d5a91f4">
+<td data-local-id=3D"b4f9ce51-6731-4666-8fdd-98172c1b1375" class=3D"conflue=
+nceTd">
+<p local-id=3D"13b4751b3d40">[Clearing]</p></td>
+<td data-local-id=3D"ada2c224-a796-406d-a6ff-c8c84d6aeb4c" class=3D"conflue=
+nceTd">
+<p local-id=3D"1ad98322ed6c">Ghi transit settlement outbound</p></td>
+<td data-local-id=3D"df43b549-00a9-4ed2-91c7-2ce39211feec" class=3D"conflue=
+nceTd">
+<p local-id=3D"c35c3d1d7812">3810 - Transit Settlement</p></td>
+<td data-local-id=3D"3ddfb131-f750-40aa-ac99-4a176b9f04c8" class=3D"conflue=
+nceTd">
+<p local-id=3D"0962460de60c">CR</p></td>
+<td data-local-id=3D"42ae9895-b627-43a7-99d4-5ea58d6477d1" class=3D"conflue=
+nceTd">
+<p local-id=3D"1cd8812d6064">198,000</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 local-id=3D"caf0858b99c0" id=3D"FundFlow-B=C6=B0=E1=BB=9Bc3=E2=80=94Ghi=
+Nh=E1=BA=ADnDoanhThuMDR">B=C6=B0=E1=BB=9Bc 3 =E2=80=94 Ghi Nh=E1=BA=ADn Doa=
+nh Thu MDR</h3>
+<div class=3D"table-wrap">
+<table data-table-width=3D"760" data-layout=3D"default" data-local-id=3D"c0=
+735ab5-9cc9-4909-ad3c-fe46e31aca9c" class=3D"confluenceTable">
+<tbody>
+<tr data-local-id=3D"447d0c5d-4372-4f61-a3a0-56df879d48b8">
+<th data-local-id=3D"38e698a4-e8b5-4623-b68f-ca13e6eada6c" class=3D"conflue=
+nceTh">
+<p local-id=3D"90aa65cfbad7">Nh=C3=B3m</p></th>
+<th data-local-id=3D"b4b65f41-14d4-42f5-9c65-bb91ecd9981e" class=3D"conflue=
+nceTh">
+<p local-id=3D"b6cf9ca4adc5">Step</p></th>
+<th data-local-id=3D"809c3306-b739-44e8-a164-8345ed5951bd" class=3D"conflue=
+nceTh">
+<p local-id=3D"0ec78d2897b5">Account</p></th>
+<th data-local-id=3D"692be819-f2e9-4aae-9f28-4d4c6f5a7964" class=3D"conflue=
+nceTh">
+<p local-id=3D"ef95a5173427">DR/CR</p></th>
+<th data-local-id=3D"0dd406e8-e327-4c48-a2e9-93cfde3956c7" class=3D"conflue=
+nceTh">
+<p local-id=3D"cfff5c8e7eb6">Amount</p></th>
+</tr>
+<tr data-local-id=3D"4d82fab6-9ee9-49be-927a-f875279a1468">
+<td data-local-id=3D"fdfde2cf-f538-448c-b492-27ad43c642ec" class=3D"conflue=
+nceTd">
+<p local-id=3D"72ba3793c63c">[Revenue]</p></td>
+<td data-local-id=3D"1d789027-c0f2-4d9e-a036-c354ee74dd5f" class=3D"conflue=
+nceTd">
+<p local-id=3D"0f6db299c8fd">X=C3=A1c nh=E1=BA=ADn =C4=91=E1=BB=91i so=C3=
+=A1t th=C3=A0nh c=C3=B4ng, gi=E1=BA=A3i ph=C3=B3ng MDR holdback</p></td>
+<td data-local-id=3D"e3598769-b781-452e-af77-6ac967d52c71" class=3D"conflue=
+nceTd">
+<p local-id=3D"05062f67c5b7">3820 - Transit MDR Holdback</p></td>
+<td data-local-id=3D"689877a1-cc84-4bfb-9eb9-c8301618383a" class=3D"conflue=
+nceTd">
+<p local-id=3D"3128923efe8d">DR</p></td>
+<td data-local-id=3D"86fa24cd-69c0-40b6-8567-c5afb5a03d1c" class=3D"conflue=
+nceTd">
+<p local-id=3D"6013e55675f4">2,000</p></td>
+</tr>
+<tr data-local-id=3D"1ba30f37-ee12-4a86-b471-120aab80ba85">
+<td data-local-id=3D"41660d65-01ee-4ce3-9d3e-d24cc24479db" class=3D"conflue=
+nceTd">
+<p local-id=3D"95ee73e532fa">[Revenue]</p></td>
+<td data-local-id=3D"e445b07a-afc8-4338-9202-ea8b606a7ccd" class=3D"conflue=
+nceTd">
+<p local-id=3D"04c5aacc5d8a">Ghi nh=E1=BA=ADn doanh thu MDR</p></td>
+<td data-local-id=3D"360424d2-74b7-48a3-bcb9-ffcfcb89a619" class=3D"conflue=
+nceTd">
+<p local-id=3D"9f9da0232ddf">4140 - Ph=C3=AD MDR</p></td>
+<td data-local-id=3D"849e086c-9fc4-4156-936c-7d52be3e87c0" class=3D"conflue=
+nceTd">
+<p local-id=3D"8b0665eb1146">CR</p></td>
+<td data-local-id=3D"b6150d9b-88b4-4bb2-87ef-3997582257d1" class=3D"conflue=
+nceTd">
+<p local-id=3D"cd7aa1fb9a51">2,000</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 local-id=3D"1c27baf1d92c" id=3D"FundFlow-B=C6=B0=E1=BB=9Bc4=E2=80=94Set=
+tlementOutbound(Chuy=E1=BB=83nTi=E1=BB=81nV=E1=BB=81NHMerchant)">B=C6=B0=E1=
+=BB=9Bc 4 =E2=80=94 Settlement Outbound (Chuy=E1=BB=83n Ti=E1=BB=81n V=E1=
+=BB=81 NH Merchant)</h3>
+<div class=3D"table-wrap">
+<table data-table-width=3D"760" data-layout=3D"default" data-local-id=3D"b6=
+621963-23c3-4503-98a2-e540809b1145" class=3D"confluenceTable">
+<tbody>
+<tr data-local-id=3D"73de433b-16e8-480b-8172-5ba7ec407a7a">
+<th data-local-id=3D"7c255dfd-73db-4a4a-9028-0da3ed2434b9" class=3D"conflue=
+nceTh">
+<p local-id=3D"6f58643b8f37">Nh=C3=B3m</p></th>
+<th data-local-id=3D"4ca867ee-63a0-44e6-b2a7-6a04484bbad9" class=3D"conflue=
+nceTh">
+<p local-id=3D"184797815ea3">Step</p></th>
+<th data-local-id=3D"950fdacc-10da-4046-95bc-9adae27842b9" class=3D"conflue=
+nceTh">
+<p local-id=3D"46e28c244224">Account</p></th>
+<th data-local-id=3D"cf873933-ecfe-48b4-aa77-8f82e8a87fc2" class=3D"conflue=
+nceTh">
+<p local-id=3D"f69c0e064af1">DR/CR</p></th>
+<th data-local-id=3D"cf3ff543-08a2-496e-ba9d-7e5119507f61" class=3D"conflue=
+nceTh">
+<p local-id=3D"99b4229cc8d7">Amount</p></th>
+</tr>
+<tr data-local-id=3D"48e55b33-9892-4aae-86a6-3d507764598c">
+<td data-local-id=3D"50f97615-2b46-4c20-beb2-387795df751f" class=3D"conflue=
+nceTd">
+<p local-id=3D"53d06a037db4">[Settlement]</p></td>
+<td data-local-id=3D"e3101fcd-3b8c-4618-8f3f-dc18b4123682" class=3D"conflue=
+nceTd">
+<p local-id=3D"2e13e7742ef4">Gi=E1=BA=A3i ph=C3=B3ng transit settlement</p>=
+</td>
+<td data-local-id=3D"144874e1-ad8a-4fee-b3f2-ed01c63feaae" class=3D"conflue=
+nceTd">
+<p local-id=3D"79e27a30e71d">3810 - Transit Settlement</p></td>
+<td data-local-id=3D"ac38eeaf-bf71-4355-b040-186f8bad3e27" class=3D"conflue=
+nceTd">
+<p local-id=3D"0ac2340d0a98">DR</p></td>
+<td data-local-id=3D"2a3d6117-1efb-4d7d-aa93-2862f3587492" class=3D"conflue=
+nceTd">
+<p local-id=3D"a082963136aa">198,000</p></td>
+</tr>
+<tr data-local-id=3D"fa3a65b1-0e14-4472-ba33-30fa720e17ae">
+<td data-local-id=3D"95395811-2ed5-42e3-9a0e-d52523ec5a03" class=3D"conflue=
+nceTd">
+<p local-id=3D"a0c295a34889">[Settlement]</p></td>
+<td data-local-id=3D"8df6d5f5-48bd-4fd6-948e-7f2b113e457c" class=3D"conflue=
+nceTd">
+<p local-id=3D"353a20e40931">Gi=E1=BA=A3m TK Napas, g=E1=BB=ADi l=E1=BB=87n=
+h chuy=E1=BB=83n v=E1=BB=81 NH merchant</p></td>
+<td data-local-id=3D"a4f8a138-c696-4f34-b024-5463c963111b" class=3D"conflue=
+nceTd">
+<p local-id=3D"6e7b2a90f3f9">1112 - TK Napas</p></td>
+<td data-local-id=3D"80654b4f-b69c-41cc-ab50-8e3a2861d82f" class=3D"conflue=
+nceTd">
+<p local-id=3D"0162f59f7572">CR</p></td>
+<td data-local-id=3D"ef14dd3e-b2d1-49b2-afbb-51ed21b4000f" class=3D"conflue=
+nceTd">
+<p local-id=3D"64b038b39a03">198,000</p></td>
+</tr>
+<tr data-local-id=3D"43c51ad9-48a5-467d-8fec-9b51ab27aeb4">
+<td data-local-id=3D"5e664fd6-d4f6-4a8f-8718-966c96c89331" class=3D"conflue=
+nceTd">
+<p local-id=3D"9da0d2ba11f4">[Settlement]</p></td>
+<td data-local-id=3D"00660d93-38fb-4259-9902-be6533443f48" class=3D"conflue=
+nceTd">
+<p local-id=3D"e6b55b8d9913">Napas x=C3=A1c nh=E1=BA=ADn NH merchant =C4=91=
+=C3=A3 nh=E1=BA=ADn ti=E1=BB=81n</p></td>
+<td data-local-id=3D"4b317443-9407-4a7a-b50c-9bc0a16a9c58" class=3D"conflue=
+nceTd">
+<p local-id=3D"4e0492a6c4f1"><em>(Settled T+0/T+1)</em></p></td>
+<td data-local-id=3D"297a8b50-0497-44b0-a5ee-ba8c5e4d7a84" class=3D"conflue=
+nceTd">
+<p local-id=3D"542b2ad53b72">=E2=80=94</p></td>
+<td data-local-id=3D"d4dc88a5-8b4a-48d1-abfb-a76d45871322" class=3D"conflue=
+nceTd">
+<p local-id=3D"054d93654b92">=E2=80=94</p></td>
+</tr>
+<tr data-local-id=3D"0060901e-83c5-42fc-a981-6e499421b997">
+<td data-local-id=3D"ccc0913c-b2dd-4944-930e-7d8152bf0f9a" class=3D"conflue=
+nceTd">
+<p local-id=3D"325028b40f79">[Settlement]</p></td>
+<td data-local-id=3D"7b219a4c-8e43-4aee-b96b-af23c4b9fadd" class=3D"conflue=
+nceTd">
+<p local-id=3D"0940db59d147">Chi ph=C3=AD Napas (TGTT ch=E1=BB=8Bu)</p></td=
+>
+<td data-local-id=3D"15d8f326-7495-4e9e-92ef-4ac6d905578f" class=3D"conflue=
+nceTd">
+<p local-id=3D"6ca4fc6d733a">5100 - Ph=C3=AD Napas</p></td>
+<td data-local-id=3D"f7912c40-c0ea-4dae-8ae1-6039da2e6715" class=3D"conflue=
+nceTd">
+<p local-id=3D"27ce69dfe38b">DR</p></td>
+<td data-local-id=3D"9fe199b9-9c73-4838-94de-c9c25c8efb69" class=3D"conflue=
+nceTd">
+<p local-id=3D"31b61a9dc1b5">500</p></td>
+</tr>
+<tr data-local-id=3D"c4c16180-3ad8-411a-b3ad-2554d9380c3f">
+<td data-local-id=3D"be152590-f00d-4a88-b861-961846d0455b" class=3D"conflue=
+nceTd">
+<p local-id=3D"d6074c390df7">[Settlement]</p></td>
+<td data-local-id=3D"723f4d05-e45d-4ae3-961b-e5e2c39c0e16" class=3D"conflue=
+nceTd">
+<p local-id=3D"72ae395d3081">Gi=E1=BA=A3m TK Napas =C4=91=E1=BB=83 tr=E1=BA=
+=A3 ph=C3=AD</p></td>
+<td data-local-id=3D"606d3ba2-e76a-4466-a099-fea74802ac91" class=3D"conflue=
+nceTd">
+<p local-id=3D"bee5a1fe165a">1112 - TK Napas</p></td>
+<td data-local-id=3D"a03bb43b-cf5c-4855-88c0-5644d1ae1edd" class=3D"conflue=
+nceTd">
+<p local-id=3D"d9d34ead1d5b">CR</p></td>
+<td data-local-id=3D"60a44df5-27fc-4d57-9544-0c5400b656b4" class=3D"conflue=
+nceTd">
+<p local-id=3D"c5f69b9edc01">500</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 local-id=3D"add8ac29ad87" id=3D"FundFlow-B=C6=B0=E1=BB=9Bc5=E2=80=94X=
+=E1=BB=ADL=C3=BDNgo=E1=BA=A1iL=E1=BB=87(Exception=E2=80=94=C4=90=E1=BB=91iS=
+o=C3=A1tKh=C3=B4ngKh=E1=BB=9Bp)">B=C6=B0=E1=BB=9Bc 5 =E2=80=94 X=E1=BB=AD L=
+=C3=BD Ngo=E1=BA=A1i L=E1=BB=87 (Exception =E2=80=94 =C4=90=E1=BB=91i So=C3=
+=A1t Kh=C3=B4ng Kh=E1=BB=9Bp)</h3>
+<div class=3D"table-wrap">
+<table data-table-width=3D"760" data-layout=3D"default" data-local-id=3D"57=
+0edc1a-0f85-4387-93a0-581ee5846a7c" class=3D"confluenceTable">
+<tbody>
+<tr data-local-id=3D"ea1554dd-e309-4e46-afa4-86f5bccae8cf">
+<th data-local-id=3D"090b5373-f445-47cf-bc3c-9f4f1455f8a5" class=3D"conflue=
+nceTh">
+<p local-id=3D"1fd73e35a985">Nh=C3=B3m</p></th>
+<th data-local-id=3D"2d68d9b9-e273-4b9d-b4c6-7ab9d41fb7aa" class=3D"conflue=
+nceTh">
+<p local-id=3D"ded6340f7de1">Step</p></th>
+<th data-local-id=3D"e7c09dac-5c0a-45ed-ae62-9b1902bc76f5" class=3D"conflue=
+nceTh">
+<p local-id=3D"d0a0231dd007">Account</p></th>
+<th data-local-id=3D"4570bfa4-8313-405c-ae1d-2db07abcbccb" class=3D"conflue=
+nceTh">
+<p local-id=3D"4eea2e3d03c9">DR/CR</p></th>
+<th data-local-id=3D"cba925a6-af91-4bf5-b000-8c4d449e820c" class=3D"conflue=
+nceTh">
+<p local-id=3D"4bae101e683d">Amount</p></th>
+</tr>
+<tr data-local-id=3D"11dba7a6-2c74-4807-aa75-9deee61c6153">
+<td data-local-id=3D"391ca037-8278-41f4-baa5-99be03c2be1f" class=3D"conflue=
+nceTd">
+<p local-id=3D"1afa623dc2d1">[Exception]</p></td>
+<td data-local-id=3D"e5d46e65-7a11-43de-a55b-71f13a72cd34" class=3D"conflue=
+nceTd">
+<p local-id=3D"083d504d3ccd">Ho=C3=A0n ti=E1=BB=81n t=E1=BB=AB transit sett=
+lement v=E1=BB=81 transit clearing</p></td>
+<td data-local-id=3D"5cf4739d-4c0e-492c-b898-37e22f690f0a" class=3D"conflue=
+nceTd">
+<p local-id=3D"17a387e2bef3">3810 - Transit Settlement</p></td>
+<td data-local-id=3D"27679661-ca42-494c-aa84-3b3dcfd37d35" class=3D"conflue=
+nceTd">
+<p local-id=3D"1cafda5644d2">DR</p></td>
+<td data-local-id=3D"9399dde3-6899-481c-8e12-e2fc513c7f1e" class=3D"conflue=
+nceTd">
+<p local-id=3D"dc199116805e">198,000</p></td>
+</tr>
+<tr data-local-id=3D"67645dd8-55d3-4ab1-8398-b21a75562d3c">
+<td data-local-id=3D"229011f9-a91a-4a1d-91ed-07233c431ba8" class=3D"conflue=
+nceTd">
+<p local-id=3D"ead6cea067bc">[Exception]</p></td>
+<td data-local-id=3D"76d53129-bb36-42f7-99ab-8bf81aff9078" class=3D"conflue=
+nceTd">
+<p local-id=3D"db0d9a3b3324">Gi=E1=BB=AF l=E1=BA=A1i transit clearing ch=E1=
+=BB=9D x=E1=BB=AD l=C3=BD</p></td>
+<td data-local-id=3D"46046654-3821-452f-8a03-23690c68a307" class=3D"conflue=
+nceTd">
+<p local-id=3D"fb4905e6d406">3800 - Transit Clearing</p></td>
+<td data-local-id=3D"78df30f2-9f66-472c-9541-f2354bdb4c3a" class=3D"conflue=
+nceTd">
+<p local-id=3D"ade944547edb">CR</p></td>
+<td data-local-id=3D"3d6d2fe3-c23c-475d-a2e1-8745e0ec36b2" class=3D"conflue=
+nceTd">
+<p local-id=3D"47f3ed26abf8">198,000</p></td>
+</tr>
+<tr data-local-id=3D"031c5163-3638-4ec7-bdfd-c8c253af4c41">
+<td data-local-id=3D"9ff54f3f-9e04-4eef-956b-91c26a78bfc8" class=3D"conflue=
+nceTd">
+<p local-id=3D"74e17d5f3aa8">[Exception]</p></td>
+<td data-local-id=3D"61df0c55-cca5-4f3e-b67a-8045e8265ad7" class=3D"conflue=
+nceTd">
+<p local-id=3D"b3932fdbc4b0">Ho=C3=A0n MDR holdback v=E1=BB=81 transit clea=
+ring</p></td>
+<td data-local-id=3D"135a01ef-28ca-4157-97ae-e76afdcc0c46" class=3D"conflue=
+nceTd">
+<p local-id=3D"33ab0d691081">3820 - Transit MDR Holdback</p></td>
+<td data-local-id=3D"157fc7dc-ff30-429f-914c-68d4ba86b3c6" class=3D"conflue=
+nceTd">
+<p local-id=3D"91302b5b107c">DR</p></td>
+<td data-local-id=3D"048e18da-52d3-4938-b787-13c948fd48b1" class=3D"conflue=
+nceTd">
+<p local-id=3D"129231799599">2,000</p></td>
+</tr>
+<tr data-local-id=3D"fd5831d7-f51e-461f-b230-0276f5c94354">
+<td data-local-id=3D"37e616a5-46b0-416e-86ca-50059cd4eae3" class=3D"conflue=
+nceTd">
+<p local-id=3D"59a970634fda">[Exception]</p></td>
+<td data-local-id=3D"4106b899-bdc9-444d-a386-39127844a829" class=3D"conflue=
+nceTd">
+<p local-id=3D"6fe0e282ee5a">C=E1=BB=99ng l=E1=BA=A1i v=C3=A0o transit clea=
+ring</p></td>
+<td data-local-id=3D"6091b910-438d-41a2-bc73-2db8233995f7" class=3D"conflue=
+nceTd">
+<p local-id=3D"8829a3e22ce1">3800 - Transit Clearing</p></td>
+<td data-local-id=3D"8968645b-2d68-461c-9484-a2da3ad9ce7b" class=3D"conflue=
+nceTd">
+<p local-id=3D"ba3ff4fa2bf6">CR</p></td>
+<td data-local-id=3D"6998fcaf-237d-4782-ac4f-4b23cd4955e9" class=3D"conflue=
+nceTd">
+<p local-id=3D"c3df17e66b96">2,000</p></td>
+</tr>
+<tr data-local-id=3D"c8b9bc66-dbe7-4b83-a98d-3dc7aaf0bcf9">
+<td data-local-id=3D"5f09fc0b-583b-4b72-a51b-49c7e4e5c8d3" class=3D"conflue=
+nceTd">
+<p local-id=3D"5aad04d1e96b">[Exception]</p></td>
+<td data-local-id=3D"84165977-d4ff-4757-a035-61cc5bac974f" class=3D"conflue=
+nceTd">
+<p local-id=3D"7d7996ee8ef6">Sau khi x=E1=BB=AD l=C3=BD xong, ho=C3=A0n v=
+=E1=BB=81 v=C3=AD merchant</p></td>
+<td data-local-id=3D"f80c277c-5c87-4fa5-a29c-74a08c6bb080" class=3D"conflue=
+nceTd">
+<p local-id=3D"ddac6206a6d2">3800 - Transit Clearing</p></td>
+<td data-local-id=3D"8faa6854-0b0b-445a-ad8e-e48784809272" class=3D"conflue=
+nceTd">
+<p local-id=3D"144a0ce0a53a">DR</p></td>
+<td data-local-id=3D"84db5ddd-b58d-4df3-9087-fe960c679a9b" class=3D"conflue=
+nceTd">
+<p local-id=3D"dbf6dfc517d9">200,000</p></td>
+</tr>
+<tr data-local-id=3D"6d8336a8-b55f-492c-9005-e672dcce3f29">
+<td data-local-id=3D"083676ed-63f3-4ff2-9b61-47b4966cafd1" class=3D"conflue=
+nceTd">
+<p local-id=3D"68fe8e48690f">[Exception]</p></td>
+<td data-local-id=3D"c81097a1-0d1f-4039-8153-8b3b7b51e154" class=3D"conflue=
+nceTd">
+<p local-id=3D"d533ed8e5c4f">C=E1=BB=99ng l=E1=BA=A1i s=E1=BB=91 d=C6=B0 v=
+=C3=AD merchant</p></td>
+<td data-local-id=3D"2589cc86-1659-48e9-83ff-14e634b714fe" class=3D"conflue=
+nceTd">
+<p local-id=3D"843bd6a3cc19">2120 - Wallet Merchant</p></td>
+<td data-local-id=3D"49fbf804-3926-4fd7-ac4b-2f11e6cd16f3" class=3D"conflue=
+nceTd">
+<p local-id=3D"9f883ac3f35f">CR</p></td>
+<td data-local-id=3D"702ee69c-894c-4ecc-b86c-46e1d9f799e6" class=3D"conflue=
+nceTd">
+<p local-id=3D"0eb654720baa">200,000</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 local-id=3D"b50dd7a1e076" id=3D"FundFlow-Ki=E1=BB=83mTraS=E1=BB=91D=C6=
+=B0Transit=E2=80=94HappyPath">Ki=E1=BB=83m Tra S=E1=BB=91 D=C6=B0 Transit =
+=E2=80=94 Happy Path</h3>
+<p local-id=3D"374ec05ec26a">Ki=E1=BB=83m tra s=E1=BB=91 d=C6=B0 transit nh=
+=E1=BA=B1m =C4=91=E1=BA=A3m b=E1=BA=A3o h=E1=BB=87 th=E1=BB=91ng ho=E1=BA=
+=A1t =C4=91=E1=BB=99ng kh=C3=B4ng c=C3=B3 l=E1=BB=97i v=C3=A0 giao d=E1=BB=
+=8Bch =C4=91c h=E1=BA=A1ch to=C3=A1n &amp; x=E1=BB=AD l=C3=BD th=C3=A0nh c=
+=C3=B4ng tr=C3=AAn m=E1=BB=8Di ho=E1=BA=A1t =C4=91=E1=BB=99ng giao d=E1=BB=
+=8Bch.</p>
+<div class=3D"table-wrap">
+<table data-table-width=3D"760" data-layout=3D"default" data-local-id=3D"6b=
+a5b2a5-f2f1-4588-b5eb-55ef8a068aa1" class=3D"confluenceTable">
+<tbody>
+<tr data-local-id=3D"c737c453-fa01-4e09-ac4b-710f58a819e4">
+<th data-local-id=3D"1ba0b627-d87d-48ec-9519-33912ce6ec3a" class=3D"conflue=
+nceTh">
+<p local-id=3D"544977c9e363">Account</p></th>
+<th data-local-id=3D"cd9a418d-699c-4941-bdbc-7cafd5f91374" class=3D"conflue=
+nceTh">
+<p local-id=3D"665177d65bfe">S=E1=BB=91 d=C6=B0 =C4=91=E1=BA=A7u</p></th>
+<th data-local-id=3D"efe8ccc0-18d4-4397-88f9-bfae5af9c940" class=3D"conflue=
+nceTh">
+<p local-id=3D"b266e97e102b">Ph=C3=A1t sinh DR</p></th>
+<th data-local-id=3D"72a65bd7-ddd6-4fc0-b056-25243b75e499" class=3D"conflue=
+nceTh">
+<p local-id=3D"7d92944c4493">Ph=C3=A1t sinh CR</p></th>
+<th data-local-id=3D"85231281-ded1-4946-bfa7-6360f98a8e7d" class=3D"conflue=
+nceTh">
+<p local-id=3D"d959253ee77b">S=E1=BB=91 d=C6=B0 cu=E1=BB=91i</p></th>
+</tr>
+<tr data-local-id=3D"1c06ae7c-bc17-4393-bdcd-c9eaecb47f45">
+<td data-local-id=3D"879a5d73-aa26-472e-be37-cb6f2cf7b74c" class=3D"conflue=
+nceTd">
+<p local-id=3D"2070c4540890">2120 - Wallet Merchant</p></td>
+<td data-local-id=3D"a55e60b5-a7bf-4cff-9c37-cb4c33f8cccb" class=3D"conflue=
+nceTd">
+<p local-id=3D"aa7d5d295c20">200,000</p></td>
+<td data-local-id=3D"4a1c9890-8b94-4f8a-beec-60a73b78ae69" class=3D"conflue=
+nceTd">
+<p local-id=3D"8603757af576">200,000</p></td>
+<td data-local-id=3D"dc0f058a-32a3-4347-81cd-c2e17f36c62b" class=3D"conflue=
+nceTd">
+<p local-id=3D"8d756ab4e194">0</p></td>
+<td data-local-id=3D"0a46c549-6573-429a-b1ed-c873e1950a6d" class=3D"conflue=
+nceTd">
+<p local-id=3D"d4f7f31e0a84"><strong>0</strong> =E2=9C=85</p></td>
+</tr>
+<tr data-local-id=3D"110bc6ef-dfd4-4d64-85e2-2d62d91973d8">
+<td data-local-id=3D"bc4a2bd4-705c-4a9e-9d9d-084676dbd7c5" class=3D"conflue=
+nceTd">
+<p local-id=3D"d8e86d498aff">3800 - Transit Clearing</p></td>
+<td data-local-id=3D"42773315-8f67-45fb-ac32-6e32a5344230" class=3D"conflue=
+nceTd">
+<p local-id=3D"a4a860b168b8">0</p></td>
+<td data-local-id=3D"7c88db7b-8e78-4594-9814-5bec55639354" class=3D"conflue=
+nceTd">
+<p local-id=3D"cf11b4f032b1">200,000</p></td>
+<td data-local-id=3D"83a93309-2de1-4215-acb6-b38b9f8a982c" class=3D"conflue=
+nceTd">
+<p local-id=3D"48dc85a4f546">200,000</p></td>
+<td data-local-id=3D"faca97a2-2dd0-4316-acf1-b9a215f02eb4" class=3D"conflue=
+nceTd">
+<p local-id=3D"8fc688614815"><strong>0</strong> =E2=9C=85</p></td>
+</tr>
+<tr data-local-id=3D"a8fdcd3e-68af-4915-8124-e832997bcaae">
+<td data-local-id=3D"6d519ee2-4072-4727-8132-07b52dca9423" class=3D"conflue=
+nceTd">
+<p local-id=3D"49214dd245f4">3820 - Transit MDR Holdback</p></td>
+<td data-local-id=3D"0566f98b-c99b-4c95-a591-e22103dcdce3" class=3D"conflue=
+nceTd">
+<p local-id=3D"dabd34a4fcdd">0</p></td>
+<td data-local-id=3D"f745945f-edca-4436-8461-b041332b3285" class=3D"conflue=
+nceTd">
+<p local-id=3D"8ad0419918a1">2,000</p></td>
+<td data-local-id=3D"4425f411-69c8-41c5-a738-dadb2f0b91e8" class=3D"conflue=
+nceTd">
+<p local-id=3D"4d2079a3178a">2,000</p></td>
+<td data-local-id=3D"a917d289-8924-449b-a7fe-2aebb15142fe" class=3D"conflue=
+nceTd">
+<p local-id=3D"0cecee53c020"><strong>0</strong> =E2=9C=85</p></td>
+</tr>
+<tr data-local-id=3D"ee248f8e-8875-4989-ae8f-73603a3e0170">
+<td data-local-id=3D"c9dbb0e1-4229-41a6-b637-95007bf98340" class=3D"conflue=
+nceTd">
+<p local-id=3D"60db078fffc0">3810 - Transit Settlement</p></td>
+<td data-local-id=3D"84740695-3f4b-4e32-9edf-e13b38b7e668" class=3D"conflue=
+nceTd">
+<p local-id=3D"ae8f77233263">0</p></td>
+<td data-local-id=3D"841b2735-25df-4a7e-acdb-e1f1624d2ef4" class=3D"conflue=
+nceTd">
+<p local-id=3D"69fb4fd9b55f">198,000</p></td>
+<td data-local-id=3D"de112f91-a7e6-4c34-99db-b892c788ad1a" class=3D"conflue=
+nceTd">
+<p local-id=3D"2b38b196eeb1">198,000</p></td>
+<td data-local-id=3D"f0226ab1-6a11-42a7-819d-569e20295fa7" class=3D"conflue=
+nceTd">
+<p local-id=3D"f7890f9970b0"><strong>0</strong> =E2=9C=85</p></td>
+</tr>
+<tr data-local-id=3D"7774eb37-e33b-4bf7-b588-7c598c55b4dc">
+<td data-local-id=3D"dec03722-5783-42f8-a3ac-25572dfb030c" class=3D"conflue=
+nceTd">
+<p local-id=3D"a2bee9c17721">4140 - Ph=C3=AD MDR</p></td>
+<td data-local-id=3D"ba6ae036-ac1c-41ad-8968-d1846d2481a4" class=3D"conflue=
+nceTd">
+<p local-id=3D"5d67f9fbadd9">0</p></td>
+<td data-local-id=3D"6bb892a4-5111-4a6d-b5b3-f8d7bbb153ee" class=3D"conflue=
+nceTd">
+<p local-id=3D"18a01b8ef235">0</p></td>
+<td data-local-id=3D"eb287fd3-3a56-4953-bbec-7a4b80215bf4" class=3D"conflue=
+nceTd">
+<p local-id=3D"21db9b962fd6">2,000</p></td>
+<td data-local-id=3D"492a7f99-8287-4a50-9784-5de9b800cf91" class=3D"conflue=
+nceTd">
+<p local-id=3D"9fda9c791868"><strong>+2,000</strong></p></td>
+</tr>
+<tr data-local-id=3D"a6dcc286-e1e7-468d-851f-156f71974978">
+<td data-local-id=3D"670e48a0-9da1-473e-a5ac-efd1143fac67" class=3D"conflue=
+nceTd">
+<p local-id=3D"a5f156cc9a24">1112 - TK Napas</p></td>
+<td data-local-id=3D"53649713-839f-4ed1-b03f-cd8ef9cdf7a3" class=3D"conflue=
+nceTd">
+<p local-id=3D"407c2c209351">=E2=80=94</p></td>
+<td data-local-id=3D"580971ef-9672-45f3-922e-e1f6ab57c75d" class=3D"conflue=
+nceTd">
+<p local-id=3D"6ebb796a7fb2">0</p></td>
+<td data-local-id=3D"e7ada0a9-0633-43cf-b485-5d53c06f42df" class=3D"conflue=
+nceTd">
+<p local-id=3D"72b2d9c8a4c8">198,500</p></td>
+<td data-local-id=3D"1bf59df8-0c10-4205-9748-5bd6afeddb5f" class=3D"conflue=
+nceTd">
+<p local-id=3D"639081835757"><strong>-198,500</strong></p></td>
+</tr>
+<tr data-local-id=3D"13a13b22-2f34-46e6-ab55-d696fccb31e7">
+<td data-local-id=3D"2971d409-2dc9-495b-a37a-650caef40be9" class=3D"conflue=
+nceTd">
+<p local-id=3D"24d3304694e6">5100 - Ph=C3=AD Napas</p></td>
+<td data-local-id=3D"a64af51d-98d3-416f-8a67-23126e4cc1a8" class=3D"conflue=
+nceTd">
+<p local-id=3D"1ae7a74bf9fe">0</p></td>
+<td data-local-id=3D"d3f2c733-89b7-439d-9873-b7d4eaaed8f2" class=3D"conflue=
+nceTd">
+<p local-id=3D"95ec56483b46">500</p></td>
+<td data-local-id=3D"1c07bad9-8a2c-45f4-b425-b7e9a9d9e862" class=3D"conflue=
+nceTd">
+<p local-id=3D"8db28821d6d8">0</p></td>
+<td data-local-id=3D"79dfa5f6-25e5-44ba-a996-c6126fe02a6f" class=3D"conflue=
+nceTd">
+<p local-id=3D"151796cbf699"><strong>+500</strong></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<blockquote local-id=3D"bee25abd-77d7-42e7-8e19-3918d2983d46">
+<p local-id=3D"94990a78fb42"><strong>K=E1=BA=BFt qu=E1=BA=A3:</strong> <cod=
+e>2120 =3D 0</code> | <code>1112 -198,500</code> | <code>4140 +2,000</code>=
+ | <code>5100 +500</code> | <strong>L=C3=A3i thu=E1=BA=A7n +1,500</strong><=
+/p>
+</blockquote>
+    </div>
+</body>
+</html>
+------=_Part_56_2112162926.1780309109798--

@@ -76,4 +76,11 @@ public interface SavingLedger {
 
   /** Returns the current account snapshot, or {@code null} if not found. */
   SavAccount findAccount(UUID id);
+
+  /**
+   * Returns the full bút toán view for one transfer: header + enriched lines with
+   * {@code account_no} and {@code account_kind} from {@code sav_account}.
+   * Returns {@code null} if not found.
+   */
+  SavTransView findTransfer(UUID transId);
 }
