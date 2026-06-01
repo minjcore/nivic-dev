@@ -209,3 +209,86 @@ CREATE INDEX IF NOT EXISTS sav_trans_data_account_idx
 -- At most one settlement (POSTED or VOIDED) per PENDING transfer.
 CREATE UNIQUE INDEX IF NOT EXISTS sav_trans_settled_uidx
   ON sav_trans (pending_id) WHERE pending_id IS NOT NULL;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- GtelPay Fund Flow Ledger — Chart of Accounts (COA)
+--   coa_*   prefix
+--
+-- Balance convention: balance_minor = Σdebit − Σcredit
+--   ASSET / EXPENSE (debit-normal): positive balance = healthy
+--   LIABILITY / REVENUE / EQUITY / TRANSIT (credit-normal): negative = healthy
+--   TRANSIT accounts must always be 0 after each complete flow
+--
+-- JdbcFundFlowLedger.ensureSchema() seeds coa_account on first startup.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS coa_account (
+  code          VARCHAR(10)  PRIMARY KEY,
+  name          VARCHAR(256) NOT NULL,
+  kind          VARCHAR(16)  NOT NULL,  -- ASSET|LIABILITY|TRANSIT|REVENUE|EXPENSE|EQUITY
+  balance_minor BIGINT       NOT NULL DEFAULT 0,
+  version       BIGINT       NOT NULL DEFAULT 0
+);
+
+COMMENT ON TABLE  coa_account               IS 'Chart of Accounts with running balance. balance_minor = Σdebit − Σcredit.';
+COMMENT ON COLUMN coa_account.kind          IS 'ASSET/EXPENSE=debit-normal; LIABILITY/REVENUE/EQUITY/TRANSIT=credit-normal';
+COMMENT ON COLUMN coa_account.balance_minor IS 'Σdebit − Σcredit across all posted transactions.';
+
+-- Journal header: one row per business event (nạp/rút/IBFT/…).
+CREATE TABLE IF NOT EXISTS coa_trans (
+  id         UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  ref_id     VARCHAR(128) UNIQUE,      -- idempotency / external bank reference
+  memo       VARCHAR(512),
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE coa_trans        IS 'Journal entry header. ref_id used for idempotency.';
+COMMENT ON COLUMN coa_trans.ref_id IS 'Unique external reference (bank ref, confirm ref, …).';
+
+-- Bút toán lines: balanced per trans_id (Σdebit_minor = Σcredit_minor).
+CREATE TABLE IF NOT EXISTS coa_trans_data (
+  trans_id      UUID        NOT NULL REFERENCES coa_trans(id),
+  line_no       SMALLINT    NOT NULL,
+  account_code  VARCHAR(10) NOT NULL REFERENCES coa_account(code),
+  debit_minor   BIGINT      NOT NULL DEFAULT 0,
+  credit_minor  BIGINT      NOT NULL DEFAULT 0,
+  currency_code VARCHAR(3)  NOT NULL DEFAULT 'VND',
+  PRIMARY KEY (trans_id, line_no)
+);
+
+COMMENT ON TABLE coa_trans_data IS 'Bút toán: double-entry lines. Invariant: Σdebit_minor = Σcredit_minor per trans_id.';
+
+CREATE INDEX IF NOT EXISTS coa_trans_data_account_idx ON coa_trans_data (account_code);
+
+-- ── COA seed — 23 accounts from GtelPay Fund Flow document ───────────────────
+INSERT INTO coa_account (code, name, kind) VALUES
+  -- Nhóm 1: Tài sản
+  ('1111', 'TK Vietinbank Chuyên dùng',      'ASSET'),
+  ('1112', 'TK Napas Clearing',               'ASSET'),
+  ('1113', 'TK VPBank - QR/POS',              'ASSET'),
+  -- Nhóm 2: Nợ phải trả
+  ('2110', 'Wallet Balance - User',           'LIABILITY'),
+  ('2120', 'Wallet Balance Merchant',         'LIABILITY'),
+  ('2130', 'Ký quỹ - Đối tác Chi hộ',         'LIABILITY'),
+  -- Nhóm 3: Transit
+  ('3100', 'Transit - Nạp tiền',              'TRANSIT'),
+  ('3200', 'Transit - Rút tiền',              'TRANSIT'),
+  ('3300', 'Transit - Chuyển tiền nội bộ',    'TRANSIT'),
+  ('3400', 'Transit - IBFT',                  'TRANSIT'),
+  ('3500', 'Transit - Thanh toán',            'TRANSIT'),
+  ('3600', 'Transit - Chi Lương',             'TRANSIT'),
+  ('3700', 'Transit - Chi hộ',                'TRANSIT'),
+  ('3800', 'Transit - Clearing',              'TRANSIT'),
+  ('3810', 'Transit - Settlement Outbound',   'TRANSIT'),
+  ('3820', 'Transit - MDR Holdback',          'TRANSIT'),
+  -- Nhóm 4: Doanh thu
+  ('4110', 'Doanh thu Phí nạp tiền',          'REVENUE'),
+  ('4120', 'Doanh thu Phí rút tiền',          'REVENUE'),
+  ('4130', 'Doanh thu Phí chuyển tiền',       'REVENUE'),
+  ('4140', 'Doanh thu Phí MDR',               'REVENUE'),
+  ('4150', 'Doanh thu Phí Chi Lương/Chi hộ',  'REVENUE'),
+  -- Nhóm 5: Chi phí
+  ('5100', 'Chi phí Phí NH / Napas',          'EXPENSE'),
+  -- Nhóm 6: Vốn
+  ('6000', 'Vốn chủ sở hữu',                  'EQUITY')
+ON CONFLICT (code) DO NOTHING;
