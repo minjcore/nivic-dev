@@ -9,6 +9,7 @@ import dev.nivic.coa.error.AlreadyReversedException;
 import dev.nivic.coa.error.InsufficientEscrowException;
 import dev.nivic.coa.error.InsufficientTransitException;
 import dev.nivic.coa.error.InsufficientWalletException;
+import dev.nivic.coa.error.NegativeBalanceException;
 import dev.nivic.coa.error.NothingToCloseException;
 import dev.nivic.coa.error.TransactionNotFoundException;
 import dev.nivic.coa.report.BalanceSheet;
@@ -71,6 +72,8 @@ public final class FundFlowApi {
     } catch (InsufficientWalletException | InsufficientTransitException
         | InsufficientEscrowException e) {
       return ApiResponse.error(422, "INSUFFICIENT_FUNDS", e.getMessage());
+    } catch (NegativeBalanceException e) {
+      return ApiResponse.error(422, "NEGATIVE_BALANCE", e.getMessage());
     } catch (AlreadyReversedException e) {
       return ApiResponse.error(409, "ALREADY_REVERSED", e.getMessage());
     } catch (NothingToCloseException e) {

@@ -230,6 +230,24 @@ CREATE TABLE IF NOT EXISTS coa_account (
   version       BIGINT       NOT NULL DEFAULT 0
 );
 
+-- Frozen rule (defense-in-depth chống âm): số dư không sang chiều sai theo bản chất tài khoản.
+-- LIABILITY/TRANSIT/REVENUE: balance ≤ 0 (ví/transit/doanh thu không ngược chiều).
+-- EXPENSE: balance ≥ 0. ASSET (1112/1113 outflow) & EQUITY (6100 lỗ): không ràng buộc.
+-- NOT VALID: thêm an toàn lên DB có sẵn (vẫn enforce mọi write mới).
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'coa_account_balance_chk') THEN
+    ALTER TABLE coa_account ADD CONSTRAINT coa_account_balance_chk CHECK (
+      CASE kind
+        WHEN 'LIABILITY' THEN balance_minor <= 0
+        WHEN 'TRANSIT'   THEN balance_minor <= 0
+        WHEN 'REVENUE'   THEN balance_minor <= 0
+        WHEN 'EXPENSE'   THEN balance_minor >= 0
+        ELSE TRUE
+      END
+    ) NOT VALID;
+  END IF;
+END $$;
+
 COMMENT ON TABLE  coa_account               IS 'Chart of Accounts with running balance. balance_minor = Σdebit − Σcredit.';
 COMMENT ON COLUMN coa_account.kind          IS 'ASSET/EXPENSE=debit-normal; LIABILITY/REVENUE/EQUITY/TRANSIT=credit-normal';
 COMMENT ON COLUMN coa_account.balance_minor IS 'Σdebit − Σcredit across all posted transactions.';

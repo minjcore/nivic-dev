@@ -46,6 +46,23 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
       )
       """;
 
+  /** Constraint name for the balance-sign rule (defense-in-depth chống âm). */
+  static final String BALANCE_CHECK = "coa_account_balance_chk";
+
+  /**
+   * Frozen rule ở tầng DB: số dư không được sang chiều sai theo bản chất tài khoản.
+   * NOT VALID để thêm an toàn lên DB có sẵn (không quét lại hàng cũ; vẫn enforce mọi write mới).
+   */
+  private static final String DDL_ACCOUNT_CHECK =
+      "ALTER TABLE coa_account ADD CONSTRAINT " + BALANCE_CHECK + " CHECK ("
+          + " CASE kind"
+          + "   WHEN 'LIABILITY' THEN balance_minor <= 0"
+          + "   WHEN 'TRANSIT'   THEN balance_minor <= 0"
+          + "   WHEN 'REVENUE'   THEN balance_minor <= 0"
+          + "   WHEN 'EXPENSE'   THEN balance_minor >= 0"
+          + "   ELSE TRUE"
+          + " END) NOT VALID";
+
   private static final String DDL_TRANS = """
       CREATE TABLE IF NOT EXISTS coa_trans (
         id           UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1084,7 +1101,15 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
 
         c.commit();
         return new CoaTrans(transId, refId, memo, createdAt, resultLines);
-      } catch (SQLException | RuntimeException e) {
+      } catch (SQLException e) {
+        try { c.rollback(); } catch (SQLException ignored) {}
+        // 23514 = check_violation (balance-sign frozen rule) → domain exception
+        if ("23514".equals(e.getSQLState()) && String.valueOf(e.getMessage()).contains(BALANCE_CHECK)) {
+          throw new dev.nivic.coa.error.NegativeBalanceException(
+              "balance-sign rule violated (ref=" + refId + "): " + e.getMessage());
+        }
+        throw e;
+      } catch (RuntimeException e) {
         try { c.rollback(); } catch (SQLException ignored) {}
         throw e;
       }
@@ -1116,6 +1141,13 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
           ps.addBatch();
         }
         ps.executeBatch();
+      }
+      // Frozen rule: balance-sign CHECK. Idempotent — ignore "already exists" (42710).
+      try (Connection c = dataSource.getConnection();
+          Statement st = c.createStatement()) {
+        st.execute(DDL_ACCOUNT_CHECK);
+      } catch (SQLException e) {
+        if (!"42710".equals(e.getSQLState())) throw e;
       }
       schemaEnsured = true;
     }
