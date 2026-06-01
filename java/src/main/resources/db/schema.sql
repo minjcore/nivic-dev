@@ -284,6 +284,38 @@ CREATE INDEX IF NOT EXISTS coa_trans_data_account_idx ON coa_trans_data (account
 CREATE INDEX IF NOT EXISTS coa_trans_data_party_idx
   ON coa_trans_data (account_code, party_mid) WHERE party_mid IS NOT NULL;
 
+-- ── Frozen rules (triggers) — đóng băng sổ nhật ký ──────────────────────────
+-- 1) Append-only: cấm UPDATE/DELETE bút toán đã ghi (TRUNCATE admin vẫn cho phép).
+CREATE OR REPLACE FUNCTION coa_forbid_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'coa journal is append-only: % on % is forbidden', TG_OP, TG_TABLE_NAME;
+END $$;
+
+DROP TRIGGER IF EXISTS coa_trans_no_mutation ON coa_trans;
+CREATE TRIGGER coa_trans_no_mutation BEFORE UPDATE OR DELETE ON coa_trans
+  FOR EACH ROW EXECUTE FUNCTION coa_forbid_mutation();
+
+DROP TRIGGER IF EXISTS coa_trans_data_no_mutation ON coa_trans_data;
+CREATE TRIGGER coa_trans_data_no_mutation BEFORE UPDATE OR DELETE ON coa_trans_data
+  FOR EACH ROW EXECUTE FUNCTION coa_forbid_mutation();
+
+-- 2) Deferred double-entry: tại COMMIT, mỗi trans_id phải có Σdebit = Σcredit.
+CREATE OR REPLACE FUNCTION coa_check_balanced() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE dr BIGINT; cr BIGINT;
+BEGIN
+  SELECT COALESCE(SUM(debit_minor),0), COALESCE(SUM(credit_minor),0)
+    INTO dr, cr FROM coa_trans_data WHERE trans_id = NEW.trans_id;
+  IF dr <> cr THEN
+    RAISE EXCEPTION 'unbalanced journal %: debit=% credit=%', NEW.trans_id, dr, cr
+      USING ERRCODE = '23514';
+  END IF;
+  RETURN NULL;
+END $$;
+
+DROP TRIGGER IF EXISTS coa_trans_data_balanced ON coa_trans_data;
+CREATE CONSTRAINT TRIGGER coa_trans_data_balanced AFTER INSERT ON coa_trans_data
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION coa_check_balanced();
+
 -- ── COA seed — 23 accounts from GtelPay Fund Flow document ───────────────────
 INSERT INTO coa_account (code, name, kind) VALUES
   -- Nhóm 1: Tài sản

@@ -63,6 +63,44 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
           + "   ELSE TRUE"
           + " END) NOT VALID";
 
+  // ── Frozen rules (DB triggers) — đóng băng sổ nhật ký ───────────────────────
+
+  /** Append-only: cấm sửa/xoá bút toán đã ghi. */
+  private static final String DDL_FN_FORBID = """
+      CREATE OR REPLACE FUNCTION coa_forbid_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        RAISE EXCEPTION 'coa journal is append-only: % on % is forbidden', TG_OP, TG_TABLE_NAME;
+      END $$
+      """;
+
+  /** Deferred: tại COMMIT, mọi trans_id phải có Σdebit = Σcredit (double-entry tầng DB). */
+  private static final String DDL_FN_BALANCED = """
+      CREATE OR REPLACE FUNCTION coa_check_balanced() RETURNS trigger LANGUAGE plpgsql AS $$
+      DECLARE dr BIGINT; cr BIGINT;
+      BEGIN
+        SELECT COALESCE(SUM(debit_minor),0), COALESCE(SUM(credit_minor),0)
+          INTO dr, cr FROM coa_trans_data WHERE trans_id = NEW.trans_id;
+        IF dr <> cr THEN
+          RAISE EXCEPTION 'unbalanced journal %: debit=% credit=%', NEW.trans_id, dr, cr
+            USING ERRCODE = '23514';
+        END IF;
+        RETURN NULL;
+      END $$
+      """;
+
+  /** Triggers: drop-then-create (idempotent). Constraint trigger phải DROP+CREATE. */
+  private static final String[] DDL_TRIGGERS = {
+      "DROP TRIGGER IF EXISTS coa_trans_no_mutation ON coa_trans",
+      "CREATE TRIGGER coa_trans_no_mutation BEFORE UPDATE OR DELETE ON coa_trans"
+          + " FOR EACH ROW EXECUTE FUNCTION coa_forbid_mutation()",
+      "DROP TRIGGER IF EXISTS coa_trans_data_no_mutation ON coa_trans_data",
+      "CREATE TRIGGER coa_trans_data_no_mutation BEFORE UPDATE OR DELETE ON coa_trans_data"
+          + " FOR EACH ROW EXECUTE FUNCTION coa_forbid_mutation()",
+      "DROP TRIGGER IF EXISTS coa_trans_data_balanced ON coa_trans_data",
+      "CREATE CONSTRAINT TRIGGER coa_trans_data_balanced AFTER INSERT ON coa_trans_data"
+          + " DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION coa_check_balanced()",
+  };
+
   private static final String DDL_TRANS = """
       CREATE TABLE IF NOT EXISTS coa_trans (
         id           UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1237,6 +1275,13 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
         st.execute(DDL_ACCOUNT_CHECK);
       } catch (SQLException e) {
         if (!"42710".equals(e.getSQLState())) throw e;
+      }
+      // Frozen rules: append-only + deferred double-entry triggers (idempotent).
+      try (Connection c = dataSource.getConnection();
+          Statement st = c.createStatement()) {
+        st.execute(DDL_FN_FORBID);
+        st.execute(DDL_FN_BALANCED);
+        for (String ddl : DDL_TRIGGERS) st.execute(ddl);
       }
       schemaEnsured = true;
     }
