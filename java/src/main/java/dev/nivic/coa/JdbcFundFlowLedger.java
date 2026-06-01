@@ -330,6 +330,68 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
   }
 
   @Override
+  public CoaTrans initIbftTransfer(IbftInitCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.requestRef());
+      if (existing != null) return existing;
+
+      long walletBalance = getBalance("2110");
+      if (walletBalance > -cmd.totalDebit()) {
+        throw new InsufficientWalletException("2110", walletBalance, cmd.totalDebit());
+      }
+
+      // DR 2110 (amount + fee) / CR 3400 (amount + fee)
+      List<JournalLine> lines = List.of(
+          new JournalLine("2110", cmd.totalDebit(), 0L),
+          new JournalLine("3400", 0L, cmd.totalDebit()));
+
+      return postJournal(lines, cmd.requestRef(),
+          cmd.memo() != null ? cmd.memo()
+              : "IBFT — trừ ví: " + cmd.amountMinor() + " phí: " + cmd.feeMinor());
+    } catch (InsufficientWalletException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("initIbftTransfer failed: " + cmd.requestRef(), e);
+    }
+  }
+
+  @Override
+  public CoaTrans settleIbftTransfer(IbftSettleCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.settleRef());
+      if (existing != null) return existing;
+
+      long transitBalance = getBalance("3400");
+      if (transitBalance > -cmd.totalTransitRelease()) {
+        throw new InsufficientTransitException("3400", transitBalance, cmd.totalTransitRelease());
+      }
+
+      // 4-leg balanced entry:
+      // DR 3400 (amount+fee) / DR 5100 (napasCost) / CR 1112 (amount+napasCost) / CR 4130 (fee)
+      List<JournalLine> lines = new java.util.ArrayList<>();
+      lines.add(new JournalLine("3400", cmd.totalTransitRelease(), 0L));
+      lines.add(new JournalLine("5100", cmd.napasCost(), 0L));
+      lines.add(new JournalLine("1112", 0L, cmd.napasOutflow()));
+      if (cmd.feeMinor() > 0) {
+        lines.add(new JournalLine("4130", 0L, cmd.feeMinor()));
+      }
+
+      return postJournal(lines, cmd.settleRef(),
+          cmd.memo() != null ? cmd.memo()
+              : "IBFT — Napas: " + cmd.amountMinor() + " phí: " + cmd.feeMinor()
+              + " Napas cost: " + cmd.napasCost());
+    } catch (InsufficientTransitException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("settleIbftTransfer failed: " + cmd.settleRef(), e);
+    }
+  }
+
+  @Override
   public long getBalance(String accountCode) {
     Objects.requireNonNull(accountCode, "accountCode");
     try {

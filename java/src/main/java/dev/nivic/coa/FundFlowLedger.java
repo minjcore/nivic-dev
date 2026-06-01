@@ -74,6 +74,25 @@ public interface FundFlowLedger {
   CoaTrans settleInternalTransfer(InternalTransferSettleCmd cmd);
 
   /**
+   * Step 1 — Trừ ví user, ghi transit IBFT.
+   * Posts: DR 2110 (amount + fee) / CR 3400 (Transit IBFT).
+   * Idempotent on {@link IbftInitCmd#requestRef()}.
+   *
+   * @throws InsufficientWalletException if Wallet User (2110) balance is insufficient
+   */
+  CoaTrans initIbftTransfer(IbftInitCmd cmd);
+
+  /**
+   * Step 2 — Napas thực hiện, giải phóng transit, ghi chi phí.
+   * Posts một entry 4 legs:
+   * DR 3400 (amount+fee) / DR 5100 (napasCost) / CR 1112 (amount+napasCost) / CR 4130 (fee).
+   * Idempotent on {@link IbftSettleCmd#settleRef()}.
+   *
+   * @throws InsufficientTransitException if Transit 3400 balance would go below zero
+   */
+  CoaTrans settleIbftTransfer(IbftSettleCmd cmd);
+
+  /**
    * Platform double-entry sanity check: sum of all debits across all transactions
    * must equal sum of all credits. Always true if posting is correct.
    */
