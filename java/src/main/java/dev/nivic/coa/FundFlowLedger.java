@@ -38,6 +38,24 @@ public interface FundFlowLedger {
   CoaTrans findTrans(UUID transId);
 
   /**
+   * Step 1 — User khởi tạo rút tiền.
+   * Posts: DR 2110 (amount + fee) / CR 3200 (Transit Rút, amount + fee).
+   * Idempotent on {@link WithdrawInitCmd#requestRef()}.
+   *
+   * @throws InsufficientWalletException if Wallet User (2110) balance is insufficient
+   */
+  CoaTrans initWithdraw(WithdrawInitCmd cmd);
+
+  /**
+   * Step 2 — NH chuyển tiền, giải phóng transit.
+   * Posts: DR 3200 (amount + fee) / CR 1111 (amount) / CR 4120 (fee).
+   * Idempotent on {@link WithdrawSettleCmd#settleRef()}.
+   *
+   * @throws InsufficientTransitException if Transit 3200 balance would go below zero
+   */
+  CoaTrans settleWithdraw(WithdrawSettleCmd cmd);
+
+  /**
    * Platform double-entry sanity check: sum of all debits across all transactions
    * must equal sum of all credits. Always true if posting is correct.
    */
