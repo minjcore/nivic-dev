@@ -408,6 +408,139 @@ class JdbcSavingLedgerTest {
     assertEquals(2_002_000L, ledger.findAccount(a2.id()).creditsPosted());
   }
 
+  // ── accrueInterest — daily rate ──────────────────────────────────────────────
+
+  @Test
+  void accrueInterest_daily_oneYear_exactRate() {
+    // 10M VND × 6.5%/năm × 365 ngày = 650,000 VND
+    SavAccount acct = ledger.openAccount(OpenAccountCmd.term(OWNER, VND, 650,
+        Instant.now().plus(365, ChronoUnit.DAYS)));
+    long principal = 10_000_000L;
+    ledger.deposit(deposit(acct.id(), principal));
+
+    long interest = SavInterestCalc.compute(principal, 650, 365);
+    assertEquals(650_000L, interest);
+
+    ledger.accrueInterest(List.of(new AccrueInterestCmd(acct.id(), interest, VND, null)));
+
+    assertEquals(principal + interest, ledger.findAccount(acct.id()).availableBalance());
+  }
+
+  @Test
+  void accrueInterest_daily_oneDay() {
+    // 10M VND × 6.5%/năm × 1/365 = 1,780 VND (floor)
+    SavAccount acct = ledger.openAccount(OpenAccountCmd.term(OWNER, VND, 650,
+        Instant.now().plus(365, ChronoUnit.DAYS)));
+    long principal = 10_000_000L;
+    ledger.deposit(deposit(acct.id(), principal));
+
+    long interest = SavInterestCalc.compute(principal, 650, 1);
+    assertEquals(1_780L, interest);
+
+    ledger.accrueInterest(List.of(new AccrueInterestCmd(acct.id(), interest, VND, null)));
+
+    assertEquals(principal + 1_780L, ledger.findAccount(acct.id()).availableBalance());
+  }
+
+  @Test
+  void accrueInterest_daily_thirtyDays() {
+    // 10M VND × 6.5%/năm × 30/365 = 53,424 VND (floor)
+    SavAccount acct = ledger.openAccount(OpenAccountCmd.term(OWNER, VND, 650,
+        Instant.now().plus(365, ChronoUnit.DAYS)));
+    long principal = 10_000_000L;
+    ledger.deposit(deposit(acct.id(), principal));
+
+    long interest = SavInterestCalc.compute(principal, 650, 30);
+    assertEquals(53_424L, interest);
+
+    ledger.accrueInterest(List.of(new AccrueInterestCmd(acct.id(), interest, VND, null)));
+
+    SavAccount updated = ledger.findAccount(acct.id());
+    assertEquals(principal + 53_424L, updated.availableBalance());
+  }
+
+  @Test
+  void accrueInterest_daily_multiplePeriodsOnSameAccount() {
+    // Tính lãi hàng tháng trong 3 tháng, mỗi lần balance tăng lên
+    SavAccount acct = ledger.openAccount(OpenAccountCmd.term(OWNER, VND, 650,
+        Instant.now().plus(365, ChronoUnit.DAYS)));
+    long principal = 10_000_000L;
+    ledger.deposit(deposit(acct.id(), principal));
+
+    UUID batchId = UUID.randomUUID();
+
+    // Tháng 1: 30 ngày
+    long m1 = SavInterestCalc.compute(principal, 650, 30);
+    ledger.accrueInterest(List.of(new AccrueInterestCmd(acct.id(), m1, VND, batchId)));
+
+    long balanceAfterM1 = ledger.findAccount(acct.id()).availableBalance();
+    assertEquals(principal + m1, balanceAfterM1);
+
+    // Tháng 2: 30 ngày — tính trên balance mới (đã cộng lãi tháng 1)
+    long m2 = SavInterestCalc.compute(balanceAfterM1, 650, 30);
+    ledger.accrueInterest(List.of(new AccrueInterestCmd(acct.id(), m2, VND, batchId)));
+
+    long balanceAfterM2 = ledger.findAccount(acct.id()).availableBalance();
+    assertEquals(balanceAfterM1 + m2, balanceAfterM2);
+
+    // Tháng 3
+    long m3 = SavInterestCalc.compute(balanceAfterM2, 650, 30);
+    ledger.accrueInterest(List.of(new AccrueInterestCmd(acct.id(), m3, VND, batchId)));
+
+    long balanceAfterM3 = ledger.findAccount(acct.id()).availableBalance();
+    assertEquals(balanceAfterM2 + m3, balanceAfterM3);
+
+    // Lãi ghép 3 tháng phải lớn hơn lãi đơn 90 ngày tính 1 lần
+    long simpleInterest90 = SavInterestCalc.compute(principal, 650, 90);
+    assertTrue(balanceAfterM3 - principal > simpleInterest90,
+        "compound (monthly) should exceed simple 90-day lump interest");
+  }
+
+  @Test
+  void accrueInterest_daily_batchDifferentRates() {
+    // Nhiều tài khoản, lãi suất khác nhau, cùng batch
+    SavAccount a1 = ledger.openAccount(OpenAccountCmd.term(OWNER, VND, 650,
+        Instant.now().plus(365, ChronoUnit.DAYS)));
+    SavAccount a2 = ledger.openAccount(OpenAccountCmd.term(OTHER, VND, 800,
+        Instant.now().plus(365, ChronoUnit.DAYS)));
+
+    ledger.deposit(deposit(a1.id(), 50_000_000L));  // 50M × 6.5%
+    ledger.deposit(deposit(a2.id(), 20_000_000L));  // 20M × 8.0%
+
+    long i1 = SavInterestCalc.compute(50_000_000L, 650, 30);  // 53,424 VND × 5 = 267,123
+    long i2 = SavInterestCalc.compute(20_000_000L, 800, 30);  // 131,506 VND
+
+    UUID batchId = UUID.randomUUID();
+    List<SavTransfer> results = ledger.accrueInterest(List.of(
+        new AccrueInterestCmd(a1.id(), i1, VND, batchId),
+        new AccrueInterestCmd(a2.id(), i2, VND, batchId)));
+
+    assertEquals(2, results.size());
+    assertEquals(50_000_000L + i1, ledger.findAccount(a1.id()).availableBalance());
+    assertEquals(20_000_000L + i2, ledger.findAccount(a2.id()).availableBalance());
+  }
+
+  @Test
+  void accrueInterest_daily_transferHasCorrectButtoanLines() {
+    // Verify bút toán: line 1 = debit reserve, line 2 = credit savings
+    SavAccount acct = ledger.openAccount(OpenAccountCmd.demand(OWNER, VND));
+    ledger.deposit(deposit(acct.id(), 10_000_000L));
+
+    long interest = SavInterestCalc.compute(10_000_000L, 650, 30);
+    List<SavTransfer> results = ledger.accrueInterest(
+        List.of(new AccrueInterestCmd(acct.id(), interest, VND, null)));
+
+    SavTransfer t = results.get(0);
+    assertEquals(2, t.lines().size(), "should have exactly 2 bút toán lines");
+
+    SavTransLine debitLine  = t.lines().stream().filter(l -> l.debitMinor()  > 0).findFirst().orElseThrow();
+    SavTransLine creditLine = t.lines().stream().filter(l -> l.creditMinor() > 0).findFirst().orElseThrow();
+
+    assertEquals(interest, debitLine.debitMinor(),   "reserve debited");
+    assertEquals(interest, creditLine.creditMinor(), "savings credited");
+    assertEquals(acct.id(), t.creditAccountId(),     "credit side is the savings account");
+  }
+
   // ── closeAccount ─────────────────────────────────────────────────────────────
 
   @Test
