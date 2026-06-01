@@ -46,12 +46,17 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
 
   private static final String DDL_TRANS = """
       CREATE TABLE IF NOT EXISTS coa_trans (
-        id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-        ref_id     VARCHAR(128) UNIQUE,
-        memo       VARCHAR(512),
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        id           UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+        ref_id       VARCHAR(128) UNIQUE,
+        memo         VARCHAR(512),
+        reverses_ref VARCHAR(128),
+        created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
       )
       """;
+
+  /** For DBs created before reverses_ref existed. */
+  private static final String DDL_TRANS_ALTER =
+      "ALTER TABLE coa_trans ADD COLUMN IF NOT EXISTS reverses_ref VARCHAR(128)";
 
   private static final String DDL_TRANS_DATA = """
       CREATE TABLE IF NOT EXISTS coa_trans_data (
@@ -116,7 +121,11 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
       "SELECT id FROM coa_trans WHERE ref_id = ?";
 
   private static final String INSERT_TRANS =
-      "INSERT INTO coa_trans (ref_id, memo) VALUES (?, ?) RETURNING id, created_at";
+      "INSERT INTO coa_trans (ref_id, memo, reverses_ref) VALUES (?, ?, ?) RETURNING id, created_at";
+
+  /** Count reversals already posted against a given original ref. */
+  private static final String COUNT_REVERSALS =
+      "SELECT COUNT(*) FROM coa_trans WHERE reverses_ref = ?";
 
   private static final String INSERT_TRANS_DATA =
       "INSERT INTO coa_trans_data (trans_id, line_no, account_code, debit_minor, credit_minor)"
@@ -848,6 +857,45 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
   }
 
   @Override
+  public CoaTrans reverse(ReversalCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      // Idempotent retry: same reversalRef already posted → return it.
+      CoaTrans existing = findByRefId(cmd.reversalRef());
+      if (existing != null) return existing;
+
+      // Load the original transaction with its bút toán lines.
+      CoaTrans original = findByRefId(cmd.originalRef());
+      if (original == null) throw new TransactionNotFoundException(cmd.originalRef());
+
+      // Guard: already reversed by a different reversalRef.
+      try (Connection c = dataSource.getConnection();
+          PreparedStatement ps = c.prepareStatement(COUNT_REVERSALS)) {
+        ps.setString(1, cmd.originalRef());
+        try (ResultSet rs = ps.executeQuery()) {
+          rs.next();
+          if (rs.getLong(1) > 0) throw new AlreadyReversedException(cmd.originalRef());
+        }
+      }
+
+      // Build inverse legs: swap debit ↔ credit for every line.
+      List<JournalLine> inverse = new ArrayList<>(original.lines().size());
+      for (CoaTransLine l : original.lines()) {
+        inverse.add(new JournalLine(l.accountCode(), l.creditMinor(), l.debitMinor()));
+      }
+
+      String memo = cmd.memo() != null ? cmd.memo()
+          : "Hoàn tiền giao dịch: " + cmd.originalRef();
+      return postJournal(inverse, cmd.reversalRef(), memo, cmd.originalRef());
+    } catch (TransactionNotFoundException | AlreadyReversedException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("reverse failed: " + cmd.originalRef(), e);
+    }
+  }
+
+  @Override
   public boolean isDoubleEntryBalanced() {
     try {
       ensureSchema();
@@ -872,6 +920,11 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
    * 4. Updates each account's balance_minor.
    */
   private CoaTrans postJournal(List<JournalLine> lines, String refId, String memo)
+      throws SQLException {
+    return postJournal(lines, refId, memo, null);
+  }
+
+  private CoaTrans postJournal(List<JournalLine> lines, String refId, String memo, String reversesRef)
       throws SQLException {
     // Pre-flight: must be balanced
     long totalDr = lines.stream().mapToLong(JournalLine::debitMinor).sum();
@@ -901,8 +954,9 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
         UUID transId;
         Instant createdAt;
         try (PreparedStatement ps = c.prepareStatement(INSERT_TRANS)) {
-          if (refId != null) ps.setString(1, refId); else ps.setNull(1, Types.VARCHAR);
-          if (memo  != null) ps.setString(2, memo);  else ps.setNull(2, Types.VARCHAR);
+          if (refId != null)      ps.setString(1, refId);       else ps.setNull(1, Types.VARCHAR);
+          if (memo  != null)      ps.setString(2, memo);        else ps.setNull(2, Types.VARCHAR);
+          if (reversesRef != null) ps.setString(3, reversesRef); else ps.setNull(3, Types.VARCHAR);
           try (ResultSet rs = ps.executeQuery()) {
             rs.next();
             transId   = rs.getObject(1, UUID.class);
@@ -952,6 +1006,7 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
           Statement st = c.createStatement()) {
         st.execute(DDL_ACCOUNT);
         st.execute(DDL_TRANS);
+        st.execute(DDL_TRANS_ALTER);
         st.execute(DDL_TRANS_DATA);
         st.execute(DDL_IDX_DATA_ACCOUNT);
       }

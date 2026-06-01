@@ -221,6 +221,18 @@ public interface FundFlowLedger {
    */
   CoaTrans eodRejectSettlement(EodRejectSettlementCmd cmd);
 
+  // ── Reversal / Hoàn tiền ──────────────────────────────────────────────────────
+
+  /**
+   * Đảo ngược một giao dịch đã ghi sổ: post bút toán bù trừ (swap debit↔credit từng dòng).
+   * Giao dịch gốc giữ nguyên (audit trail); reversal được link qua {@code reverses_ref}.
+   * Idempotent on {@link ReversalCmd#reversalRef()}.
+   *
+   * @throws TransactionNotFoundException if {@code originalRef} không tồn tại
+   * @throws AlreadyReversedException     if giao dịch gốc đã được đảo bởi một reversal khác
+   */
+  CoaTrans reverse(ReversalCmd cmd);
+
   /**
    * Platform double-entry sanity check: sum of all debits across all transactions
    * must equal sum of all credits. Always true if posting is correct.
