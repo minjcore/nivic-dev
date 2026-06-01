@@ -63,8 +63,8 @@ class JdbcSavingLedgerTest {
   @AfterEach
   void cleanUp() throws SQLException {
     try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
-      // transfers first (FK), then user accounts (system accounts stay)
-      st.execute("TRUNCATE sav_transfer");
+      // CASCADE handles: sav_trans_data FK → sav_trans, and sav_trans self-ref (pending_id)
+      st.execute("TRUNCATE sav_trans_data, sav_trans CASCADE");
       st.execute("DELETE FROM sav_account WHERE owner_mid <> 0");
     }
   }

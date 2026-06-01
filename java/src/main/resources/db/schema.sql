@@ -171,32 +171,41 @@ CREATE TABLE IF NOT EXISTS sav_account (
 COMMENT ON TABLE sav_account IS 'Savings account with TigerBeetle 4-counter balance model.';
 COMMENT ON COLUMN sav_account.flags IS '0x01=CLOSED, 0x02=TERM_LOCKED (before maturity), 0x04=FROZEN';
 
-CREATE TABLE IF NOT EXISTS sav_transfer (
+-- Transfer header: lifecycle metadata only (no amount, no account refs).
+CREATE TABLE IF NOT EXISTS sav_trans (
   id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   kind              VARCHAR(24) NOT NULL,           -- DEPOSIT | WITHDRAWAL | INTEREST | FEE | PENALTY
-  debit_account_id  UUID        NOT NULL REFERENCES sav_account(id),
-  credit_account_id UUID        NOT NULL REFERENCES sav_account(id),
-  amount_minor      BIGINT      NOT NULL,           -- always positive; direction determined by debit/credit
-  currency_code     VARCHAR(3)  NOT NULL,
   phase             VARCHAR(16) NOT NULL DEFAULT 'POSTED', -- PENDING | POSTED | VOIDED
-  pending_id        UUID        REFERENCES sav_transfer(id), -- non-null for POSTED/VOIDED settlement rows
+  pending_id        UUID        REFERENCES sav_trans(id), -- non-null for POSTED/VOIDED settlement rows
   idempotency_key   UUID        UNIQUE,             -- client-supplied; server deduplicates
-  ref_mid           BIGINT,                         -- link to wallet mid (for deposit/withdrawal context)
+  ref_mid           BIGINT,                         -- link to wallet mid
   ref_request_id    BIGINT,                         -- link to wallet request_id
   linked_batch_id   UUID,                           -- groups atomic-batch transfers (interest accrual)
   memo              VARCHAR(256),
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-COMMENT ON TABLE sav_transfer IS 'Immutable transfer log; rows are never updated after INSERT.';
-COMMENT ON COLUMN sav_transfer.pending_id IS 'References the PENDING transfer this row settles (POSTED) or cancels (VOIDED).';
+COMMENT ON TABLE sav_trans IS 'Immutable transfer header; rows are never updated after INSERT.';
+COMMENT ON COLUMN sav_trans.pending_id IS 'References the PENDING transfer this row settles (POSTED) or cancels (VOIDED).';
 
-CREATE INDEX IF NOT EXISTS sav_transfer_debit_idx
-  ON sav_transfer (debit_account_id, created_at DESC);
+-- Bút toán (double-entry journal lines): one row per leg of each transfer.
+-- Standard two-leg transfer: line 1 = debit side, line 2 = credit side.
+CREATE TABLE IF NOT EXISTS sav_trans_data (
+  trans_id          UUID        NOT NULL REFERENCES sav_trans(id),
+  line_no           SMALLINT    NOT NULL,           -- 1 = debit leg, 2 = credit leg
+  account_id        UUID        NOT NULL REFERENCES sav_account(id),
+  debit_minor       BIGINT      NOT NULL DEFAULT 0,
+  credit_minor      BIGINT      NOT NULL DEFAULT 0,
+  currency_code     VARCHAR(3)  NOT NULL,
+  PRIMARY KEY (trans_id, line_no)
+);
 
-CREATE INDEX IF NOT EXISTS sav_transfer_credit_idx
-  ON sav_transfer (credit_account_id, created_at DESC);
+COMMENT ON TABLE sav_trans_data IS 'Bút toán: double-entry lines for each transfer. Balanced: sum(debit_minor) = sum(credit_minor) per trans_id.';
+
+-- Lookup transfers by account (either debit or credit side).
+CREATE INDEX IF NOT EXISTS sav_trans_data_account_idx
+  ON sav_trans_data (account_id);
 
 -- At most one settlement (POSTED or VOIDED) per PENDING transfer.
-CREATE UNIQUE INDEX IF NOT EXISTS sav_transfer_settled_uidx
-  ON sav_transfer (pending_id) WHERE pending_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS sav_trans_settled_uidx
+  ON sav_trans (pending_id) WHERE pending_id IS NOT NULL;
