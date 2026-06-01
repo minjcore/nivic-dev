@@ -4,6 +4,10 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import dev.nivic.coa.cmd.*;
 import dev.nivic.coa.JdbcFundFlowLedger;
+import dev.nivic.coa.report.BalanceSheet;
+import dev.nivic.coa.report.FundFlowReports;
+import dev.nivic.coa.report.ProfitAndLoss;
+import dev.nivic.coa.report.TrialBalance;
 import dev.nivic.db.Postgres;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -36,10 +40,12 @@ public final class ControlPlaneServer {
 
   private final DataSource ds;
   private final JdbcFundFlowLedger ledger;
+  private final FundFlowReports reports;
 
   private ControlPlaneServer(DataSource ds) {
     this.ds = ds;
     this.ledger = new JdbcFundFlowLedger(ds);
+    this.reports = new FundFlowReports(ds);
   }
 
   public static void main(String[] args) throws Exception {
@@ -161,6 +167,11 @@ public final class ControlPlaneServer {
         ledger.eodSettleOutbound(new EodSettleOutboundCmd(net, napas, ref + "-OUT", null));
         yield "EOD settle " + fmt(merchant) + "đ (MDR " + fmt(mdr) + "đ, Napas " + fmt(napas) + "đ)";
       }
+      case "close" -> {
+        var pl = reports.profitAndLoss();
+        ledger.closePeriod(new PeriodCloseCmd(ref + "-CLOSE", null));
+        yield "Khoá sổ — kết chuyển lãi/lỗ " + fmt(pl.netProfit()) + "đ → 6100";
+      }
       default -> throw new IllegalArgumentException("unknown flow: " + flow);
     };
   }
@@ -212,7 +223,31 @@ public final class ControlPlaneServer {
           .append('}');
       }
     }
-    sb.append("]}");
+    sb.append("]");
+
+    // Reports derived from coa_account.
+    TrialBalance tb = reports.trialBalance();
+    BalanceSheet bs = reports.balanceSheet();
+    ProfitAndLoss pl = reports.profitAndLoss();
+    sb.append(",\"reports\":{")
+      .append("\"trial\":{")
+        .append("\"totalDebit\":").append(tb.totalDebit()).append(',')
+        .append("\"totalCredit\":").append(tb.totalCredit()).append(',')
+        .append("\"balanced\":").append(tb.isBalanced())
+      .append("},\"sheet\":{")
+        .append("\"assets\":").append(bs.assets()).append(',')
+        .append("\"liabilities\":").append(bs.liabilities()).append(',')
+        .append("\"equity\":").append(bs.equity()).append(',')
+        .append("\"netIncome\":").append(bs.netIncome()).append(',')
+        .append("\"transit\":").append(bs.transit()).append(',')
+        .append("\"balanced\":").append(bs.isBalanced())
+      .append("},\"pnl\":{")
+        .append("\"revenue\":").append(pl.totalRevenue()).append(',')
+        .append("\"expense\":").append(pl.totalExpense()).append(',')
+        .append("\"net\":").append(pl.netProfit())
+      .append("}}");
+
+    sb.append("}");
     return sb.toString();
   }
 
@@ -293,6 +328,17 @@ public final class ControlPlaneServer {
         .tx:first-child{border-top:0}
         .tx .memo{color:var(--txt)} .tx .meta{color:var(--mut);display:flex;justify-content:space-between;margin-top:2px}
         .tx .amt{color:var(--blue);font-variant-numeric:tabular-nums}
+        .rpt{font-size:13px}
+        .rpt h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);
+          margin:14px 0 6px;font-weight:600}
+        .rpt h3:first-child{margin-top:0}
+        .rpt .row{display:flex;justify-content:space-between;padding:3px 0;font-variant-numeric:tabular-nums}
+        .rpt .row .lbl{color:var(--mut)}
+        .rpt .row.tot{border-top:1px solid var(--line);margin-top:4px;padding-top:6px;font-weight:600}
+        .rpt .row .v.pos{color:var(--green)} .rpt .row .v.neg{color:var(--amber)}
+        .rpt .eq{font-size:11px;color:var(--mut);margin-top:6px;font-family:ui-monospace,monospace}
+        .rpt .chk{font-size:11px;margin-top:4px}
+        .rpt .chk.ok{color:var(--green)} .rpt .chk.bad{color:var(--red)}
         #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card);
           border:1px solid var(--blue);border-radius:8px;padding:10px 18px;opacity:0;transition:.3s;pointer-events:none}
         #toast.show{opacity:1}
@@ -317,8 +363,13 @@ public final class ControlPlaneServer {
               <button onclick="run('payroll')">Chi lương</button>
               <button onclick="run('disbursement')">Chi hộ</button>
               <button class="wide" onclick="run('eod')">EOD Settlement &amp; Clearing</button>
+              <button class="wide" onclick="run('close')">📕 Khoá sổ cuối kỳ</button>
               <button class="wide reset" onclick="reset()">⟲ Reset toàn bộ</button>
             </div>
+          </div>
+          <div class="panel">
+            <h2>Báo cáo kế toán</h2>
+            <div id="reports" class="rpt"></div>
           </div>
           <div class="panel">
             <h2>Bút toán gần nhất</h2>
@@ -352,6 +403,7 @@ public final class ControlPlaneServer {
             }
             sec.appendChild(cards); g.appendChild(sec);
           }
+          renderReports(r.reports);
           const rc=document.getElementById('recent');
           rc.innerHTML=r.recent.length?'':'<span style="color:var(--mut);font-size:12px">Chưa có giao dịch</span>';
           for(const t of r.recent){
@@ -362,6 +414,41 @@ public final class ControlPlaneServer {
             rc.appendChild(d);
           }
           document.getElementById('clock').textContent='cập nhật '+new Date().toLocaleTimeString('vi-VN');
+        }
+        function row(lbl,val,opts){
+          opts=opts||{};
+          const cls=opts.tot?'row tot':'row';
+          const vcls=opts.sign?(val>0?'v pos':(val<0?'v neg':'v')):'v';
+          return '<div class="'+cls+'"><span class="lbl">'+lbl+'</span>'+
+                 '<span class="'+vcls+'">'+fmt(val)+' đ</span></div>';
+        }
+        function renderReports(rp){
+          const el=document.getElementById('reports');
+          if(!rp){el.innerHTML='';return;}
+          const t=rp.trial, s=rp.sheet, p=rp.pnl;
+          let h='';
+          // Trial Balance
+          h+='<h3>Bảng cân đối thử</h3>';
+          h+=row('Tổng Nợ',t.totalDebit);
+          h+=row('Tổng Có',t.totalCredit);
+          h+='<div class="chk '+(t.balanced?'ok':'bad')+'">'+(t.balanced?'✓ ΣNợ = ΣCó':'✗ lệch')+'</div>';
+          // Balance Sheet
+          h+='<h3>Bảng cân đối kế toán</h3>';
+          h+=row('Tài sản (1xxx)',s.assets);
+          h+=row('Nợ phải trả (2xxx)',s.liabilities);
+          h+=row('Vốn (6xxx)',s.equity);
+          h+=row('Lãi/lỗ kỳ này',s.netIncome,{sign:true});
+          if(s.transit!==0) h+=row('Transit (3xxx)',s.transit,{sign:true});
+          h+='<div class="eq">TS '+fmt(s.assets)+' = Nợ '+fmt(s.liabilities)+
+             ' + Vốn '+fmt(s.equity)+' + Lãi '+fmt(s.netIncome)+
+             (s.transit!==0?' + Transit '+fmt(s.transit):'')+'</div>';
+          h+='<div class="chk '+(s.balanced?'ok':'bad')+'">'+(s.balanced?'✓ Phương trình cân':'✗ lệch')+'</div>';
+          // P&L
+          h+='<h3>Kết quả kinh doanh</h3>';
+          h+=row('Doanh thu (4xxx)',p.revenue);
+          h+=row('Chi phí (5xxx)',p.expense);
+          h+=row('Lãi/lỗ thuần',p.net,{tot:true,sign:true});
+          el.innerHTML=h;
         }
         async function run(flow){
           const r=await(await fetch('/api/demo/'+flow,{method:'POST'})).json();
