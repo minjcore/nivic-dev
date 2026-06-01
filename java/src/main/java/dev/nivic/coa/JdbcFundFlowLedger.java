@@ -443,6 +443,156 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
     }
   }
 
+  // ── EOD Settlement & Clearing ─────────────────────────────────────────────────
+
+  @Override
+  public CoaTrans eodInitClearing(EodClearingInitCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.clearingRef());
+      if (existing != null) return existing;
+
+      // 2120 credit-normal: balance < 0 when merchant has money
+      long merchantBalance = getBalance("2120");
+      if (merchantBalance > -cmd.totalAmount()) {
+        throw new InsufficientWalletException("2120", merchantBalance, cmd.totalAmount());
+      }
+
+      // DR 2120 / CR 3800
+      List<JournalLine> lines = List.of(
+          new JournalLine("2120", cmd.totalAmount(), 0L),
+          new JournalLine("3800", 0L, cmd.totalAmount()));
+
+      return postJournal(lines, cmd.clearingRef(),
+          cmd.memo() != null ? cmd.memo()
+              : "EOD Clearing — lock merchant: " + cmd.totalAmount());
+    } catch (InsufficientWalletException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("eodInitClearing failed: " + cmd.clearingRef(), e);
+    }
+  }
+
+  @Override
+  public CoaTrans eodReconcile(EodReconcileCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.reconcileRef());
+      if (existing != null) return existing;
+
+      long clearingBalance = getBalance("3800");
+      if (clearingBalance > -cmd.totalAmount()) {
+        throw new InsufficientTransitException("3800", clearingBalance, cmd.totalAmount());
+      }
+
+      // DR 3800 total / CR 3820 mdr / CR 3810 net
+      List<JournalLine> lines = new java.util.ArrayList<>();
+      lines.add(new JournalLine("3800", cmd.totalAmount(), 0L));
+      lines.add(new JournalLine("3820", 0L, cmd.mdrAmount()));
+      lines.add(new JournalLine("3810", 0L, cmd.netAmount()));
+
+      return postJournal(lines, cmd.reconcileRef(),
+          cmd.memo() != null ? cmd.memo()
+              : "EOD Reconcile — MDR: " + cmd.mdrAmount() + " net: " + cmd.netAmount());
+    } catch (InsufficientTransitException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("eodReconcile failed: " + cmd.reconcileRef(), e);
+    }
+  }
+
+  @Override
+  public CoaTrans eodRecognizeMdr(EodRecognizeMdrCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.mdrRef());
+      if (existing != null) return existing;
+
+      long mdrHoldback = getBalance("3820");
+      if (mdrHoldback > -cmd.mdrAmount()) {
+        throw new InsufficientTransitException("3820", mdrHoldback, cmd.mdrAmount());
+      }
+
+      // DR 3820 / CR 4140
+      List<JournalLine> lines = List.of(
+          new JournalLine("3820", cmd.mdrAmount(), 0L),
+          new JournalLine("4140", 0L, cmd.mdrAmount()));
+
+      return postJournal(lines, cmd.mdrRef(),
+          cmd.memo() != null ? cmd.memo() : "EOD MDR revenue: " + cmd.mdrAmount());
+    } catch (InsufficientTransitException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("eodRecognizeMdr failed: " + cmd.mdrRef(), e);
+    }
+  }
+
+  @Override
+  public CoaTrans eodSettleOutbound(EodSettleOutboundCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.settleRef());
+      if (existing != null) return existing;
+
+      long settlementBalance = getBalance("3810");
+      if (settlementBalance > -cmd.netAmount()) {
+        throw new InsufficientTransitException("3810", settlementBalance, cmd.netAmount());
+      }
+
+      // DR 3810 net / DR 5100 napasCost / CR 1112 (net + napasCost)
+      List<JournalLine> lines = new java.util.ArrayList<>();
+      lines.add(new JournalLine("3810", cmd.netAmount(), 0L));
+      lines.add(new JournalLine("5100", cmd.napasCost(), 0L));
+      lines.add(new JournalLine("1112", 0L, cmd.napasOutflow()));
+
+      return postJournal(lines, cmd.settleRef(),
+          cmd.memo() != null ? cmd.memo()
+              : "EOD Settlement Outbound — net: " + cmd.netAmount() + " Napas: " + cmd.napasCost());
+    } catch (InsufficientTransitException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("eodSettleOutbound failed: " + cmd.settleRef(), e);
+    }
+  }
+
+  @Override
+  public CoaTrans eodRejectSettlement(EodRejectSettlementCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.rejectRef());
+      if (existing != null) return existing;
+
+      // Validate: 3810 và 3820 phải còn đủ credit chưa được settle
+      long settlementBalance = getBalance("3810");
+      if (settlementBalance > -cmd.netAmount()) {
+        throw new InsufficientTransitException("3810", settlementBalance, cmd.netAmount());
+      }
+      long mdrHoldback = getBalance("3820");
+      if (mdrHoldback > -cmd.mdrAmount()) {
+        throw new InsufficientTransitException("3820", mdrHoldback, cmd.mdrAmount());
+      }
+
+      // DR 3810 net / DR 3820 mdr / CR 2120 total
+      List<JournalLine> lines = new java.util.ArrayList<>();
+      lines.add(new JournalLine("3810", cmd.netAmount(), 0L));
+      lines.add(new JournalLine("3820", cmd.mdrAmount(), 0L));
+      lines.add(new JournalLine("2120", 0L, cmd.totalRefund()));
+
+      return postJournal(lines, cmd.rejectRef(),
+          cmd.memo() != null ? cmd.memo()
+              : "EOD Reject — hoàn về merchant: " + cmd.totalRefund());
+    } catch (InsufficientTransitException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("eodRejectSettlement failed: " + cmd.rejectRef(), e);
+    }
+  }
+
   @Override
   public long getBalance(String accountCode) {
     Objects.requireNonNull(accountCode, "accountCode");
@@ -475,6 +625,17 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
       }
     } catch (SQLException e) {
       throw new IllegalStateException("findTrans failed: " + transId, e);
+    }
+  }
+
+  @Override
+  public CoaTrans findTransByRefId(String refId) {
+    Objects.requireNonNull(refId, "refId");
+    try {
+      ensureSchema();
+      return findByRefId(refId);
+    } catch (SQLException e) {
+      throw new IllegalStateException("findTransByRefId failed: " + refId, e);
     }
   }
 

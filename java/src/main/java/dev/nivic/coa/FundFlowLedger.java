@@ -37,6 +37,9 @@ public interface FundFlowLedger {
   /** Full journal transaction with bút toán lines. Returns null if not found. */
   CoaTrans findTrans(UUID transId);
 
+  /** Lookup by idempotency / external ref ({@code coa_trans.ref_id}). Returns null if not found. */
+  CoaTrans findTransByRefId(String refId);
+
   /**
    * Step 1 — User khởi tạo rút tiền.
    * Posts: DR 2110 (amount + fee) / CR 3200 (Transit Rút, amount + fee).
@@ -107,6 +110,47 @@ public interface FundFlowLedger {
    * @throws InsufficientTransitException if Transit 3500 balance would go below zero
    */
   CoaTrans creditMerchantQrPos(QrPosCreditMerchantCmd cmd);
+
+  // ── Settlement & Clearing EOD (Use Case 11) ──────────────────────────────────
+
+  /**
+   * Step 1 — Lock toàn bộ số dư ví merchant vào transit clearing.
+   * Posts: DR 2120 (totalAmount) / CR 3800 (totalAmount).
+   *
+   * @throws InsufficientWalletException using account 2120 if merchant balance insufficient
+   */
+  CoaTrans eodInitClearing(EodClearingInitCmd cmd);
+
+  /**
+   * Step 2 — Đối soát: tách MDR, chuyển phần net sang transit settlement.
+   * Posts: DR 3800 total / CR 3820 mdr / CR 3810 net.
+   *
+   * @throws InsufficientTransitException if 3800 Transit Clearing has insufficient balance
+   */
+  CoaTrans eodReconcile(EodReconcileCmd cmd);
+
+  /**
+   * Step 3 — Xác nhận đối soát thành công, ghi nhận doanh thu MDR.
+   * Posts: DR 3820 (mdr) / CR 4140 (mdr).
+   *
+   * @throws InsufficientTransitException if 3820 Transit MDR Holdback has insufficient balance
+   */
+  CoaTrans eodRecognizeMdr(EodRecognizeMdrCmd cmd);
+
+  /**
+   * Step 4 — Settlement Outbound qua Napas, ghi chi phí Napas.
+   * Posts: DR 3810 (net) / DR 5100 (napasCost) / CR 1112 (net + napasCost).
+   *
+   * @throws InsufficientTransitException if 3810 Transit Settlement has insufficient balance
+   */
+  CoaTrans eodSettleOutbound(EodSettleOutboundCmd cmd);
+
+  /**
+   * Step 5 (Exception) — Đối soát không khớp: hoàn toàn bộ tiền về ví merchant.
+   * Áp dụng sau step 2, trước step 3+4.
+   * Posts: DR 3810 (net) / DR 3820 (mdr) / CR 2120 (total).
+   */
+  CoaTrans eodRejectSettlement(EodRejectSettlementCmd cmd);
 
   /**
    * Platform double-entry sanity check: sum of all debits across all transactions
