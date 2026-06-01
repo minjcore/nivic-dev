@@ -290,5 +290,6 @@ INSERT INTO coa_account (code, name, kind) VALUES
   -- Nhóm 5: Chi phí
   ('5100', 'Chi phí Phí NH / Napas',          'EXPENSE'),
   -- Nhóm 6: Vốn
-  ('6000', 'Vốn chủ sở hữu',                  'EQUITY')
+  ('6000', 'Vốn chủ sở hữu',                  'EQUITY'),
+  ('6100', 'Lợi nhuận giữ lại',               'EQUITY')
 ON CONFLICT (code) DO NOTHING;

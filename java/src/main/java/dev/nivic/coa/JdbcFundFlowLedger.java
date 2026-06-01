@@ -102,7 +102,11 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
       {"4150", "Doanh thu Phí Chi Lương/Chi hộ",  "REVENUE"},
       {"5100", "Chi phí Phí NH / Napas",          "EXPENSE"},
       {"6000", "Vốn chủ sở hữu",                  "EQUITY"},
+      {"6100", "Lợi nhuận giữ lại",               "EQUITY"},
   };
+
+  /** Retained-earnings account closing entries flow into. */
+  private static final String RETAINED_EARNINGS = "6100";
 
   private static final String UPSERT_ACCOUNT =
       "INSERT INTO coa_account (code, name, kind) VALUES (?, ?, ?)"
@@ -128,6 +132,11 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
   /** Count reversals already posted against a given original ref. */
   private static final String COUNT_REVERSALS =
       "SELECT COUNT(*) FROM coa_trans WHERE reverses_ref = ?";
+
+  /** Revenue + expense accounts with a non-zero balance (for period close). */
+  private static final String SELECT_PNL_BALANCES =
+      "SELECT code, kind, balance_minor FROM coa_account"
+          + " WHERE kind IN ('REVENUE','EXPENSE') AND balance_minor <> 0 ORDER BY code";
 
   private static final String INSERT_TRANS_DATA =
       "INSERT INTO coa_trans_data (trans_id, line_no, account_code, debit_minor, credit_minor)"
@@ -855,6 +864,53 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
       return findByRefId(refId);
     } catch (SQLException e) {
       throw new IllegalStateException("findTransByRefId failed: " + refId, e);
+    }
+  }
+
+  @Override
+  public CoaTrans closePeriod(PeriodCloseCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      // Idempotent retry.
+      CoaTrans existing = findByRefId(cmd.closeRef());
+      if (existing != null) return existing;
+
+      // Read all revenue/expense balances.
+      List<JournalLine> lines = new ArrayList<>();
+      long totalRevenue = 0, totalExpense = 0;
+      try (Connection c = dataSource.getConnection();
+          PreparedStatement ps = c.prepareStatement(SELECT_PNL_BALANCES);
+          ResultSet rs = ps.executeQuery()) {
+        while (rs.next()) {
+          String code = rs.getString("code");
+          String kind = rs.getString("kind");
+          long bal = rs.getLong("balance_minor");
+          if ("REVENUE".equals(kind)) {
+            long natural = -bal;                       // credit-normal
+            lines.add(new JournalLine(code, natural, 0L)); // DR revenue → 0
+            totalRevenue += natural;
+          } else { // EXPENSE
+            long natural = bal;                        // debit-normal
+            lines.add(new JournalLine(code, 0L, natural)); // CR expense → 0
+            totalExpense += natural;
+          }
+        }
+      }
+      if (lines.isEmpty()) throw new NothingToCloseException();
+
+      // Balance into retained earnings (6100): profit → CR, loss → DR.
+      long net = totalRevenue - totalExpense;
+      if (net > 0)      lines.add(new JournalLine(RETAINED_EARNINGS, 0L, net));
+      else if (net < 0) lines.add(new JournalLine(RETAINED_EARNINGS, -net, 0L));
+
+      String memo = cmd.memo() != null ? cmd.memo()
+          : "Khoá sổ — lãi/lỗ thuần: " + (totalRevenue - totalExpense);
+      return postJournal(lines, cmd.closeRef(), memo);
+    } catch (NothingToCloseException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("closePeriod failed: " + cmd.closeRef(), e);
     }
   }
 

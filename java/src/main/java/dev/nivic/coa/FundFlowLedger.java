@@ -235,6 +235,18 @@ public interface FundFlowLedger {
    */
   CoaTrans reverse(ReversalCmd cmd);
 
+  // ── Period Close / Khoá sổ ────────────────────────────────────────────────────
+
+  /**
+   * Khoá sổ cuối kỳ: kết chuyển doanh thu (4xxx) và chi phí (5xxx) về Lợi nhuận giữ lại (6100).
+   * Posts một journal: DR mọi 4xxx (về 0) / CR mọi 5xxx (về 0) / cân bằng vào 6100 (lãi → CR,
+   * lỗ → DR). Sau khoá: 4xxx/5xxx = 0, 6100 += lãi thuần. Idempotent on
+   * {@link PeriodCloseCmd#closeRef()}.
+   *
+   * @throws NothingToCloseException nếu không có số dư doanh thu/chi phí để kết chuyển
+   */
+  CoaTrans closePeriod(PeriodCloseCmd cmd);
+
   /**
    * Platform double-entry sanity check: sum of all debits across all transactions
    * must equal sum of all credits. Always true if posting is correct.
