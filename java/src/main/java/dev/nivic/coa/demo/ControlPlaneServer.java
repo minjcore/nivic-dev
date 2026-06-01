@@ -526,7 +526,7 @@ public final class ControlPlaneServer {
         <span style="color:var(--mut);font-size:12px;margin-left:auto" id="clock"></span>
       </header>
       <div class="tabs">
-        <div class="tab active" id="tab-coa" onclick="showTab('coa')">⚖️ Hệ Kế toán (COA)</div>
+        <div class="tab active" id="tab-coa" onclick="showTab('coa')">⚖️ Sổ kế toán</div>
         <div class="tab" id="tab-sav" onclick="showTab('sav')">🏦 Hệ Ví / Tiết kiệm</div>
       </div>
 
