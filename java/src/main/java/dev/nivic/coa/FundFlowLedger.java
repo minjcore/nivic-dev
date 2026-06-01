@@ -111,6 +111,27 @@ public interface FundFlowLedger {
    */
   CoaTrans creditMerchantQrPos(QrPosCreditMerchantCmd cmd);
 
+  // ── Chi Lương — Payroll Disbursement (Use Case 9) ────────────────────────────
+
+  /**
+   * Step 1 — Lock ví merchant doanh nghiệp vào transit chi lương.
+   * Posts: DR 2120 (amount + totalFee) / CR 3600 (Transit Chi Lương).
+   * Idempotent on {@link PayrollInitCmd#requestRef()}.
+   *
+   * @throws InsufficientWalletException if Wallet Merchant (2120) balance is insufficient
+   */
+  CoaTrans initPayroll(PayrollInitCmd cmd);
+
+  /**
+   * Step 2 — Bulk IBFT đến TK NH nhân viên, giải phóng transit, ghi chi phí Napas.
+   * Posts (4 legs):
+   * DR 3600 (amount+totalFee) / DR 5100 (napasCost) / CR 4150 (totalFee) / CR 1112 (amount+napasCost).
+   * Idempotent on {@link PayrollDisburseCmd#disburseRef()}.
+   *
+   * @throws InsufficientTransitException if Transit 3600 balance would go below zero
+   */
+  CoaTrans disbursePayroll(PayrollDisburseCmd cmd);
+
   // ── Settlement & Clearing EOD (Use Case 11) ──────────────────────────────────
 
   /**

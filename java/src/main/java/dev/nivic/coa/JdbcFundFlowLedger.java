@@ -443,6 +443,72 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
     }
   }
 
+  // ── Chi Lương (Payroll Disbursement) ─────────────────────────────────────────
+
+  @Override
+  public CoaTrans initPayroll(PayrollInitCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.requestRef());
+      if (existing != null) return existing;
+
+      // 2120 credit-normal: balance < 0 when merchant has money
+      long merchantBalance = getBalance("2120");
+      if (merchantBalance > -cmd.totalLock()) {
+        throw new InsufficientWalletException("2120", merchantBalance, cmd.totalLock());
+      }
+
+      // DR 2120 (amount + totalFee) / CR 3600 (amount + totalFee)
+      List<JournalLine> lines = List.of(
+          new JournalLine("2120", cmd.totalLock(), 0L),
+          new JournalLine("3600", 0L, cmd.totalLock()));
+
+      return postJournal(lines, cmd.requestRef(),
+          cmd.memo() != null ? cmd.memo()
+              : "Chi lương — lock: " + cmd.amount() + " phí: " + cmd.totalFee()
+              + " (" + cmd.employeeCount() + " NV)");
+    } catch (InsufficientWalletException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("initPayroll failed: " + cmd.requestRef(), e);
+    }
+  }
+
+  @Override
+  public CoaTrans disbursePayroll(PayrollDisburseCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.disburseRef());
+      if (existing != null) return existing;
+
+      long transitBalance = getBalance("3600");
+      if (transitBalance > -cmd.totalTransitRelease()) {
+        throw new InsufficientTransitException("3600", transitBalance, cmd.totalTransitRelease());
+      }
+
+      // DR 3600 (amount+totalFee) / DR 5100 (napasCost) / CR 4150 (totalFee) / CR 1112 (amount+napasCost)
+      // CR 4150 skipped when totalFee = 0 (3 legs)
+      List<JournalLine> lines = new java.util.ArrayList<>();
+      lines.add(new JournalLine("3600", cmd.totalTransitRelease(), 0L));
+      lines.add(new JournalLine("5100", cmd.napasCost(), 0L));
+      if (cmd.totalFee() > 0) {
+        lines.add(new JournalLine("4150", 0L, cmd.totalFee()));
+      }
+      lines.add(new JournalLine("1112", 0L, cmd.napasOutflow()));
+
+      return postJournal(lines, cmd.disburseRef(),
+          cmd.memo() != null ? cmd.memo()
+              : "Chi lương — Napas bulk: " + cmd.amount()
+              + " phí: " + cmd.totalFee() + " Napas cost: " + cmd.napasCost());
+    } catch (InsufficientTransitException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("disbursePayroll failed: " + cmd.disburseRef(), e);
+    }
+  }
+
   // ── EOD Settlement & Clearing ─────────────────────────────────────────────────
 
   @Override
