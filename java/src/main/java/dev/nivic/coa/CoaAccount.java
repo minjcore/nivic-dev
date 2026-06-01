@@ -15,6 +15,7 @@ public record CoaAccount(
     String code,
     String name,
     CoaAccountKind kind,
+    String currencyCode,
     long balanceMinor,
     long version) {
 
@@ -22,6 +23,7 @@ public record CoaAccount(
     Objects.requireNonNull(code, "code");
     Objects.requireNonNull(name, "name");
     Objects.requireNonNull(kind, "kind");
+    Objects.requireNonNull(currencyCode, "currencyCode");
   }
 
   /** True for ASSET and EXPENSE accounts. */

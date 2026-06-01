@@ -226,6 +226,7 @@ CREATE TABLE IF NOT EXISTS coa_account (
   code          VARCHAR(10)  PRIMARY KEY,
   name          VARCHAR(256) NOT NULL,
   kind          VARCHAR(16)  NOT NULL,  -- ASSET|LIABILITY|TRANSIT|REVENUE|EXPENSE|EQUITY
+  currency_code VARCHAR(3)   NOT NULL DEFAULT 'VND',  -- mono-currency: mỗi TK 1 loại tiền
   balance_minor BIGINT       NOT NULL DEFAULT 0,
   version       BIGINT       NOT NULL DEFAULT 0
 );
@@ -330,13 +331,15 @@ CREATE TRIGGER coa_trans_data_no_mutation BEFORE UPDATE OR DELETE ON coa_trans_d
 
 -- 2) Deferred double-entry: tại COMMIT, mỗi trans_id phải có Σdebit = Σcredit.
 CREATE OR REPLACE FUNCTION coa_check_balanced() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE dr BIGINT; cr BIGINT;
+DECLARE bad RECORD;
 BEGIN
-  SELECT COALESCE(SUM(debit_minor),0), COALESCE(SUM(credit_minor),0)
-    INTO dr, cr FROM coa_trans_data WHERE trans_id = NEW.trans_id;
-  IF dr <> cr THEN
-    RAISE EXCEPTION 'unbalanced journal %: debit=% credit=%', NEW.trans_id, dr, cr
-      USING ERRCODE = '23514';
+  -- Cân theo TỪNG currency (multi-currency double-entry).
+  SELECT currency_code, SUM(debit_minor) dr, SUM(credit_minor) cr
+    INTO bad FROM coa_trans_data WHERE trans_id = NEW.trans_id
+    GROUP BY currency_code HAVING SUM(debit_minor) <> SUM(credit_minor) LIMIT 1;
+  IF FOUND THEN
+    RAISE EXCEPTION 'unbalanced journal % in %: debit=% credit=%',
+      NEW.trans_id, bad.currency_code, bad.dr, bad.cr USING ERRCODE = '23514';
   END IF;
   RETURN NULL;
 END $$;
@@ -379,4 +382,12 @@ INSERT INTO coa_account (code, name, kind) VALUES
   -- Nhóm 6: Vốn
   ('6000', 'Vốn chủ sở hữu',                  'EQUITY'),
   ('6100', 'Lợi nhuận giữ lại',               'EQUITY')
+ON CONFLICT (code) DO NOTHING;
+
+-- Tài khoản ngoại tệ + vị thế FX (currency ≠ VND).
+INSERT INTO coa_account (code, name, kind, currency_code) VALUES
+  ('1121', 'TK ngân hàng USD',       'ASSET',     'USD'),
+  ('1920', 'Vị thế FX - VND',        'ASSET',     'VND'),
+  ('1921', 'Vị thế FX - USD',        'ASSET',     'USD'),
+  ('2150', 'Ví ngoại tệ User - USD', 'LIABILITY', 'USD')
 ON CONFLICT (code) DO NOTHING;

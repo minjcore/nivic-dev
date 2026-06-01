@@ -46,6 +46,13 @@ public interface FundFlowLedger {
   /** Số dư tiền gửi tiết kiệm của một user — sổ chi tiết của control account 2140. */
   long savingsBalance(long mid);
 
+  /**
+   * Đổi tiền VND ↔ USD (multi-currency). Post một bút toán CÂN THEO TỪNG CURRENCY,
+   * bắc cầu qua tài khoản vị thế FX (1920 VND / 1921 USD).
+   * Idempotent on {@link dev.nivic.coa.cmd.FxExchangeCmd#requestRef()}.
+   */
+  CoaTrans fxExchange(dev.nivic.coa.cmd.FxExchangeCmd cmd);
+
   // ── Savings ví ↔ Sổ cái (control account 2140 + chi phí lãi 5200) ─────────────
 
   /**

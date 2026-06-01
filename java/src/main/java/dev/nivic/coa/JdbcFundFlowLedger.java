@@ -39,11 +39,16 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
 
   // ── DDL ──────────────────────────────────────────────────────────────────────
 
+  /** For DBs created before currency_code existed. */
+  private static final String DDL_ACCOUNT_CCY_ALTER =
+      "ALTER TABLE coa_account ADD COLUMN IF NOT EXISTS currency_code VARCHAR(3) NOT NULL DEFAULT 'VND'";
+
   private static final String DDL_ACCOUNT = """
       CREATE TABLE IF NOT EXISTS coa_account (
         code          VARCHAR(10)  PRIMARY KEY,
         name          VARCHAR(256) NOT NULL,
         kind          VARCHAR(16)  NOT NULL,
+        currency_code VARCHAR(3)   NOT NULL DEFAULT 'VND',
         balance_minor BIGINT       NOT NULL DEFAULT 0,
         version       BIGINT       NOT NULL DEFAULT 0
       )
@@ -76,16 +81,17 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
       END $$
       """;
 
-  /** Deferred: tại COMMIT, mọi trans_id phải có Σdebit = Σcredit (double-entry tầng DB). */
+  /** Deferred: tại COMMIT, mọi trans_id phải cân theo TỪNG currency (double-entry đa tệ tầng DB). */
   private static final String DDL_FN_BALANCED = """
       CREATE OR REPLACE FUNCTION coa_check_balanced() RETURNS trigger LANGUAGE plpgsql AS $$
-      DECLARE dr BIGINT; cr BIGINT;
+      DECLARE bad RECORD;
       BEGIN
-        SELECT COALESCE(SUM(debit_minor),0), COALESCE(SUM(credit_minor),0)
-          INTO dr, cr FROM coa_trans_data WHERE trans_id = NEW.trans_id;
-        IF dr <> cr THEN
-          RAISE EXCEPTION 'unbalanced journal %: debit=% credit=%', NEW.trans_id, dr, cr
-            USING ERRCODE = '23514';
+        SELECT currency_code, SUM(debit_minor) dr, SUM(credit_minor) cr
+          INTO bad FROM coa_trans_data WHERE trans_id = NEW.trans_id
+          GROUP BY currency_code HAVING SUM(debit_minor) <> SUM(credit_minor) LIMIT 1;
+        IF FOUND THEN
+          RAISE EXCEPTION 'unbalanced journal % in %: debit=% credit=%',
+            NEW.trans_id, bad.currency_code, bad.dr, bad.cr USING ERRCODE = '23514';
         END IF;
         RETURN NULL;
       END $$
@@ -233,25 +239,36 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
       {"6100", "Lợi nhuận giữ lại",               "EQUITY"},
   };
 
+  /** Tài khoản ngoại tệ + vị thế FX (currency ≠ VND). {code, name, kind, ccy}. */
+  private static final Object[][] FX_ACCOUNTS = {
+      {"1121", "TK ngân hàng USD",        "ASSET",   "USD"},
+      {"1920", "Vị thế FX - VND",         "ASSET",   "VND"},
+      {"1921", "Vị thế FX - USD",         "ASSET",   "USD"},
+      {"2150", "Ví ngoại tệ User - USD",  "LIABILITY", "USD"},
+  };
+
   /** Control account cho tiền gửi tiết kiệm (subledger = sav_account per-user). */
   static final String SAVINGS_CONTROL = "2140";
   /** Chi phí lãi tiền gửi tiết kiệm. */
   static final String SAVINGS_INTEREST_EXPENSE = "5200";
+  /** Vị thế FX (giữ số dư mở khi đổi tiền). */
+  static final String FX_POSITION_VND = "1920";
+  static final String FX_POSITION_USD = "1921";
 
   /** Retained-earnings account closing entries flow into. */
   private static final String RETAINED_EARNINGS = "6100";
 
   private static final String UPSERT_ACCOUNT =
-      "INSERT INTO coa_account (code, name, kind) VALUES (?, ?, ?)"
+      "INSERT INTO coa_account (code, name, kind, currency_code) VALUES (?, ?, ?, ?)"
           + " ON CONFLICT (code) DO NOTHING";
 
   // ── DML ───────────────────────────────────────────────────────────────────────
 
   private static final String SELECT_ACCOUNT_FOR_UPDATE =
-      "SELECT code, name, kind, balance_minor, version FROM coa_account WHERE code = ? FOR UPDATE";
+      "SELECT code, name, kind, currency_code, balance_minor, version FROM coa_account WHERE code = ? FOR UPDATE";
 
   private static final String SELECT_ACCOUNT =
-      "SELECT code, name, kind, balance_minor, version FROM coa_account WHERE code = ?";
+      "SELECT code, name, kind, currency_code, balance_minor, version FROM coa_account WHERE code = ?";
 
   private static final String UPDATE_BALANCE =
       "UPDATE coa_account SET balance_minor = balance_minor + ?, version = version + 1 WHERE code = ?";
@@ -272,8 +289,8 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
           + " WHERE kind IN ('REVENUE','EXPENSE') AND balance_minor <> 0 ORDER BY code";
 
   private static final String INSERT_TRANS_DATA =
-      "INSERT INTO coa_trans_data (trans_id, line_no, account_code, debit_minor, credit_minor, party_mid)"
-          + " VALUES (?, ?, ?, ?, ?, ?)";
+      "INSERT INTO coa_trans_data (trans_id, line_no, account_code, debit_minor, credit_minor, party_mid, currency_code)"
+          + " VALUES (?, ?, ?, ?, ?, ?, ?)";
 
   private static final String SELECT_BALANCE =
       "SELECT balance_minor FROM coa_account WHERE code = ?";
@@ -991,6 +1008,37 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
   }
 
   @Override
+  public CoaTrans fxExchange(FxExchangeCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.requestRef());
+      if (existing != null) return existing;
+
+      // VND leg (balanced trong VND) + USD leg (balanced trong USD), bắc cầu qua vị thế FX.
+      // buyUsd=true: chi VND (CR 1111), nhận USD (DR 1121). buyUsd=false: ngược lại.
+      List<JournalLine> lines = new ArrayList<>();
+      if (cmd.buyUsd()) {
+        lines.add(new JournalLine(FX_POSITION_VND, cmd.vndAmount(), 0L).inCurrency("VND"));
+        lines.add(new JournalLine("1111", 0L, cmd.vndAmount()).inCurrency("VND"));
+        lines.add(new JournalLine("1121", cmd.usdAmount(), 0L).inCurrency("USD"));
+        lines.add(new JournalLine(FX_POSITION_USD, 0L, cmd.usdAmount()).inCurrency("USD"));
+      } else {
+        lines.add(new JournalLine("1111", cmd.vndAmount(), 0L).inCurrency("VND"));
+        lines.add(new JournalLine(FX_POSITION_VND, 0L, cmd.vndAmount()).inCurrency("VND"));
+        lines.add(new JournalLine(FX_POSITION_USD, cmd.usdAmount(), 0L).inCurrency("USD"));
+        lines.add(new JournalLine("1121", 0L, cmd.usdAmount()).inCurrency("USD"));
+      }
+      return postJournal(lines, cmd.requestRef(),
+          cmd.memo() != null ? cmd.memo()
+              : "FX " + (cmd.buyUsd() ? "mua" : "bán") + " USD: " + cmd.vndAmount()
+              + " VND ↔ " + cmd.usdAmount() + " USD");
+    } catch (SQLException e) {
+      throw new IllegalStateException("fxExchange failed: " + cmd.requestRef(), e);
+    }
+  }
+
+  @Override
   public long savingsBalance(long mid) {
     try {
       ensureSchema();
@@ -1465,17 +1513,32 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
    */
   private CoaTrans postJournalTx(Connection c, List<JournalLine> lines, String refId,
       String memo, String reversesRef) throws SQLException {
-    long totalDr = lines.stream().mapToLong(JournalLine::debitMinor).sum();
-    long totalCr = lines.stream().mapToLong(JournalLine::creditMinor).sum();
-    if (totalDr != totalCr) {
-      throw new IllegalArgumentException(
-          "journal not balanced: DR=" + totalDr + " CR=" + totalCr + " ref=" + refId);
+    // Balance per currency (multi-currency: Σdebit = Σcredit within each currency).
+    Map<String, long[]> perCcy = new LinkedHashMap<>(); // ccy → [dr, cr]
+    for (JournalLine l : lines) {
+      long[] dc = perCcy.computeIfAbsent(l.currency(), k -> new long[2]);
+      dc[0] += l.debitMinor();
+      dc[1] += l.creditMinor();
+    }
+    for (var e : perCcy.entrySet()) {
+      if (e.getValue()[0] != e.getValue()[1]) {
+        throw new IllegalArgumentException("journal not balanced in " + e.getKey()
+            + ": DR=" + e.getValue()[0] + " CR=" + e.getValue()[1] + " ref=" + refId);
+      }
     }
     // Lock accounts in code order to prevent deadlocks.
     List<String> codesOrdered = lines.stream()
         .map(JournalLine::accountCode).distinct().sorted().toList();
     Map<String, CoaAccount> locked = new LinkedHashMap<>();
     for (String code : codesOrdered) locked.put(code, lockAccount(c, code));
+    // Currency-match: a line's currency must equal its account's currency (mono-currency accounts).
+    for (JournalLine l : lines) {
+      CoaAccount a = locked.get(l.accountCode());
+      if (!a.currencyCode().equals(l.currency())) {
+        throw new IllegalArgumentException("currency mismatch: account " + l.accountCode()
+            + " is " + a.currencyCode() + " but line is " + l.currency());
+      }
+    }
 
     UUID transId;
     Instant createdAt;
@@ -1500,6 +1563,7 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
         ps.setLong(4, l.debitMinor());
         ps.setLong(5, l.creditMinor());
         if (l.partyMid() != null) ps.setLong(6, l.partyMid()); else ps.setNull(6, Types.BIGINT);
+        ps.setString(7, l.currency());
         ps.executeUpdate();
       }
       try (PreparedStatement ps = c.prepareStatement(UPDATE_BALANCE)) {
@@ -1509,7 +1573,7 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
       }
       CoaAccount acct = locked.get(l.accountCode());
       resultLines.add(new CoaTransLine(lineNo, l.accountCode(), acct.name(),
-          l.debitMinor(), l.creditMinor(), "VND"));
+          l.debitMinor(), l.creditMinor(), l.currency()));
     }
     return new CoaTrans(transId, refId, memo, createdAt, resultLines);
   }
@@ -1523,6 +1587,7 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
       try (Connection c = dataSource.getConnection();
           Statement st = c.createStatement()) {
         st.execute(DDL_ACCOUNT);
+        st.execute(DDL_ACCOUNT_CCY_ALTER);
         st.execute(DDL_TRANS);
         st.execute(DDL_TRANS_ALTER);
         st.execute(DDL_TRANS_DATA);
@@ -1539,6 +1604,14 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
           ps.setString(1, (String) row[0]);
           ps.setString(2, (String) row[1]);
           ps.setString(3, (String) row[2]);
+          ps.setString(4, "VND");
+          ps.addBatch();
+        }
+        for (Object[] row : FX_ACCOUNTS) {
+          ps.setString(1, (String) row[0]);
+          ps.setString(2, (String) row[1]);
+          ps.setString(3, (String) row[2]);
+          ps.setString(4, (String) row[3]);
           ps.addBatch();
         }
         ps.executeBatch();
@@ -1613,20 +1686,28 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
         rs.getString(1),                           // code
         rs.getString(2),                           // name
         CoaAccountKind.valueOf(rs.getString(3)),   // kind
-        rs.getLong(4),                             // balance_minor
-        rs.getLong(5));                            // version
+        rs.getString(4),                           // currency_code
+        rs.getLong(5),                             // balance_minor
+        rs.getLong(6));                            // version
   }
 
   /** Internal line record used only within postJournal. */
-  private record JournalLine(String accountCode, long debitMinor, long creditMinor, Long partyMid) {
-    /** No analytic party (most lines). */
+  private record JournalLine(String accountCode, long debitMinor, long creditMinor,
+      Long partyMid, String currency) {
+    /** Default: no party, VND. */
     JournalLine(String accountCode, long debitMinor, long creditMinor) {
-      this(accountCode, debitMinor, creditMinor, null);
+      this(accountCode, debitMinor, creditMinor, null, "VND");
+    }
+    /** With party, VND. */
+    JournalLine(String accountCode, long debitMinor, long creditMinor, Long partyMid) {
+      this(accountCode, debitMinor, creditMinor, partyMid, "VND");
     }
     long netDelta() { return debitMinor - creditMinor; }
-    /** Same line tagged with a party (user/merchant) for the subsidiary ledger. */
     JournalLine withParty(Long mid) {
-      return new JournalLine(accountCode, debitMinor, creditMinor, mid);
+      return new JournalLine(accountCode, debitMinor, creditMinor, mid, currency);
+    }
+    JournalLine inCurrency(String ccy) {
+      return new JournalLine(accountCode, debitMinor, creditMinor, partyMid, ccy);
     }
   }
 }
