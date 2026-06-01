@@ -443,6 +443,91 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
     }
   }
 
+  // ── Chi Hộ (Disbursement on Behalf) ──────────────────────────────────────────
+
+  @Override
+  public CoaTrans prefundDisbursement(DisbursementPrefundCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.prefundRef());
+      if (existing != null) return existing;
+
+      // DR 1111 / CR 2130
+      List<JournalLine> lines = List.of(
+          new JournalLine("1111", cmd.amount(), 0L),
+          new JournalLine("2130", 0L, cmd.amount()));
+
+      return postJournal(lines, cmd.prefundRef(),
+          cmd.memo() != null ? cmd.memo() : "Chi hộ — pre-fund ký quỹ: " + cmd.amount());
+    } catch (SQLException e) {
+      throw new IllegalStateException("prefundDisbursement failed: " + cmd.prefundRef(), e);
+    }
+  }
+
+  @Override
+  public CoaTrans initDisbursement(DisbursementInitCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.requestRef());
+      if (existing != null) return existing;
+
+      // 2130 credit-normal: balance < 0 khi đối tác còn ký quỹ
+      long escrowBalance = getBalance("2130");
+      if (escrowBalance > -cmd.totalDebit()) {
+        throw new InsufficientEscrowException("2130", escrowBalance, cmd.totalDebit());
+      }
+
+      // DR 2130 (amount + fee) / CR 3700 (amount + fee)
+      List<JournalLine> lines = List.of(
+          new JournalLine("2130", cmd.totalDebit(), 0L),
+          new JournalLine("3700", 0L, cmd.totalDebit()));
+
+      return postJournal(lines, cmd.requestRef(),
+          cmd.memo() != null ? cmd.memo()
+              : "Chi hộ — trừ ký quỹ: " + cmd.amount() + " phí: " + cmd.fee());
+    } catch (InsufficientEscrowException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("initDisbursement failed: " + cmd.requestRef(), e);
+    }
+  }
+
+  @Override
+  public CoaTrans settleDisbursement(DisbursementSettleCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.settleRef());
+      if (existing != null) return existing;
+
+      long transitBalance = getBalance("3700");
+      if (transitBalance > -cmd.totalTransitRelease()) {
+        throw new InsufficientTransitException("3700", transitBalance, cmd.totalTransitRelease());
+      }
+
+      // DR 3700 (amount+fee) / DR 5100 (napasCost) / CR 4150 (fee) / CR 1112 (amount+napasCost)
+      // CR 4150 skipped when fee = 0 (3 legs)
+      List<JournalLine> lines = new java.util.ArrayList<>();
+      lines.add(new JournalLine("3700", cmd.totalTransitRelease(), 0L));
+      lines.add(new JournalLine("5100", cmd.napasCost(), 0L));
+      if (cmd.fee() > 0) {
+        lines.add(new JournalLine("4150", 0L, cmd.fee()));
+      }
+      lines.add(new JournalLine("1112", 0L, cmd.napasOutflow()));
+
+      return postJournal(lines, cmd.settleRef(),
+          cmd.memo() != null ? cmd.memo()
+              : "Chi hộ — Napas gửi: " + cmd.amount()
+              + " phí: " + cmd.fee() + " Napas cost: " + cmd.napasCost());
+    } catch (InsufficientTransitException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("settleDisbursement failed: " + cmd.settleRef(), e);
+    }
+  }
+
   // ── Chi Lương (Payroll Disbursement) ─────────────────────────────────────────
 
   @Override

@@ -132,6 +132,34 @@ public interface FundFlowLedger {
    */
   CoaTrans disbursePayroll(PayrollDisburseCmd cmd);
 
+  // ── Chi Hộ — Disbursement on Behalf (Use Case 10) ────────────────────────────
+
+  /**
+   * Bước 0 — Đối tác pre-fund ký quỹ.
+   * Posts: DR 1111 (amount) / CR 2130 (amount).
+   * Idempotent on {@link DisbursementPrefundCmd#prefundRef()}.
+   */
+  CoaTrans prefundDisbursement(DisbursementPrefundCmd cmd);
+
+  /**
+   * Bước 1a — Trừ ký quỹ đối tác, ghi transit chi hộ.
+   * Posts: DR 2130 (amount + fee) / CR 3700 (Transit Chi hộ).
+   * Idempotent on {@link DisbursementInitCmd#requestRef()}.
+   *
+   * @throws InsufficientEscrowException if Ký quỹ đối tác (2130) balance is insufficient
+   */
+  CoaTrans initDisbursement(DisbursementInitCmd cmd);
+
+  /**
+   * Bước 1b — Napas gửi bên thụ hưởng, giải phóng transit, ghi chi phí.
+   * Posts (4 legs):
+   * DR 3700 (amount+fee) / DR 5100 (napasCost) / CR 4150 (fee) / CR 1112 (amount+napasCost).
+   * Idempotent on {@link DisbursementSettleCmd#settleRef()}.
+   *
+   * @throws InsufficientTransitException if Transit 3700 balance would go below zero
+   */
+  CoaTrans settleDisbursement(DisbursementSettleCmd cmd);
+
   // ── Settlement & Clearing EOD (Use Case 11) ──────────────────────────────────
 
   /**
