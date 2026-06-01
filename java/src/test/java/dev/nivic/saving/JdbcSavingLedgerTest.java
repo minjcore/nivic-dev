@@ -652,11 +652,137 @@ class JdbcSavingLedgerTest {
 
   @Test
   void closeAccount_withPendingWithdrawal_throwsIllegalState() {
+    // Cơ bản: pending != 0 dù available = 0 → vẫn throws
     SavAccount acct = ledger.openAccount(OpenAccountCmd.demand(OWNER, VND));
     ledger.deposit(deposit(acct.id(), 100_000L));
-    ledger.withdrawal(pendingWithdrawal(acct.id(), 100_000L)); // 0 available, but pending != 0
+    SavTransfer pending = ledger.withdrawal(pendingWithdrawal(acct.id(), 100_000L));
 
     assertThrows(IllegalStateException.class, () -> ledger.closeAccount(acct.id(), OWNER));
+
+    // Verify cả hai điều kiện: available=0 nhưng pending=100k → bị block
+    SavAccount snap = ledger.findAccount(acct.id());
+    assertEquals(0L, snap.availableBalance());
+    assertEquals(100_000L, snap.debitsPending());
+    assertFalse(snap.isClosed());
+
+    // Cleanup: void để không leak state sang test khác
+    ledger.voidPending(pending.id());
+  }
+
+  @Test
+  void closeAccount_afterVoidPending_balanceRestored_throwsIllegalState() {
+    // void pending → balance khôi phục về 100k → available != 0 → vẫn throws
+    SavAccount acct = ledger.openAccount(OpenAccountCmd.demand(OWNER, VND));
+    ledger.deposit(deposit(acct.id(), 100_000L));
+    SavTransfer pending = ledger.withdrawal(pendingWithdrawal(acct.id(), 100_000L));
+    ledger.voidPending(pending.id());
+
+    SavAccount snap = ledger.findAccount(acct.id());
+    assertEquals(100_000L, snap.availableBalance(), "balance restored after void");
+    assertEquals(0L, snap.debitsPending());
+
+    assertThrows(IllegalStateException.class, () -> ledger.closeAccount(acct.id(), OWNER));
+  }
+
+  @Test
+  void closeAccount_afterVoidPendingAndWithdraw_succeeds() {
+    // void → withdraw hết balance → close được
+    SavAccount acct = ledger.openAccount(OpenAccountCmd.demand(OWNER, VND));
+    ledger.deposit(deposit(acct.id(), 100_000L));
+    SavTransfer pending = ledger.withdrawal(pendingWithdrawal(acct.id(), 100_000L));
+    ledger.voidPending(pending.id());
+    ledger.withdrawal(withdrawal(acct.id(), 100_000L));
+
+    SavAccount closed = ledger.closeAccount(acct.id(), OWNER);
+    assertTrue(closed.isClosed());
+  }
+
+  @Test
+  void closeAccount_afterPostPendingFullBalance_succeeds() {
+    // post pending (hết balance) → pending=0, available=0 → close được
+    SavAccount acct = ledger.openAccount(OpenAccountCmd.demand(OWNER, VND));
+    ledger.deposit(deposit(acct.id(), 100_000L));
+    SavTransfer pending = ledger.withdrawal(pendingWithdrawal(acct.id(), 100_000L));
+    ledger.postPending(pending.id());
+
+    SavAccount snap = ledger.findAccount(acct.id());
+    assertEquals(0L, snap.availableBalance());
+    assertEquals(0L, snap.debitsPending());
+
+    SavAccount closed = ledger.closeAccount(acct.id(), OWNER);
+    assertTrue(closed.isClosed());
+  }
+
+  @Test
+  void closeAccount_partialPending_throwsIllegalState() {
+    // Chỉ pending một phần: available != 0 VÀ pending != 0 → cả hai điều kiện fail
+    SavAccount acct = ledger.openAccount(OpenAccountCmd.demand(OWNER, VND));
+    ledger.deposit(deposit(acct.id(), 300_000L));
+    SavTransfer pending = ledger.withdrawal(pendingWithdrawal(acct.id(), 100_000L));
+
+    SavAccount snap = ledger.findAccount(acct.id());
+    assertEquals(200_000L, snap.availableBalance());
+    assertEquals(100_000L, snap.debitsPending());
+
+    assertThrows(IllegalStateException.class, () -> ledger.closeAccount(acct.id(), OWNER));
+    assertFalse(ledger.findAccount(acct.id()).isClosed());
+
+    ledger.voidPending(pending.id());
+  }
+
+  @Test
+  void closeAccount_multiplePendingAllPosted_succeeds() {
+    // Nhiều pending, tất cả đều được post → balance=0, pending=0 → close được
+    SavAccount acct = ledger.openAccount(OpenAccountCmd.demand(OWNER, VND));
+    ledger.deposit(deposit(acct.id(), 300_000L));
+    SavTransfer p1 = ledger.withdrawal(pendingWithdrawal(acct.id(), 100_000L));
+    SavTransfer p2 = ledger.withdrawal(pendingWithdrawal(acct.id(), 100_000L));
+    SavTransfer p3 = ledger.withdrawal(pendingWithdrawal(acct.id(), 100_000L));
+
+    ledger.postPending(p1.id());
+    ledger.postPending(p2.id());
+
+    // Còn p3 chưa post → throws
+    assertThrows(IllegalStateException.class, () -> ledger.closeAccount(acct.id(), OWNER));
+
+    ledger.postPending(p3.id()); // post nốt
+    assertTrue(ledger.closeAccount(acct.id(), OWNER).isClosed());
+  }
+
+  @Test
+  void closeAccount_multiplePendingPartiallyVoided_throwsIllegalState() {
+    // void một số, còn lại vẫn pending → throws
+    SavAccount acct = ledger.openAccount(OpenAccountCmd.demand(OWNER, VND));
+    ledger.deposit(deposit(acct.id(), 200_000L));
+    SavTransfer p1 = ledger.withdrawal(pendingWithdrawal(acct.id(), 100_000L));
+    SavTransfer p2 = ledger.withdrawal(pendingWithdrawal(acct.id(), 100_000L));
+
+    ledger.voidPending(p1.id()); // void p1, p2 vẫn pending
+
+    SavAccount snap = ledger.findAccount(acct.id());
+    assertEquals(100_000L, snap.availableBalance(), "p1 voided, balance partially restored");
+    assertEquals(100_000L, snap.debitsPending(),    "p2 still pending");
+
+    assertThrows(IllegalStateException.class, () -> ledger.closeAccount(acct.id(), OWNER));
+
+    ledger.voidPending(p2.id());
+  }
+
+  @Test
+  void closeAccount_pendingNotClosedFlag_depositStillAllowed() {
+    // Khi có pending (chưa closed), deposit vẫn được nhận
+    SavAccount acct = ledger.openAccount(OpenAccountCmd.demand(OWNER, VND));
+    ledger.deposit(deposit(acct.id(), 100_000L));
+    SavTransfer pending = ledger.withdrawal(pendingWithdrawal(acct.id(), 100_000L));
+
+    // Account không phải CLOSED, chỉ đang có pending → deposit được
+    assertDoesNotThrow(() -> ledger.deposit(deposit(acct.id(), 50_000L)));
+
+    SavAccount snap = ledger.findAccount(acct.id());
+    assertEquals(50_000L, snap.availableBalance(), "new deposit adds to available");
+    assertFalse(snap.isClosed());
+
+    ledger.voidPending(pending.id());
   }
 
   @Test
