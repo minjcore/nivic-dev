@@ -47,6 +47,14 @@ public interface FundFlowLedger {
   long savingsBalance(long mid);
 
   /**
+   * Phản chiếu (mirror) một chuyển khoản ví vận hành (Sevlet wallet) vào sổ cái COA:
+   * DR 2110(party=payerAcct) / CR 2110(party=payeeAcct). Tiền dịch chuyển giữa hai ví trong
+   * sổ chi tiết của control account 2110; tổng 2110 không đổi (chuyển nội bộ).
+   * Idempotent on {@code ref} (thường = "WAL:" + mid + ":" + requestId).
+   */
+  CoaTrans mirrorWalletTransfer(long payerAcct, long payeeAcct, long amount, String ref, String memo);
+
+  /**
    * Đổi tiền VND ↔ USD (multi-currency). Post một bút toán CÂN THEO TỪNG CURRENCY,
    * bắc cầu qua tài khoản vị thế FX (1920 VND / 1921 USD).
    * Idempotent on {@link dev.nivic.coa.cmd.FxExchangeCmd#requestRef()}.

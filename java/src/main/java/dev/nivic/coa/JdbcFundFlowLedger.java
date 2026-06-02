@@ -1085,6 +1085,26 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
   }
 
   @Override
+  public CoaTrans mirrorWalletTransfer(long payerAcct, long payeeAcct, long amount, String ref, String memo) {
+    if (amount <= 0) throw new IllegalArgumentException("amount must be positive");
+    if (payerAcct == payeeAcct) throw new IllegalArgumentException("payer == payee");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(ref);
+      if (existing != null) return existing;
+      // CR payee TRƯỚC, DR payer SAU: cùng tác động lên 2110, net 0, nhưng đặt CR trước để
+      // số dư tổng 2110 (credit-normal, luôn ≤ 0) không bao giờ tạm vượt 0 → không vướng CHECK chống âm.
+      List<JournalLine> lines = List.of(
+          new JournalLine(WALLET_CONTROL, 0L, amount).withParty(payeeAcct),
+          new JournalLine(WALLET_CONTROL, amount, 0L).withParty(payerAcct));
+      return postJournal(lines, ref,
+          memo != null ? memo : "Mirror ví: " + payerAcct + "→" + payeeAcct + " " + amount);
+    } catch (SQLException e) {
+      throw new IllegalStateException("mirrorWalletTransfer failed: " + ref, e);
+    }
+  }
+
+  @Override
   public long savingsBalance(long mid) {
     try {
       ensureSchema();
