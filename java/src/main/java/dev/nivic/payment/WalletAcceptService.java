@@ -37,6 +37,12 @@ public final class WalletAcceptService implements AutoCloseable {
   private final WalletPersistDisruptor persistRing;
   private final int intentTtlMinutes;
 
+  /** Optional hook fired AFTER a money-moving accept (FULL_POST/CONFIRM_SETTLE), off the hot path. */
+  private volatile java.util.function.Consumer<SevletWalletPayload> acceptSink;
+  private volatile java.util.concurrent.Executor acceptExecutor;
+  private static final org.apache.logging.log4j.Logger LOG =
+      org.apache.logging.log4j.LogManager.getLogger(WalletAcceptService.class);
+
   public WalletAcceptService(
       IdempotencyGate idempotency,
       WalService wal,
@@ -128,6 +134,38 @@ public final class WalletAcceptService implements AutoCloseable {
     return ack == null ? AcceptResult.ok() : AcceptResult.okWithIntentAck(ack);
   }
 
+  /**
+   * Đăng ký hook chạy SAU mỗi accept chuyển tiền (FULL_POST/CONFIRM_SETTLE), bất đồng bộ qua
+   * {@code executor} để không chặn hot path. Thường nối tới {@code WalletGlBridge::mirror} để phản
+   * chiếu sang sổ cái COA. Lỗi trong hook được nuốt + log (ví vận hành là nguồn sự thật; đối soát
+   * bắt lệch sau). {@code null} sink để tắt.
+   */
+  public void setAcceptSink(java.util.function.Consumer<SevletWalletPayload> sink,
+      java.util.concurrent.Executor executor) {
+    this.acceptSink = sink;
+    this.acceptExecutor = executor;
+  }
+
+  /** Submit hook off the hot path; never propagate hook failures. */
+  private void fireAccepted(SevletWalletPayload payload) {
+    java.util.function.Consumer<SevletWalletPayload> sink = acceptSink;
+    if (sink == null) return;
+    Runnable task = () -> {
+      try {
+        sink.accept(payload);
+      } catch (RuntimeException e) {
+        LOG.warn("accept sink failed (mid={} req={}): {}", payload.mid(), payload.requestId(),
+            e.toString());
+      }
+    };
+    java.util.concurrent.Executor ex = acceptExecutor;
+    if (ex != null) {
+      try { ex.execute(task); } catch (RuntimeException e) { LOG.warn("accept executor rejected: {}", e.toString()); }
+    } else {
+      task.run(); // fallback đồng bộ nếu không cấu hình executor
+    }
+  }
+
   private int effectiveIntentTtlMinutes(MidProfile profile) {
     int base = intentTtlMinutes;
     if (profile != null) {
@@ -172,6 +210,10 @@ public final class WalletAcceptService implements AutoCloseable {
       } catch (RuntimeException e) {
         throw e;
       }
+    }
+    // Phản chiếu sang sổ cái COA (async) chỉ với nghiệp vụ chuyển tiền đã ghi journal.
+    if (kind == PersistKind.FULL_POST || kind == PersistKind.CONFIRM_SETTLE) {
+      fireAccepted(payload);
     }
   }
 
