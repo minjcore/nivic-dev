@@ -276,6 +276,11 @@ public final class ControlPlaneServer {
         ledger.closePeriod(new PeriodCloseCmd(ref + "-CLOSE", null));
         yield "Khoá sổ — kết chuyển lãi/lỗ " + fmt(pl.netProfit()) + "đ → 6100";
       }
+      case "fx" -> {
+        // Mua 100.00 USD với 2,400,000 VND (rate 24,000)
+        ledger.fxExchange(new FxExchangeCmd(2_400_000L, 10_000L, true, ref + "-FX", null));
+        yield "FX: mua 100.00 USD = 2,400,000đ (rate 24,000) → 1111−, 1121+";
+      }
       // ── Savings ──
       case "sav_open" -> {
         SavAccount a = saving.openAccount(OpenAccountCmd.demand(DEMO_SAVING_MID, "VND"));
@@ -546,6 +551,7 @@ public final class ControlPlaneServer {
               <button onclick="run('payroll')">Chi lương</button>
               <button onclick="run('disbursement')">Chi hộ</button>
               <button class="wide" onclick="run('eod')">EOD Settlement &amp; Clearing</button>
+              <button class="wide" onclick="run('fx')">💱 Đổi tiền (FX) VND→USD</button>
               <button class="wide" onclick="run('close')">📕 Khoá sổ cuối kỳ</button>
               <button class="wide reset" onclick="reset()">⟲ Reset toàn bộ</button>
             </div>
