@@ -285,6 +285,65 @@ class FundFlowReportsTest {
     assertTrue(cf.isConsistent());
   }
 
+  // ── Cash Flow Statement (Operating / Investing / Financing) ──────────────────
+
+  @Test
+  void cashFlowStatement_empty() {
+    CashFlowStatement cf = reports.cashFlowStatement();
+    assertEquals(0L, cf.operating());
+    assertEquals(0L, cf.financing());
+    assertEquals(0L, cf.netCashFlow());
+    assertTrue(cf.isConsistent());
+  }
+
+  @Test
+  void cashFlowStatement_topupIsOperating() {
+    // Nạp 100k: DR 1111 / CR 3100 (transit) → đối ứng không phải Vốn → Operating.
+    ledger.receiveTopUp(new TopUpReceiveCmd(100_000L, "CFS-R", null));
+    ledger.confirmTopUp(new TopUpConfirmCmd(100_000L, 1_000L, "CFS-C", null));
+
+    CashFlowStatement cf = reports.cashFlowStatement();
+    assertEquals(100_000L, cf.operating(), "nạp tiền = hoạt động kinh doanh");
+    assertEquals(0L, cf.financing());
+    assertEquals(100_000L, cf.closingCash());
+    assertTrue(cf.isConsistent());
+  }
+
+  @Test
+  void cashFlowStatement_capitalIsFinancing() {
+    // Nạp vốn: DR 1111 / CR 6000 (Vốn) → Financing.
+    // Dùng maker-checker propose+approve để post journal vốn.
+    var p = ledger.propose(new dev.nivic.coa.mc.ProposeJournalCmd("alice", "CFS-CAP", "Nạp vốn",
+        java.util.List.of(
+            new dev.nivic.coa.mc.ProposeJournalCmd.EntryLine("1111", 1_000_000L, 0L),
+            new dev.nivic.coa.mc.ProposeJournalCmd.EntryLine("6000", 0L, 1_000_000L))));
+    ledger.approve(p.id(), "bob");
+
+    CashFlowStatement cf = reports.cashFlowStatement();
+    assertEquals(1_000_000L, cf.financing(), "nạp vốn = hoạt động tài chính");
+    assertEquals(0L, cf.operating());
+    assertTrue(cf.isConsistent());
+  }
+
+  @Test
+  void cashFlowStatement_mixedOperatingAndFinancing() {
+    // Vốn 1M (Financing) + nạp tiền user 100k (Operating)
+    var p = ledger.propose(new dev.nivic.coa.mc.ProposeJournalCmd("alice", "CFS-MIX-CAP", null,
+        java.util.List.of(
+            new dev.nivic.coa.mc.ProposeJournalCmd.EntryLine("1111", 1_000_000L, 0L),
+            new dev.nivic.coa.mc.ProposeJournalCmd.EntryLine("6000", 0L, 1_000_000L))));
+    ledger.approve(p.id(), "bob");
+    ledger.receiveTopUp(new TopUpReceiveCmd(100_000L, "CFS-MIX-R", null));
+    ledger.confirmTopUp(new TopUpConfirmCmd(100_000L, 0L, "CFS-MIX-C", null));
+
+    CashFlowStatement cf = reports.cashFlowStatement();
+    assertEquals(  100_000L, cf.operating());
+    assertEquals(1_000_000L, cf.financing());
+    assertEquals(1_100_000L, cf.netCashFlow());
+    assertEquals(1_100_000L, cf.closingCash(), "tổng tiền = operating + financing");
+    assertTrue(cf.isConsistent());
+  }
+
   @Test
   void reports_consistentAfterMixedFlows() {
     // Chạy nhiều luồng, kiểm tra 3 báo cáo nhất quán

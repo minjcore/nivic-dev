@@ -208,6 +208,16 @@ public final class FundFlowApi {
     if ("reports/sheet".equals(p)) return ApiResponse.ok(sheetJson(reports.balanceSheet()));
     if ("reports/pnl".equals(p))   return ApiResponse.ok(pnlJson(reports.profitAndLoss()));
     if ("reports/cashflow".equals(p)) return ApiResponse.ok(cashFlowJson(reports.cashFlow()));
+    if ("reports/cashflow-statement".equals(p)) {
+      var cf = reports.cashFlowStatement();
+      return ApiResponse.ok("{\"operating\":" + cf.operating()
+          + ",\"investing\":" + cf.investing()
+          + ",\"financing\":" + cf.financing()
+          + ",\"netCashFlow\":" + cf.netCashFlow()
+          + ",\"openingCash\":" + cf.openingCash()
+          + ",\"closingCash\":" + cf.closingCash()
+          + ",\"consistent\":" + cf.isConsistent() + "}");
+    }
     return ApiResponse.error(404, "NOT_FOUND", "unknown route: GET " + p);
   }
 

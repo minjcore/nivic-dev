@@ -111,6 +111,49 @@ public final class FundFlowReports {
     return new CashFlow(0L, inflows, outflows, closing, lines);
   }
 
+  /**
+   * Báo cáo lưu chuyển tiền tệ phân loại Operating/Investing/Financing.
+   * Cash = TK ngân hàng (mã 11xx). Mỗi giao dịch chạm tiền phân loại theo TK đối ứng:
+   * có dòng Vốn (6xxx) → Financing; còn lại → Operating; (Investing chưa phát sinh).
+   */
+  public CashFlowStatement cashFlowStatement() {
+    long operating = 0, investing = 0, financing = 0, closing = 0;
+    // Net cash + cờ "có đối ứng Vốn" theo từng trans_id.
+    try (Connection c = dataSource.getConnection();
+        PreparedStatement ps = c.prepareStatement(
+            "WITH per_trans AS ("
+                + "  SELECT d.trans_id,"
+                + "    SUM(CASE WHEN a.kind='ASSET' AND a.code LIKE '11%'"
+                + "             THEN d.debit_minor - d.credit_minor ELSE 0 END) AS net_cash,"
+                + "    BOOL_OR(a.kind='EQUITY') AS has_equity"
+                + "  FROM coa_trans_data d JOIN coa_account a ON a.code = d.account_code"
+                + "  GROUP BY d.trans_id)"
+                + " SELECT"
+                + "  COALESCE(SUM(CASE WHEN has_equity     THEN net_cash ELSE 0 END),0) AS financing,"
+                + "  COALESCE(SUM(CASE WHEN NOT has_equity THEN net_cash ELSE 0 END),0) AS operating"
+                + " FROM per_trans WHERE net_cash <> 0");
+        ResultSet rs = ps.executeQuery()) {
+      if (rs.next()) {
+        financing = rs.getLong("financing");
+        operating = rs.getLong("operating");
+      }
+    } catch (SQLException e) {
+      throw new IllegalStateException("cashFlowStatement failed", e);
+    }
+    // Closing cash = Σ số dư TK tiền (11xx). Opening = 0 (chưa có as-of).
+    try (Connection c = dataSource.getConnection();
+        PreparedStatement ps = c.prepareStatement(
+            "SELECT COALESCE(SUM(balance_minor),0) FROM coa_account"
+                + " WHERE kind='ASSET' AND code LIKE '11%'");
+        ResultSet rs = ps.executeQuery()) {
+      rs.next();
+      closing = rs.getLong(1);
+    } catch (SQLException e) {
+      throw new IllegalStateException("cashFlowStatement closing failed", e);
+    }
+    return new CashFlowStatement(operating, investing, financing, 0L, closing);
+  }
+
   /** Báo cáo kết quả kinh doanh: doanh thu (4xxx) − chi phí (5xxx). */
   public ProfitAndLoss profitAndLoss() {
     List<ProfitAndLoss.Line> revenue = new ArrayList<>();
