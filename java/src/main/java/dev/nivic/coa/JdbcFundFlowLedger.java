@@ -1448,7 +1448,6 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
       ps.setLong(1, id);
       try (ResultSet rs = ps.executeQuery()) {
         if (!rs.next()) return null;
-        long postedTransId = rs.getLong("posted_trans_id");
         header = new Proposal(
             rs.getLong("id"),
             rs.getString("ref_id"),
@@ -1457,7 +1456,7 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
             ProposalStatus.valueOf(rs.getString("status")),
             rs.getString("checker_id"),
             rs.getString("reason"),
-            rs.wasNull() ? null : postedTransId,
+            (Long) rs.getObject("posted_trans_id"),
             rs.getTimestamp("created_at").toInstant(),
             rs.getTimestamp("decided_at") == null ? null : rs.getTimestamp("decided_at").toInstant(),
             List.of());

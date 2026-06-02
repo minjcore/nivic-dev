@@ -721,17 +721,14 @@ public final class JdbcSavingLedger implements SavingLedger {
     while (rs.next()) {
       long id = rs.getLong(1);
       if (!headers.containsKey(id)) {
-        Long pendingId = rs.getLong(4);
-        Long idempotencyKey = rs.getLong(5);
-        Long linkedBatchId = rs.getLong(8);
         headers.put(id, new Object[]{
             SavTransferKind.valueOf(rs.getString(2)),   // kind
             SavTransferPhase.valueOf(rs.getString(3)),  // phase
-            rs.wasNull() ? null : pendingId,            // pending_id
-            rs.wasNull() ? null : idempotencyKey,       // idempotency_key
+            (Long) rs.getObject(4),                     // pending_id
+            (Long) rs.getObject(5),                     // idempotency_key
             (Long) rs.getObject(6),                     // ref_mid
             (Long) rs.getObject(7),                     // ref_request_id
-            rs.wasNull() ? null : linkedBatchId,        // linked_batch_id
+            (Long) rs.getObject(8),                     // linked_batch_id
             rs.getString(9),                            // memo
             rs.getTimestamp(10).toInstant()             // created_at
         });
@@ -784,14 +781,11 @@ public final class JdbcSavingLedger implements SavingLedger {
         id              = rs.getLong(1);
         kind            = SavTransferKind.valueOf(rs.getString(2));
         phase           = SavTransferPhase.valueOf(rs.getString(3));
-        long p = rs.getLong(4);
-        long ik = rs.getLong(5);
-        pendingId       = rs.wasNull() ? null : p;
-        idempotencyKey  = rs.wasNull() ? null : ik;
+        pendingId       = (Long) rs.getObject(4);
+        idempotencyKey  = (Long) rs.getObject(5);
         refMid          = (Long) rs.getObject(6);
         refRequestId    = (Long) rs.getObject(7);
-        long lb = rs.getLong(8);
-        linkedBatchId   = rs.wasNull() ? null : lb;
+        linkedBatchId   = (Long) rs.getObject(8);
         memo            = rs.getString(9);
         createdAt       = rs.getTimestamp(10).toInstant();
       }
