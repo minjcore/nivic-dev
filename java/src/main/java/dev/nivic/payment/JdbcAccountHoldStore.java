@@ -11,7 +11,7 @@ public final class JdbcAccountHoldStore implements AccountHoldStore {
 
   private static final String DDL =
       """
-      CREATE TABLE IF NOT EXISTS wallet_account_hold (
+      CREATE TABLE IF NOT EXISTS acct_account_hold (
         mid BIGINT NOT NULL,
         request_id BIGINT NOT NULL,
         account_id INTEGER NOT NULL,
@@ -22,10 +22,10 @@ public final class JdbcAccountHoldStore implements AccountHoldStore {
       """;
 
   private static final String INSERT =
-      "INSERT INTO wallet_account_hold (mid, request_id, account_id, amount_minor) VALUES (?,?,?,?)";
+      "INSERT INTO acct_account_hold (mid, request_id, account_id, amount_minor) VALUES (?,?,?,?)";
 
   private static final String DELETE =
-      "DELETE FROM wallet_account_hold WHERE mid = ? AND request_id = ?";
+      "DELETE FROM acct_account_hold WHERE mid = ? AND request_id = ?";
 
   private final DataSource dataSource;
   private volatile boolean tableEnsured;

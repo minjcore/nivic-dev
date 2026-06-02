@@ -1,15 +1,14 @@
 package dev.nivic.saving;
 
 import java.util.Objects;
-import java.util.UUID;
 
 public record WithdrawalCmd(
-    UUID debitAccountId,
+    long debitAccountId,
     long amountMinor,
     String currencyCode,
     /** True → create PENDING transfer (two-phase, requires {@link SavingLedger#postPending} later). */
     boolean pending,
-    UUID idempotencyKey,
+    Long idempotencyKey,
     Long refMid,
     Long refRequestId,
     String memo) {

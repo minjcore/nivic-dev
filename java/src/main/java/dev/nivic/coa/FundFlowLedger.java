@@ -2,7 +2,6 @@ package dev.nivic.coa;
 
 import dev.nivic.coa.cmd.*;
 import dev.nivic.coa.error.*;
-import java.util.UUID;
 
 /**
  * Platform-level double-entry ledger following the GtelPay Chart of Accounts.
@@ -89,7 +88,7 @@ public interface FundFlowLedger {
   CoaTrans savingsInterest(SavingsInterestCmd cmd);
 
   /** Full journal transaction with bút toán lines. Returns null if not found. */
-  CoaTrans findTrans(UUID transId);
+  CoaTrans findTrans(long transId);
 
   /** Lookup by idempotency / external ref ({@code coa_trans.ref_id}). Returns null if not found. */
   CoaTrans findTransByRefId(String refId);
@@ -292,7 +291,7 @@ public interface FundFlowLedger {
    * @throws dev.nivic.coa.error.ProposalStateException nếu đã quyết định
    * @throws dev.nivic.coa.error.SegregationOfDutiesException nếu checker trùng maker
    */
-  CoaTrans approve(java.util.UUID proposalId, String checkerId);
+  CoaTrans approve(long proposalId, String checkerId);
 
   /**
    * Checker từ chối — đánh dấu REJECTED, không post.
@@ -300,10 +299,10 @@ public interface FundFlowLedger {
    * @throws dev.nivic.coa.error.ProposalNotFoundException / ProposalStateException
    *     / SegregationOfDutiesException tương tự {@link #approve}
    */
-  dev.nivic.coa.mc.Proposal reject(java.util.UUID proposalId, String checkerId, String reason);
+  dev.nivic.coa.mc.Proposal reject(long proposalId, String checkerId, String reason);
 
   /** Đề xuất theo id (kèm lines), hoặc null nếu không tồn tại. */
-  dev.nivic.coa.mc.Proposal findProposal(java.util.UUID proposalId);
+  dev.nivic.coa.mc.Proposal findProposal(long proposalId);
 
   /** Danh sách đề xuất đang chờ duyệt (PENDING), mới nhất trước. */
   java.util.List<dev.nivic.coa.mc.Proposal> pendingProposals();

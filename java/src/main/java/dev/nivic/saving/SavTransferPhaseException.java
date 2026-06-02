@@ -1,10 +1,8 @@
 package dev.nivic.saving;
 
-import java.util.UUID;
-
 public final class SavTransferPhaseException extends RuntimeException {
 
-  public SavTransferPhaseException(UUID transferId, SavTransferPhase expected, SavTransferPhase actual) {
+  public SavTransferPhaseException(long transferId, SavTransferPhase expected, SavTransferPhase actual) {
     super(
         "transfer phase mismatch: id="
             + transferId
@@ -15,7 +13,7 @@ public final class SavTransferPhaseException extends RuntimeException {
   }
 
   /** Transfer is already settled (POSTED or VOIDED). */
-  public SavTransferPhaseException(UUID transferId) {
+  public SavTransferPhaseException(long transferId) {
     super("transfer already settled: id=" + transferId);
   }
 }

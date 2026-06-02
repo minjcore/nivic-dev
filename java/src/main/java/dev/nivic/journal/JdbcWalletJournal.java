@@ -10,14 +10,14 @@ import java.util.Objects;
 import javax.sql.DataSource;
 
 /**
- * PostgreSQL double-entry journal: {@code wallet_journal_entry} + {@code wallet_journal_line}
+ * PostgreSQL double-entry journal: {@code acct_journal_entry} + {@code acct_journal_line}
  * (balanced debit/credit for wire {@code amount}).
  */
 public final class JdbcWalletJournal implements WalletJournal {
 
   private static final String DDL_ENTRY =
       """
-      CREATE TABLE IF NOT EXISTS wallet_journal_entry (
+      CREATE TABLE IF NOT EXISTS acct_journal_entry (
         mid BIGINT NOT NULL,
         request_id BIGINT NOT NULL,
         order_id BIGINT NOT NULL,
@@ -31,7 +31,7 @@ public final class JdbcWalletJournal implements WalletJournal {
 
   private static final String DDL_LINE =
       """
-      CREATE TABLE IF NOT EXISTS wallet_journal_line (
+      CREATE TABLE IF NOT EXISTS acct_journal_line (
         mid BIGINT NOT NULL,
         request_id BIGINT NOT NULL,
         line_no SMALLINT NOT NULL,
@@ -39,18 +39,18 @@ public final class JdbcWalletJournal implements WalletJournal {
         debit_minor BIGINT NOT NULL,
         credit_minor BIGINT NOT NULL,
         PRIMARY KEY (mid, request_id, line_no),
-        CONSTRAINT wallet_journal_line_entry_fk
+        CONSTRAINT acct_journal_line_entry_fk
           FOREIGN KEY (mid, request_id)
-          REFERENCES wallet_journal_entry (mid, request_id)
+          REFERENCES acct_journal_entry (mid, request_id)
       )
       """;
 
   private static final String INSERT_ENTRY =
-      "INSERT INTO wallet_journal_entry (mid, request_id, order_id, input, currency_code,"
+      "INSERT INTO acct_journal_entry (mid, request_id, order_id, input, currency_code,"
           + " extra_data) VALUES (?, ?, ?, ?, ?, ?)";
 
   private static final String INSERT_LINE =
-      "INSERT INTO wallet_journal_line (mid, request_id, line_no, account, debit_minor,"
+      "INSERT INTO acct_journal_line (mid, request_id, line_no, account, debit_minor,"
           + " credit_minor) VALUES (?, ?, ?, ?, ?, ?)";
 
   private final DataSource dataSource;

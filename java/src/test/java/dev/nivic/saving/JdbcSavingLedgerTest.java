@@ -10,7 +10,6 @@ import java.sql.Statement;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
@@ -151,7 +150,7 @@ class JdbcSavingLedgerTest {
   @Test
   void deposit_idempotencyKey_noDuplicateCredit() {
     SavAccount acct = ledger.openAccount(OpenAccountCmd.demand(OWNER, VND));
-    UUID key = UUID.randomUUID();
+    Long key = 12345L;
 
     SavTransfer first  = ledger.deposit(deposit(acct.id(), 100_000L, key));
     SavTransfer second = ledger.deposit(deposit(acct.id(), 100_000L, key));
@@ -310,7 +309,7 @@ class JdbcSavingLedgerTest {
   void withdrawal_idempotencyKey_noDuplicateDebit() {
     SavAccount acct = ledger.openAccount(OpenAccountCmd.demand(OWNER, VND));
     ledger.deposit(deposit(acct.id(), 500_000L));
-    UUID key = UUID.randomUUID();
+    Long key = System.currentTimeMillis();
 
     SavTransfer first  = ledger.withdrawal(withdrawal(acct.id(), 100_000L, key));
     SavTransfer second = ledger.withdrawal(withdrawal(acct.id(), 100_000L, key));
@@ -462,7 +461,7 @@ class JdbcSavingLedgerTest {
     long interestAmount = 8_000L; // pre-computed by caller
 
     List<SavTransfer> results = ledger.accrueInterest(
-        List.of(new AccrueInterestCmd(acct.id(), interestAmount, VND, UUID.randomUUID())));
+        List.of(new AccrueInterestCmd(acct.id(), interestAmount, VND, System.currentTimeMillis())));
 
     assertEquals(1, results.size());
     SavTransfer t = results.get(0);
@@ -482,7 +481,7 @@ class JdbcSavingLedgerTest {
     ledger.deposit(deposit(a1.id(), 1_000_000L));
     ledger.deposit(deposit(a2.id(), 2_000_000L));
 
-    UUID batchId = UUID.randomUUID();
+    Long batchId = System.currentTimeMillis();
     List<SavTransfer> results = ledger.accrueInterest(List.of(
         new AccrueInterestCmd(a1.id(), 1_000L, VND, batchId),
         new AccrueInterestCmd(a2.id(), 2_000L, VND, batchId)));
@@ -553,7 +552,7 @@ class JdbcSavingLedgerTest {
     long principal = 10_000_000L;
     ledger.deposit(deposit(acct.id(), principal));
 
-    UUID batchId = UUID.randomUUID();
+    Long batchId = System.currentTimeMillis();
 
     // Tháng 1: 30 ngày
     long m1 = SavInterestCalc.compute(principal, 650, 30);
@@ -596,7 +595,7 @@ class JdbcSavingLedgerTest {
     long i1 = SavInterestCalc.compute(50_000_000L, 650, 30);  // 53,424 VND × 5 = 267,123
     long i2 = SavInterestCalc.compute(20_000_000L, 800, 30);  // 131,506 VND
 
-    UUID batchId = UUID.randomUUID();
+    Long batchId = System.currentTimeMillis();
     List<SavTransfer> results = ledger.accrueInterest(List.of(
         new AccrueInterestCmd(a1.id(), i1, VND, batchId),
         new AccrueInterestCmd(a2.id(), i2, VND, batchId)));
@@ -882,7 +881,7 @@ class JdbcSavingLedgerTest {
 
   @Test
   void findAccount_unknown_returnsNull() {
-    assertNull(ledger.findAccount(UUID.randomUUID()));
+    assertNull(ledger.findAccount(999999999L));
   }
 
   // ── balance invariants ────────────────────────────────────────────────────────
@@ -905,23 +904,23 @@ class JdbcSavingLedgerTest {
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
-  private DepositCmd deposit(UUID accountId, long amount) {
+  private DepositCmd deposit(long accountId, long amount) {
     return new DepositCmd(accountId, amount, VND, null, null, null, null);
   }
 
-  private DepositCmd deposit(UUID accountId, long amount, UUID idempotencyKey) {
+  private DepositCmd deposit(long accountId, long amount, Long idempotencyKey) {
     return new DepositCmd(accountId, amount, VND, idempotencyKey, null, null, null);
   }
 
-  private WithdrawalCmd withdrawal(UUID accountId, long amount) {
+  private WithdrawalCmd withdrawal(long accountId, long amount) {
     return new WithdrawalCmd(accountId, amount, VND, false, null, null, null, null);
   }
 
-  private WithdrawalCmd withdrawal(UUID accountId, long amount, UUID idempotencyKey) {
+  private WithdrawalCmd withdrawal(long accountId, long amount, Long idempotencyKey) {
     return new WithdrawalCmd(accountId, amount, VND, false, idempotencyKey, null, null, null);
   }
 
-  private WithdrawalCmd pendingWithdrawal(UUID accountId, long amount) {
+  private WithdrawalCmd pendingWithdrawal(long accountId, long amount) {
     return new WithdrawalCmd(accountId, amount, VND, true, null, null, null, null);
   }
 
@@ -931,12 +930,12 @@ class JdbcSavingLedgerTest {
   }
 
   /** Directly sets an account flag in the DB (for test setup only). */
-  private void setFlag(UUID accountId, int flag) {
+  private void setFlag(long accountId, int flag) {
     try (Connection c = ds.getConnection()) {
       try (var ps = c.prepareStatement(
           "UPDATE sav_account SET flags = flags | ? WHERE id = ?")) {
         ps.setInt(1, flag);
-        ps.setObject(2, accountId);
+        ps.setLong(2, accountId);
         ps.executeUpdate();
       }
     } catch (SQLException e) {

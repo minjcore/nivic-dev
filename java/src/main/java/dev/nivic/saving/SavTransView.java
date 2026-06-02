@@ -3,7 +3,6 @@ package dev.nivic.saving;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 
 /**
  * Full read-model for one transfer: header from {@code sav_trans} + enriched bút toán lines
@@ -12,14 +11,14 @@ import java.util.UUID;
  * <p>A well-formed transfer always has {@link #isBalanced()} == {@code true}.</p>
  */
 public record SavTransView(
-    UUID id,
+    long id,
     SavTransferKind kind,
     SavTransferPhase phase,
-    UUID pendingId,
-    UUID idempotencyKey,
+    Long pendingId,
+    Long idempotencyKey,
     Long refMid,
     Long refRequestId,
-    UUID linkedBatchId,
+    Long linkedBatchId,
     String memo,
     Instant createdAt,
     List<SavTransLineView> lines) {

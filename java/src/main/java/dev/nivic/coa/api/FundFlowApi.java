@@ -17,7 +17,6 @@ import dev.nivic.coa.report.FundFlowReports;
 import dev.nivic.coa.report.ProfitAndLoss;
 import dev.nivic.coa.report.TrialBalance;
 import java.util.Objects;
-import java.util.UUID;
 import javax.sql.DataSource;
 
 /**
@@ -198,8 +197,13 @@ public final class FundFlowApi {
       String id = param(query, "id");
       String ref = param(query, "ref");
       CoaTrans t = null;
-      if (id != null && !id.isBlank()) t = ledger.findTrans(UUID.fromString(id.trim()));
-      else if (ref != null && !ref.isBlank()) t = ledger.findTransByRefId(ref.trim());
+      if (id != null && !id.isBlank()) {
+        try {
+          t = ledger.findTrans(Long.parseLong(id.trim()));
+        } catch (NumberFormatException e) {
+          return ApiResponse.error(400, "BAD_REQUEST", "id must be a valid BIGINT");
+        }
+      } else if (ref != null && !ref.isBlank()) t = ledger.findTransByRefId(ref.trim());
       else return ApiResponse.error(400, "BAD_REQUEST", "require ?id= or ?ref=");
       if (t == null) return ApiResponse.error(404, "NOT_FOUND", "transaction not found");
       return ApiResponse.ok(transJson(t));
@@ -227,7 +231,7 @@ public final class FundFlowApi {
     StringBuilder sb = new StringBuilder();
     boolean ok = t.isBalanced() && t.lines().size() >= 2;
     sb.append('{')
-      .append("\"id\":").append(MiniJson.str(t.id().toString())).append(',')
+      .append("\"id\":").append(t.id()).append(',')
       .append("\"ref\":").append(MiniJson.str(t.refId())).append(',')
       .append("\"memo\":").append(MiniJson.str(t.memo())).append(',')
       .append("\"createdAt\":").append(MiniJson.str(String.valueOf(t.createdAt()))).append(',')

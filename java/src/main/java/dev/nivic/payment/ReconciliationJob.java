@@ -21,8 +21,8 @@ public final class ReconciliationJob {
     try (Connection c = dataSource.getConnection();
         Statement st = c.createStatement()) {
       long idem = count(st, "SELECT COUNT(*) FROM wallet_idempotency");
-      long pay = count(st, "SELECT COUNT(*) FROM payment_ledger");
-      return "wallet_idempotency_rows=" + idem + " payment_ledger_rows=" + pay;
+      long pay = count(st, "SELECT COUNT(*) FROM led_payment");
+      return "wallet_idempotency_rows=" + idem + " led_payment_rows=" + pay;
     }
   }
 

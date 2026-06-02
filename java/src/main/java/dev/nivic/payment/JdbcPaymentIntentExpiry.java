@@ -23,13 +23,13 @@ public final class JdbcPaymentIntentExpiry {
       CoreLedgerStatus.sqlInList(CoreLedgerStatus::isOpenForConfirmation);
 
   private static final String SELECT =
-      "SELECT mid, request_id FROM payment_ledger WHERE intent_status IN ("
+      "SELECT mid, request_id FROM led_payment WHERE intent_status IN ("
           + SQL_IN_OPEN
           + ")"
           + " AND expires_at IS NOT NULL AND expires_at < NOW() LIMIT 500";
 
   private static final String MARK =
-      "UPDATE payment_ledger SET intent_status = '"
+      "UPDATE led_payment SET intent_status = '"
           + ST_EXPIRED
           + "', cancel_reason = 'TTL' WHERE mid = ?"
           + " AND request_id = ? AND intent_status IN ("

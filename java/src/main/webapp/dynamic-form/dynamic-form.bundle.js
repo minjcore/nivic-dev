@@ -20,7 +20,109 @@ async function loadJson(path) {
   if (!r.ok) throw new Error("HTTP " + r.status + " " + path);
   return r.json();
 }
+function collectLeafFields(fieldList) {
+  const out = [];
+  for (const f of fieldList || []) {
+    if (f.type === "custom-field" && Array.isArray(f.fields)) {
+      out.push(...collectLeafFields(f.fields));
+    } else {
+      out.push(f);
+    }
+  }
+  return out;
+}
+function initFieldValue(f, target) {
+  if (f.type === "number") {
+    target[f.id] = f.default != null ? Number(f.default) : null;
+  } else {
+    target[f.id] = f.default != null ? String(f.default) : "";
+  }
+}
+function validateField(f, v, fieldErrors) {
+  if (f.required && (v === "" || v == null)) {
+    fieldErrors[f.id] = "B\u1EAFt bu\u1ED9c";
+    return false;
+  }
+  let ok = true;
+  if (f.type === "number" && v !== "" && v != null) {
+    const n = Number(v);
+    if (Number.isNaN(n)) {
+      fieldErrors[f.id] = "Ph\u1EA3i l\xE0 s\u1ED1";
+      return false;
+    }
+    if (f.min != null && n < f.min) {
+      fieldErrors[f.id] = "\u2265 " + f.min;
+      ok = false;
+    }
+    if (f.max != null && n > f.max) {
+      fieldErrors[f.id] = "\u2264 " + f.max;
+      ok = false;
+    }
+  }
+  if (f.maxLength && typeof v === "string" && v.length > f.maxLength) {
+    fieldErrors[f.id] = "T\u1ED1i \u0111a " + f.maxLength + " k\xFD t\u1EF1";
+    ok = false;
+  }
+  return ok;
+}
+var DynamicField = defineComponent({
+  name: "DynamicField",
+  props: {
+    field: { type: Object, required: true },
+    formData: { type: Object, required: true },
+    fieldErrors: { type: Object, required: true }
+  },
+  template: `
+    <fieldset v-if="field.type === 'custom-field'" class="custom-field-group">
+      <legend>{{ field.label }}</legend>
+      <p v-if="field.description" class="custom-field-desc">{{ field.description }}</p>
+      <DynamicField
+        v-for="sub in (field.fields || [])"
+        :key="sub.id"
+        :field="sub"
+        :form-data="formData"
+        :field-errors="fieldErrors"
+      />
+    </fieldset>
+    <div v-else class="field-row">
+      <label :for="field.id">{{ field.label }}</label>
+      <input
+        v-if="field.type === 'text' || field.type === 'number'"
+        :id="field.id"
+        :type="field.type === 'number' ? 'number' : 'text'"
+        v-model="formData[field.id]"
+        :placeholder="field.placeholder || ''"
+        :required="field.required"
+        :min="field.min"
+        :max="field.max"
+        :maxlength="field.maxLength"
+      />
+      <select
+        v-else-if="field.type === 'select'"
+        :id="field.id"
+        v-model="formData[field.id]"
+        :required="field.required"
+      >
+        <option v-for="opt in (field.options || [])" :key="String(opt.value)" :value="opt.value">
+          {{ opt.label }}
+        </option>
+      </select>
+      <textarea
+        v-else-if="field.type === 'textarea'"
+        :id="field.id"
+        v-model="formData[field.id]"
+        :rows="field.rows || 3"
+        :placeholder="field.placeholder || ''"
+        :required="field.required"
+      />
+      <p v-else class="err">Unsupported field type: {{ field.type }}</p>
+      <p v-if="fieldErrors[field.id]" class="err">{{ fieldErrors[field.id] }}</p>
+    </div>
+  `
+});
+DynamicField.components = { DynamicField };
 createApp({
+  components: { DynamicField },
   setup() {
     const loading = ref(true);
     const error = ref("");
@@ -34,13 +136,20 @@ createApp({
     const fields = computed(
       () => schema.value && schema.value.fields ? schema.value.fields : []
     );
+    const leafFields = computed(() => collectLeafFields(fields.value));
+    const customLeafIds = computed(() => {
+      const ids = /* @__PURE__ */ new Set();
+      for (const g of fields.value) {
+        if (g.type !== "custom-field") continue;
+        for (const f of collectLeafFields(g.fields)) ids.add(f.id);
+      }
+      return ids;
+    });
     function resetModel() {
       Object.keys(formData).forEach((k) => delete formData[k]);
       Object.keys(fieldErrors).forEach((k) => delete fieldErrors[k]);
-      for (const f of fields.value) {
-        if (f.type === "number")
-          formData[f.id] = f.default != null ? Number(f.default) : null;
-        else formData[f.id] = f.default != null ? String(f.default) : "";
+      for (const f of leafFields.value) {
+        initFieldValue(f, formData);
       }
     }
     onMounted(async () => {
@@ -68,40 +177,25 @@ createApp({
     function validate() {
       Object.keys(fieldErrors).forEach((k) => delete fieldErrors[k]);
       let ok = true;
-      for (const f of fields.value) {
-        const v = formData[f.id];
-        if (f.required && (v === "" || v == null)) {
-          fieldErrors[f.id] = "B\u1EAFt bu\u1ED9c";
-          ok = false;
-          continue;
-        }
-        if (f.type === "number" && v !== "" && v != null) {
-          const n = Number(v);
-          if (Number.isNaN(n)) {
-            fieldErrors[f.id] = "Ph\u1EA3i l\xE0 s\u1ED1";
-            ok = false;
-            continue;
-          }
-          if (f.min != null && n < f.min) {
-            fieldErrors[f.id] = "\u2265 " + f.min;
-            ok = false;
-          }
-          if (f.max != null && n > f.max) {
-            fieldErrors[f.id] = "\u2264 " + f.max;
-            ok = false;
-          }
-        }
-        if (f.maxLength && typeof v === "string" && v.length > f.maxLength) {
-          fieldErrors[f.id] = "T\u1ED1i \u0111a " + f.maxLength + " k\xFD t\u1EF1";
-          ok = false;
-        }
+      for (const f of leafFields.value) {
+        if (!validateField(f, formData[f.id], fieldErrors)) ok = false;
       }
       return ok;
+    }
+    function buildSubmitPayload() {
+      const custom = {};
+      const core = {};
+      for (const f of leafFields.value) {
+        const v = formData[f.id];
+        if (customLeafIds.value.has(f.id)) custom[f.id] = v;
+        else core[f.id] = v;
+      }
+      return { ...core, customFields: custom };
     }
     async function handleSubmit() {
       submitResult.value = "";
       if (!validate()) return;
-      const payload = { ...formData };
+      const payload = buildSubmitPayload();
       const r = await fetch(submitUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -132,41 +226,21 @@ createApp({
         <div class="form-container" :id="containerId">
           <h1>{{ schema?.title || 'Qu\u1EA3n l\xFD Merchants' }}</h1>
           <p class="meta">
-            <strong>App:</strong> qu\u1EA3n l\xFD merchant (draft) \u2014 schema t\u1EEB <code>FormDefinitionJson</code> trong manifest
-            <code>{{ manifestUrl }}</code>; slot codegen qua <code>FormCodegenServlet</code>;
-            l\u01B0u draft POST <code>{{ submitUrl }}</code>. C\u1EA7n <code>HTTP_PROXY_TARGET_BASE</code> tr\u1ECF origin app khi d\xF9ng <code>/httpproxy</code>.
+            <strong>App:</strong> qu\u1EA3n l\xFD merchant (draft) \u2014 schema t\u1EEB <code>FormDefinitionJson</code>;
+            h\u1ED7 tr\u1EE3 <code>custom-field</code> (nh\xF3m tr\u01B0\u1EDDng tenant); POST c\xF3 <code>customFields</code>.
           </p>
           <p v-if="loading">\u0110ang t\u1EA3i manifest &amp; codegen\u2026</p>
           <p v-else-if="error" class="err">{{ error }}</p>
           <template v-else>
             <component v-if="beforeFields" :is="beforeFields" />
             <form @submit.prevent="handleSubmit">
-              <div v-for="field in fields" :key="field.id">
-                <label :for="field.id">{{ field.label }}</label>
-                <input
-                  v-if="field.type === 'text' || field.type === 'number'"
-                  :id="field.id"
-                  :type="field.type === 'number' ? 'number' : 'text'"
-                  v-model="formData[field.id]"
-                  :placeholder="field.placeholder || ''"
-                  :required="field.required"
-                  :min="field.min"
-                  :max="field.max"
-                  :maxlength="field.maxLength"
-                />
-                <select v-else-if="field.type === 'select'" :id="field.id" v-model="formData[field.id]" :required="field.required">
-                  <option v-for="opt in field.options" :key="String(opt.value)" :value="opt.value">{{ opt.label }}</option>
-                </select>
-                <textarea
-                  v-else-if="field.type === 'textarea'"
-                  :id="field.id"
-                  v-model="formData[field.id]"
-                  :rows="field.rows || 3"
-                  :placeholder="field.placeholder || ''"
-                  :required="field.required"
-                />
-                <p v-if="fieldErrors[field.id]" class="err">{{ fieldErrors[field.id] }}</p>
-              </div>
+              <DynamicField
+                v-for="field in fields"
+                :key="field.id"
+                :field="field"
+                :form-data="formData"
+                :field-errors="fieldErrors"
+              />
               <button type="submit">L\u01B0u draft merchant</button>
             </form>
             <component v-if="afterFields" :is="afterFields" />

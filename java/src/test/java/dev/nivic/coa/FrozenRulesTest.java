@@ -10,7 +10,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -125,15 +124,15 @@ class FrozenRulesTest {
     // Chèn trực tiếp header + 1 dòng lệch (DR 100 không có CR) → COMMIT phải fail.
     try (Connection c = ds.getConnection()) {
       c.setAutoCommit(false);
-      UUID id;
+      long id;
       try (PreparedStatement ps = c.prepareStatement(
           "INSERT INTO coa_trans (ref_id, memo) VALUES ('FR-UNBAL', 'x') RETURNING id")) {
-        try (ResultSet rs = ps.executeQuery()) { rs.next(); id = rs.getObject(1, UUID.class); }
+        try (ResultSet rs = ps.executeQuery()) { rs.next(); id = rs.getLong(1); }
       }
       try (PreparedStatement ps = c.prepareStatement(
           "INSERT INTO coa_trans_data (trans_id, line_no, account_code, debit_minor, credit_minor)"
               + " VALUES (?, 1, '1111', 100, 0)")) {
-        ps.setObject(1, id);
+        ps.setLong(1, id);
         ps.executeUpdate(); // chưa fire (deferred)
       }
       SQLException ex = assertThrows(SQLException.class, c::commit, "commit phải bị deferred trigger chặn");
@@ -147,15 +146,15 @@ class FrozenRulesTest {
     // DR 100 / CR 100 → cân → commit OK (kể cả chèn tay).
     try (Connection c = ds.getConnection()) {
       c.setAutoCommit(false);
-      UUID id;
+      long id;
       try (PreparedStatement ps = c.prepareStatement(
           "INSERT INTO coa_trans (ref_id, memo) VALUES ('FR-BAL', 'x') RETURNING id")) {
-        try (ResultSet rs = ps.executeQuery()) { rs.next(); id = rs.getObject(1, UUID.class); }
+        try (ResultSet rs = ps.executeQuery()) { rs.next(); id = rs.getLong(1); }
       }
       try (PreparedStatement ps = c.prepareStatement(
           "INSERT INTO coa_trans_data (trans_id, line_no, account_code, debit_minor, credit_minor)"
               + " VALUES (?, 1, '1111', 100, 0), (?, 2, '3100', 0, 100)")) {
-        ps.setObject(1, id); ps.setObject(2, id);
+        ps.setLong(1, id); ps.setObject(2, id);
         ps.executeUpdate();
       }
       assertDoesNotThrow(c::commit);

@@ -3,7 +3,6 @@ package dev.nivic.saving;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 
 /**
  * Immutable transfer header ({@code sav_trans}) with its accounting lines ({@code sav_trans_data}).
@@ -13,20 +12,19 @@ import java.util.UUID;
  * Rows in {@code sav_trans} are never updated after INSERT.</p>
  */
 public record SavTransfer(
-    UUID id,
+    long id,
     SavTransferKind kind,
     SavTransferPhase phase,
-    UUID pendingId,
-    UUID idempotencyKey,
+    Long pendingId,
+    Long idempotencyKey,
     Long refMid,
     Long refRequestId,
-    UUID linkedBatchId,
+    Long linkedBatchId,
     String memo,
     Instant createdAt,
     List<SavTransLine> lines) {
 
   public SavTransfer {
-    Objects.requireNonNull(id, "id");
     Objects.requireNonNull(kind, "kind");
     Objects.requireNonNull(phase, "phase");
     Objects.requireNonNull(createdAt, "createdAt");
@@ -35,7 +33,7 @@ public record SavTransfer(
   }
 
   /** Account debited in this transfer (line with debit_minor > 0). */
-  public UUID debitAccountId() {
+  public Long debitAccountId() {
     return lines.stream()
         .filter(l -> l.debitMinor() > 0)
         .map(SavTransLine::accountId)
@@ -44,7 +42,7 @@ public record SavTransfer(
   }
 
   /** Account credited in this transfer (line with credit_minor > 0). */
-  public UUID creditAccountId() {
+  public Long creditAccountId() {
     return lines.stream()
         .filter(l -> l.creditMinor() > 0)
         .map(SavTransLine::accountId)

@@ -1,6 +1,6 @@
 package dev.nivic.ledger;
 
-/** Another open {@code payment_ledger} row already uses this {@code (mid, order_id)}. */
+/** Another open {@code led_payment} row already uses this {@code (mid, order_id)}. */
 public final class OrderIdConflictException extends RuntimeException {
 
   private final long mid;

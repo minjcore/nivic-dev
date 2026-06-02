@@ -2,7 +2,6 @@ package dev.nivic.saving;
 
 import java.time.Instant;
 import java.util.Objects;
-import java.util.UUID;
 
 /**
  * Savings account value object (read from {@code sav_account}).
@@ -10,7 +9,7 @@ import java.util.UUID;
  * <p>Credit-normal account: available = credits_posted − debits_posted − debits_pending.</p>
  */
 public record SavAccount(
-    UUID id,
+    long id,
     long ownerMid,
     String accountNo,
     SavAccountKind kind,

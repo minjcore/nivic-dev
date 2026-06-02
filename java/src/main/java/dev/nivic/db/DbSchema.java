@@ -39,10 +39,10 @@ public final class DbSchema {
     public static final String ORDER_ID = "order_id";
   }
 
-  /** One row per accepted Sevlet wallet message. */
-  public static final String WALLET_LEDGER = "wallet_ledger";
+  /** One row per accepted Sevlet wallet message (ledger projection). */
+  public static final String LED_WALLET = "led_wallet";
 
-  public static final class WALLET_LEDGER_ {
+  public static final class LED_WALLET_ {
     public static final String MID = "mid";
     public static final String REQUEST_ID = "request_id";
     public static final String ORDER_ID = "order_id";
@@ -55,10 +55,10 @@ public final class DbSchema {
     public static final String CREATED_AT = "created_at";
   }
 
-  /** Initial intent and/or upsert after wallet_ledger settle; ON CONFLICT keeps order_id and created_at. */
-  public static final String PAYMENT_LEDGER = "payment_ledger";
+  /** Payment intent ledger: initial row or upsert after led_wallet settle; ON CONFLICT keeps order_id and created_at. */
+  public static final String LED_PAYMENT = "led_payment";
 
-  public static final class PAYMENT_LEDGER_ {
+  public static final class LED_PAYMENT_ {
     public static final String MID = "mid";
     public static final String REQUEST_ID = "request_id";
     public static final String ORDER_ID = "order_id";
@@ -76,10 +76,10 @@ public final class DbSchema {
     public static final String CANCEL_REASON = "cancel_reason";
   }
 
-  /** wallet_account_hold table. */
-  public static final String WALLET_ACCOUNT_HOLD = "wallet_account_hold";
+  /** Reserved amount against account_id until intent completes or is released. */
+  public static final String ACCT_ACCOUNT_HOLD = "acct_account_hold";
 
-  public static final class WALLET_ACCOUNT_HOLD_ {
+  public static final class ACCT_ACCOUNT_HOLD_ {
     public static final String MID = "mid";
     public static final String REQUEST_ID = "request_id";
     public static final String ACCOUNT_ID = "account_id";
@@ -87,10 +87,10 @@ public final class DbSchema {
     public static final String CREATED_AT = "created_at";
   }
 
-  /** Journal voucher header; lines in wallet_journal_line. */
-  public static final String WALLET_JOURNAL_ENTRY = "wallet_journal_entry";
+  /** Journal voucher header; lines in acct_journal_line. */
+  public static final String ACCT_JOURNAL_ENTRY = "acct_journal_entry";
 
-  public static final class WALLET_JOURNAL_ENTRY_ {
+  public static final class ACCT_JOURNAL_ENTRY_ {
     public static final String MID = "mid";
     public static final String REQUEST_ID = "request_id";
     public static final String ORDER_ID = "order_id";
@@ -101,9 +101,9 @@ public final class DbSchema {
   }
 
   /** Balanced lines: debit account / credit account for wire amount. */
-  public static final String WALLET_JOURNAL_LINE = "wallet_journal_line";
+  public static final String ACCT_JOURNAL_LINE = "acct_journal_line";
 
-  public static final class WALLET_JOURNAL_LINE_ {
+  public static final class ACCT_JOURNAL_LINE_ {
     public static final String MID = "mid";
     public static final String REQUEST_ID = "request_id";
     public static final String LINE_NO = "line_no";

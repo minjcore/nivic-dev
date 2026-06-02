@@ -1,13 +1,12 @@
 package dev.nivic.saving;
 
 import java.util.Objects;
-import java.util.UUID;
 
 public record DepositCmd(
-    UUID creditAccountId,
+    long creditAccountId,
     long amountMinor,
     String currencyCode,
-    UUID idempotencyKey,
+    Long idempotencyKey,
     Long refMid,
     Long refRequestId,
     String memo) {

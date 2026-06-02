@@ -2,7 +2,13 @@ package dev.nivic.sevlet.api;
 
 import java.nio.charset.StandardCharsets;
 
-/** Shared JSON form definition: merchant admin (demo). XML or DB can map to the same shape. */
+/**
+ * Shared JSON form definition: merchant admin (demo). XML or DB can map to the same shape.
+ *
+ * <p>Field types: {@code text}, {@code number}, {@code select}, {@code textarea}, and
+ * {@code custom-field} — a grouped block with nested {@code fields} for tenant-specific extensions.
+ * The UI submits nested values under {@code customFields} in the POST body.
+ */
 public final class FormDefinitionJson {
 
   private FormDefinitionJson() {}
@@ -96,6 +102,43 @@ public final class FormDefinitionJson {
             "placeholder": "Số tài khoản, ngân hàng, ghi chú nội bộ…",
             "rows": 4,
             "required": false
+          },
+          {
+            "id": "merchant_extensions",
+            "type": "custom-field",
+            "label": "Trường tùy chỉnh (tenant)",
+            "description": "Schema mở rộng theo Mc — không sửa core fields phía trên.",
+            "fields": [
+              {
+                "id": "partner_ref",
+                "type": "text",
+                "label": "Mã đối tác / referral",
+                "placeholder": "VD: AGT-HCM-01",
+                "required": false,
+                "maxLength": 64
+              },
+              {
+                "id": "onboarding_tier",
+                "type": "select",
+                "label": "Gói onboarding",
+                "required": false,
+                "default": "standard",
+                "options": [
+                  { "value": "standard", "label": "Standard" },
+                  { "value": "priority", "label": "Priority" },
+                  { "value": "enterprise", "label": "Enterprise" }
+                ]
+              },
+              {
+                "id": "internal_tags",
+                "type": "textarea",
+                "label": "Tags nội bộ (CSV)",
+                "placeholder": "qr-pay, stall, pilot",
+                "rows": 2,
+                "required": false,
+                "maxLength": 512
+              }
+            ]
           }
         ]
       }

@@ -1,15 +1,14 @@
 package dev.nivic.saving;
 
 import java.util.Objects;
-import java.util.UUID;
 
 /**
  * Enriched bút toán line: {@link SavTransLine} + account metadata from {@code sav_account}.
- * Returned by {@link SavingLedger#findTransfer(UUID)}.
+ * Returned by {@link SavingLedger#findTransfer(long)}.
  */
 public record SavTransLineView(
     int lineNo,
-    UUID accountId,
+    long accountId,
     String accountNo,
     SavAccountKind accountKind,
     long debitMinor,

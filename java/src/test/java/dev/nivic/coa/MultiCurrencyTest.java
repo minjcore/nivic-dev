@@ -10,7 +10,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -124,15 +123,15 @@ class MultiCurrencyTest {
     // VND cân (100=100) nhưng USD lệch (50 DR không có CR) → deferred trigger chặn theo currency.
     try (Connection c = ds.getConnection()) {
       c.setAutoCommit(false);
-      UUID id;
+      long id;
       try (PreparedStatement ps = c.prepareStatement(
           "INSERT INTO coa_trans (ref_id) VALUES ('FX-BAD') RETURNING id")) {
-        try (ResultSet rs = ps.executeQuery()) { rs.next(); id = rs.getObject(1, UUID.class); }
+        try (ResultSet rs = ps.executeQuery()) { rs.next(); id = rs.getLong(1); }
       }
       try (PreparedStatement ps = c.prepareStatement(
           "INSERT INTO coa_trans_data (trans_id,line_no,account_code,debit_minor,credit_minor,currency_code)"
               + " VALUES (?,1,'1920',100,0,'VND'),(?,2,'1111',0,100,'VND'),(?,3,'1121',50,0,'USD')")) {
-        ps.setObject(1, id); ps.setObject(2, id); ps.setObject(3, id);
+        ps.setLong(1, id); ps.setLong(2, id); ps.setLong(3, id);
         ps.executeUpdate();
       }
       SQLException ex = assertThrows(SQLException.class, c::commit);

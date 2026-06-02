@@ -115,7 +115,7 @@ class HotPathTest {
     assertEquals(AMOUNT, jr.lines().get(1).creditMinor());
 
     List<MemoryPaymentLedger.PaymentEntry> paymentSnap = paymentLedger.snapshot();
-    assertEquals(1, paymentSnap.size(), "payment_ledger must have 1 entry (settled)");
+    assertEquals(1, paymentSnap.size(), "led_payment must have 1 entry (settled)");
     assertEquals(CoreLedgerStatus.SETTLED, paymentSnap.get(0).intentStatus());
   }
 

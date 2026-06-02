@@ -72,7 +72,7 @@ emit_table() {
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
-TABLE_ORDER="wallet_mid_secret merchant_config wallet_idempotency wallet_ledger payment_ledger wallet_account_hold wallet_journal_entry wallet_journal_line"
+TABLE_ORDER="wallet_mid_secret merchant_config wallet_idempotency led_wallet led_payment acct_account_hold acct_journal_entry acct_journal_line"
 
 # 1. Extract all COMMENT ON TABLE
 grep -E "^COMMENT ON TABLE" "$SCHEMA" | while IFS="'" read -r prefix comment suffix; do

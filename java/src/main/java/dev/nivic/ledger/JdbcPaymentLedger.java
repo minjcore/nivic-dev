@@ -18,7 +18,7 @@ import java.util.Objects;
 import javax.sql.DataSource;
 
 /**
- * PostgreSQL-backed {@code payment_ledger}: initial {@link #append} then {@link #appendAfterWallet}
+ * PostgreSQL-backed {@code led_payment}: initial {@link #append} then {@link #appendAfterWallet}
  * upsert keeps {@code order_id} from the first row. Order intents add TTL, challenge, and optional
  * {@link AccountHoldStore} rows in the same transaction as the intent insert.
  */
@@ -26,7 +26,7 @@ public final class JdbcPaymentLedger implements PaymentLedger {
 
   private static final String DDL_BASE =
       """
-      CREATE TABLE IF NOT EXISTS payment_ledger (
+      CREATE TABLE IF NOT EXISTS led_payment (
         mid BIGINT NOT NULL,
         request_id BIGINT NOT NULL,
         order_id BIGINT NOT NULL,
@@ -42,12 +42,12 @@ public final class JdbcPaymentLedger implements PaymentLedger {
       """;
 
   private static final String INSERT_FULL =
-      "INSERT INTO payment_ledger (mid, request_id, order_id, input, amount_minor, debit, credit,"
+      "INSERT INTO led_payment (mid, request_id, order_id, input, amount_minor, debit, credit,"
           + " currency_code, extra_data, intent_status, expires_at, confirm_challenge) VALUES (?, ?,"
           + " ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
   private static final String INSERT_LEGACY =
-      "INSERT INTO payment_ledger (mid, request_id, order_id, input, amount_minor, debit, credit,"
+      "INSERT INTO led_payment (mid, request_id, order_id, input, amount_minor, debit, credit,"
           + " currency_code, extra_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
   private static final String ST_SETTLED = CoreLedgerStatus.SETTLED.name();
@@ -55,17 +55,17 @@ public final class JdbcPaymentLedger implements PaymentLedger {
   private static final String SQL_IN_OPEN =
       CoreLedgerStatus.sqlInList(CoreLedgerStatus::isOpenForConfirmation);
 
-  /** Partial unique index; keep in sync with {@code schema/10_payment_ledger_open_order_unique.sql}. */
-  static final String PAYMENT_LEDGER_UIDX_OPEN_MID_ORDER = "payment_ledger_uidx_open_mid_order";
+  /** Partial unique index; keep in sync with {@code schema/10_led_payment_open_order_unique.sql}. */
+  static final String LED_PAYMENT_UIDX_OPEN_MID_ORDER = "led_payment_uidx_open_mid_order";
 
   private static final String SELECT_OPEN_ORDER_CONFLICT =
-      "SELECT request_id FROM payment_ledger WHERE mid = ? AND order_id = ? AND request_id <> ?"
+      "SELECT request_id FROM led_payment WHERE mid = ? AND order_id = ? AND request_id <> ?"
           + " AND intent_status IN ("
           + SQL_IN_OPEN
           + ") LIMIT 1";
 
   private static final String UPSERT_AFTER_WALLET =
-      "INSERT INTO payment_ledger (mid, request_id, order_id, input, amount_minor, debit, credit,"
+      "INSERT INTO led_payment (mid, request_id, order_id, input, amount_minor, debit, credit,"
           + " currency_code, extra_data, intent_status, expires_at, confirm_challenge, confirmed_at) VALUES"
           + " (?, ?, ?, ?, ?, ?, ?, ?, ?, '"
           + ST_SETTLED
@@ -80,10 +80,10 @@ public final class JdbcPaymentLedger implements PaymentLedger {
           + " intent_status = '"
           + ST_SETTLED
           + "',"
-          + " confirmed_at = COALESCE(payment_ledger.confirmed_at, NOW())";
+          + " confirmed_at = COALESCE(led_payment.confirmed_at, NOW())";
 
   private static final String SETTLE_BY_ORDER =
-      "UPDATE payment_ledger SET"
+      "UPDATE led_payment SET"
           + " input = ?,"
           + " amount_minor = ?,"
           + " debit = ?,"
@@ -103,7 +103,7 @@ public final class JdbcPaymentLedger implements PaymentLedger {
           + " RETURNING request_id";
 
   private static final String REJECT_BY_ORDER =
-      "UPDATE payment_ledger SET"
+      "UPDATE led_payment SET"
           + " intent_status = '"
           + ST_CANCELLED
           + "',"
@@ -140,17 +140,17 @@ public final class JdbcPaymentLedger implements PaymentLedger {
       try (Connection c = dataSource.getConnection();
           Statement st = c.createStatement()) {
         st.execute(DDL_BASE);
-        st.execute("ALTER TABLE payment_ledger ALTER COLUMN debit DROP NOT NULL");
-        st.execute("ALTER TABLE payment_ledger ALTER COLUMN credit DROP NOT NULL");
-        st.execute("ALTER TABLE payment_ledger ADD COLUMN IF NOT EXISTS intent_status VARCHAR(32)");
-        st.execute("ALTER TABLE payment_ledger ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ");
-        st.execute("ALTER TABLE payment_ledger ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ");
-        st.execute("ALTER TABLE payment_ledger ADD COLUMN IF NOT EXISTS confirm_challenge BYTEA");
-        st.execute("ALTER TABLE payment_ledger ADD COLUMN IF NOT EXISTS cancel_reason VARCHAR(512)");
+        st.execute("ALTER TABLE led_payment ALTER COLUMN debit DROP NOT NULL");
+        st.execute("ALTER TABLE led_payment ALTER COLUMN credit DROP NOT NULL");
+        st.execute("ALTER TABLE led_payment ADD COLUMN IF NOT EXISTS intent_status VARCHAR(32)");
+        st.execute("ALTER TABLE led_payment ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ");
+        st.execute("ALTER TABLE led_payment ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ");
+        st.execute("ALTER TABLE led_payment ADD COLUMN IF NOT EXISTS confirm_challenge BYTEA");
+        st.execute("ALTER TABLE led_payment ADD COLUMN IF NOT EXISTS cancel_reason VARCHAR(512)");
         st.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS "
-                + PAYMENT_LEDGER_UIDX_OPEN_MID_ORDER
-                + " ON payment_ledger (mid, order_id) WHERE intent_status IN ("
+                + LED_PAYMENT_UIDX_OPEN_MID_ORDER
+                + " ON led_payment (mid, order_id) WHERE intent_status IN ("
                 + SQL_IN_OPEN
                 + ")");
       }
@@ -161,7 +161,7 @@ public final class JdbcPaymentLedger implements PaymentLedger {
   private static boolean isOpenOrderUniqueViolation(SQLException e) {
     return "23505".equals(e.getSQLState())
         && e.getMessage() != null
-        && e.getMessage().contains(PAYMENT_LEDGER_UIDX_OPEN_MID_ORDER);
+        && e.getMessage().contains(LED_PAYMENT_UIDX_OPEN_MID_ORDER);
   }
 
   @Override
@@ -181,7 +181,7 @@ public final class JdbcPaymentLedger implements PaymentLedger {
       }
     } catch (SQLException e) {
       throw new IllegalStateException(
-          "payment_ledger open-order check failed: mid=" + mid + " orderId=" + orderId, e);
+          "led_payment open-order check failed: mid=" + mid + " orderId=" + orderId, e);
     }
   }
 
@@ -243,7 +243,7 @@ public final class JdbcPaymentLedger implements PaymentLedger {
       throw e;
     } catch (SQLException e) {
       throw new IllegalStateException(
-          "payment_ledger append failed: mid="
+          "led_payment append failed: mid="
               + payload.mid()
               + " requestId="
               + payload.requestId(),
@@ -272,7 +272,7 @@ public final class JdbcPaymentLedger implements PaymentLedger {
       }
     } catch (SQLException e) {
       throw new IllegalStateException(
-          "payment_ledger appendAfterWallet failed: mid="
+          "led_payment appendAfterWallet failed: mid="
               + payload.mid()
               + " requestId="
               + payload.requestId(),

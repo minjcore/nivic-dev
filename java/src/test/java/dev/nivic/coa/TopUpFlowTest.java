@@ -222,6 +222,6 @@ class TopUpFlowTest {
 
   @Test
   void findTrans_unknown_returnsNull() {
-    assertNull(ledger.findTrans(java.util.UUID.randomUUID()));
+    assertNull(ledger.findTrans(999999999L));
   }
 }

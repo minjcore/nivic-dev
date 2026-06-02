@@ -8,6 +8,7 @@ Generated from `src/main/resources/db/schema.sql`.
 
 | Column | Type | Description |
 |--------|------|-------------|
+| `mid` | | merchant_id — same value as wire field mid for merchant-signed payloads. |
 | `payment_check_order` | | True: order phase — same order_id on duplicate (mid,request_id); persist raw to WAL only until transaction replay. False: full persist in one step. |
 
 ## `merchant_config`
@@ -15,6 +16,7 @@ Generated from `src/main/resources/db/schema.sql`.
 
 | Column | Type | Description |
 |--------|------|-------------|
+| `mid` | | merchant_id — matches wallet_mid_secret.mid and wire mid. |
 | `enabled` | | False rejects wallet traffic for this mid (after HMAC). |
 | `intent_ttl_minutes` | | Order-intent TTL override; null = servlet default. |
 
@@ -25,16 +27,16 @@ Generated from `src/main/resources/db/schema.sql`.
 |--------|------|-------------|
 | `order_id` | | First-seen orderId; mismatched retry under order-payment mode → 409. |
 
-## `wallet_ledger`
-**Description:** One row per accepted Sevlet wallet message.
+## `led_wallet`
+**Description:** One row per accepted Sevlet wallet message (ledger projection).
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `input` | | Wire command opcode (u64). |
 | `amount_minor` | | Amount in ISO 4217 minor units for currency_code. |
 
-## `payment_ledger`
-**Description:** Initial intent and/or upsert after wallet_ledger settle; ON CONFLICT keeps order_id and created_at.
+## `led_payment`
+**Description:** Payment intent ledger: initial row or upsert after led_wallet settle; ON CONFLICT keeps order_id and created_at.
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -46,15 +48,19 @@ Generated from `src/main/resources/db/schema.sql`.
 | `intent_status` | | See dev.nivic.ledger.CoreLedgerStatus (VARCHAR = Enum.name()); null = legacy row. |
 | `confirm_challenge` | | 32-byte value echoed in CONFIRM / REJECT extraData. |
 
-## `wallet_account_hold`
-
-## `wallet_journal_entry`
-**Description:** Journal voucher header; lines in wallet_journal_line.
+## `acct_account_hold`
+**Description:** Reserved amount against account_id until intent completes or is released.
 
 | Column | Type | Description |
 |--------|------|-------------|
 
-## `wallet_journal_line`
+## `acct_journal_entry`
+**Description:** Journal voucher header; lines in acct_journal_line.
+
+| Column | Type | Description |
+|--------|------|-------------|
+
+## `acct_journal_line`
 **Description:** Balanced lines: debit account / credit account for wire amount.
 
 | Column | Type | Description |

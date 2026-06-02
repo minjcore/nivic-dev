@@ -3,27 +3,26 @@ package dev.nivic.coa.mc;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 
 /**
  * Đề xuất bút toán chờ duyệt (read model của {@code coa_proposal} + lines).
- * Khi APPROVED, {@link #postedTransId} trỏ tới bút toán bất biến đã sinh trên sổ cái.
+ * Khi APPROVED, {@link #postedTransId} trỏ tới bút toán bất biến đã sinh trên sổ cái
+ * ({@code null} khi chưa duyệt). {@code id} là BIGINT identity.
  */
 public record Proposal(
-    UUID id,
+    long id,
     String refId,
     String memo,
     String makerId,
     ProposalStatus status,
     String checkerId,
     String reason,
-    UUID postedTransId,
+    Long postedTransId,
     Instant createdAt,
     Instant decidedAt,
     List<Line> lines) {
 
   public Proposal {
-    Objects.requireNonNull(id, "id");
     Objects.requireNonNull(makerId, "makerId");
     Objects.requireNonNull(status, "status");
     lines = lines == null ? List.of() : List.copyOf(lines);

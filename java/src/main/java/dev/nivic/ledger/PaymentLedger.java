@@ -4,11 +4,11 @@ import dev.nivic.sevlet.SevletWalletPayload;
 import java.util.Currency;
 
 /**
- * Append-only <strong>order-payment</strong> projection ({@code payment_ledger}): intent accepted
+ * Append-only <strong>order-payment</strong> projection ({@code led_payment}): intent accepted
  * into Core with idempotency, without {@link dev.nivic.ledger.WalletLedger} / journal until settle/replay.
  *
  * <p>{@link #append} stores intent without accounts; {@link #appendAfterWallet} runs after
- * {@code wallet_ledger}/journal in a <strong>separate</strong> JDBC transaction (settled row with
+ * {@code led_wallet}/journal in a <strong>separate</strong> JDBC transaction (settled row with
  * {@code debit}/{@code credit}). On upsert, {@code order_id} stays the value from {@link #append}
  * when that row already exists.</p>
  *
@@ -29,7 +29,7 @@ public interface PaymentLedger {
 
   /**
    * After {@link dev.nivic.ledger.WalletLedger} and {@link dev.nivic.journal.WalletJournal} commits: upserts
-   * {@code payment_ledger} with {@code debit}/{@code credit} in a new connection. If a row already
+   * {@code led_payment} with {@code debit}/{@code credit} in a new connection. If a row already
    * exists (initial {@link #append}), {@code order_id} is left unchanged; only the settle fields
    * update.
    */
@@ -43,7 +43,7 @@ public interface PaymentLedger {
 
   /**
    * After idempotency on {@code (mid, request_id)}: rejects when another <strong>open</strong> row
-   * in {@code payment_ledger} already uses the same {@code (mid, order_id)} with a different {@code
+   * in {@code led_payment} already uses the same {@code (mid, order_id)} with a different {@code
    * request_id}. Callers should invoke this only when starting a new order-payment intent (e.g.
    * after {@code claimFirst} and before {@link #append} for that intent), not for confirm/reject.
    *

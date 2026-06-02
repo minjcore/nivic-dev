@@ -10,7 +10,6 @@ import java.sql.Statement;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -22,7 +21,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * Tests for {@link SavingLedger#findTransfer(UUID)}: full bút toán view with account details.
+ * Tests for {@link SavingLedger#findTransfer(long)}: full bút toán view with account details.
  */
 @Testcontainers
 @Tag("integration")
@@ -66,7 +65,7 @@ class SavTransViewTest {
 
   @Test
   void findTransfer_unknown_returnsNull() {
-    assertNull(ledger.findTransfer(UUID.randomUUID()));
+    assertNull(ledger.findTransfer(999999999L));
   }
 
   // ── DEPOSIT — hai legs cân bằng ───────────────────────────────────────────
@@ -240,7 +239,7 @@ class SavTransViewTest {
     long interest = SavInterestCalc.compute(700_000L, 650, 30);
     List<SavTransfer> ir = ledger.accrueInterest(List.of(new AccrueInterestCmd(acct.id(), interest, VND, null)));
 
-    for (UUID id : List.of(w.id(), ir.get(0).id())) {
+    for (long id : List.of(w.id(), ir.get(0).id())) {
       SavTransView view = ledger.findTransfer(id);
       assertTrue(view.isBalanced(), "transfer " + id + " must be balanced: debit=" + view.debitTotal() + " credit=" + view.creditTotal());
     }

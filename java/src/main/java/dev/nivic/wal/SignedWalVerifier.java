@@ -57,9 +57,10 @@ public final class SignedWalVerifier {
     return out;
   }
 
-  record ParsedSigned(long seq, byte[] payload, byte[] nextPrevHash) {}
+  public record ParsedSigned(long seq, byte[] payload, byte[] nextPrevHash) {}
 
-  static ParsedSigned parseSignedBody(byte[] record, byte[] expectedPrev, PublicKey verifyKey)
+  /** Parses and verifies one NVW2 frame body (after length-prefix strip). */
+  public static ParsedSigned parseSignedBody(byte[] record, byte[] expectedPrev, PublicKey verifyKey)
       throws GeneralSecurityException {
     int min =
         SignedWalConstants.HEADER_LEN + SignedWalConstants.ED25519_SIG_LEN;

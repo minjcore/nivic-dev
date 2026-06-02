@@ -9,7 +9,7 @@ import java.util.Objects;
 /**
  * Persists an accepted wallet payload to {@link WalletLedger} and double-entry {@link WalletJournal}.
  * Callers that also use {@link dev.nivic.ledger.PaymentLedger#appendAfterWallet} should invoke it
- * after {@link #record} so {@code payment_ledger} commits in a separate transaction.
+ * after {@link #record} so {@code led_payment} commits in a separate transaction.
  */
 public final class LedgerService {
 

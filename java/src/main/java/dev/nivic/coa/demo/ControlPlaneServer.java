@@ -68,7 +68,7 @@ public final class ControlPlaneServer {
     ControlPlaneServer app = new ControlPlaneServer(ds);
     // Touch each ledger once to ensure schema + seed exist.
     app.ledger.isDoubleEntryBalanced();
-    app.saving.findAccount(UUID.randomUUID()); // triggers savings ensureTables + system accounts
+    app.saving.findAccount(1L); // triggers savings ensureTables + system accounts
 
     HttpServer server = HttpServer.create(new InetSocketAddress("0.0.0.0", PORT), 0);
     server.createContext("/", app::handleIndex);
@@ -134,7 +134,7 @@ public final class ControlPlaneServer {
   }
 
   /**
-   * Tra cứu một giao dịch COA theo trans_id (UUID) hoặc ref_id, trả về trạng thái + bút toán.
+   * Tra cứu một giao dịch COA theo trans_id (BIGINT) hoặc ref_id, trả về trạng thái + bút toán.
    * {@code GET /api/trans?id=<uuid>} hoặc {@code /api/trans?ref=<ref_id>}.
    */
   private void handleTrans(HttpExchange ex) throws IOException {
@@ -145,7 +145,12 @@ public final class ControlPlaneServer {
     try {
       dev.nivic.coa.CoaTrans t = null;
       if (id != null && !id.isBlank()) {
-        t = ledger.findTrans(UUID.fromString(id.trim()));
+        try {
+          t = ledger.findTrans(Long.parseLong(id.trim()));
+        } catch (NumberFormatException e) {
+          send(ex, 400, "application/json", "{\"found\":false,\"error\":" + jsonStr("id phải là BIGINT hợp lệ") + "}");
+          return;
+        }
       } else if (ref != null && !ref.isBlank()) {
         t = ledger.findTransByRefId(ref.trim());
       }
@@ -154,8 +159,6 @@ public final class ControlPlaneServer {
         return;
       }
       send(ex, 200, "application/json; charset=utf-8", transJson(t));
-    } catch (IllegalArgumentException e) {
-      send(ex, 400, "application/json", "{\"found\":false,\"error\":" + jsonStr("id không hợp lệ (UUID)") + "}");
     } catch (RuntimeException e) {
       send(ex, 500, "application/json", "{\"found\":false,\"error\":" + jsonStr(e.getMessage()) + "}");
     }
@@ -164,7 +167,7 @@ public final class ControlPlaneServer {
   private static String transJson(dev.nivic.coa.CoaTrans t) {
     StringBuilder sb = new StringBuilder();
     sb.append("{\"found\":true")
-      .append(",\"id\":").append(jsonStr(t.id().toString()))
+      .append(",\"id\":").append(t.id())
       .append(",\"ref\":").append(jsonStr(t.refId()))
       .append(",\"memo\":").append(jsonStr(t.memo()))
       .append(",\"at\":").append(jsonStr(String.valueOf(t.createdAt())))
@@ -202,13 +205,13 @@ public final class ControlPlaneServer {
   }
 
   /** Sổ tiết kiệm user mới nhất chưa đóng (flag CLOSED = 0x01); null nếu chưa có. */
-  private UUID currentSavingAccount() {
+  private Long currentSavingAccount() {
     try (Connection c = ds.getConnection();
         PreparedStatement ps = c.prepareStatement(
             "SELECT id FROM sav_account WHERE owner_mid <> 0 AND (flags & 1) = 0"
                 + " ORDER BY opened_at DESC LIMIT 1")) {
       try (ResultSet rs = ps.executeQuery()) {
-        return rs.next() ? rs.getObject(1, UUID.class) : null;
+        return rs.next() ? rs.getLong(1) : null;
       }
     } catch (SQLException e) {
       throw new IllegalStateException("currentSavingAccount failed", e);
@@ -292,25 +295,25 @@ public final class ControlPlaneServer {
         yield "Mở sổ tiết kiệm " + a.accountNo();
       }
       case "sav_deposit" -> {
-        UUID id = currentSavingAccount();
+        Long id = currentSavingAccount();
         if (id == null) id = saving.openAccount(OpenAccountCmd.demand(DEMO_SAVING_MID, "VND")).id();
         saving.deposit(new DepositCmd(id, 1_000_000L, "VND", null, null, null, "Gửi tiết kiệm"));
         yield "Gửi tiết kiệm 1,000,000đ";
       }
       case "sav_withdraw" -> {
-        UUID id = currentSavingAccount();
+        Long id = currentSavingAccount();
         if (id == null) yield "Chưa có sổ tiết kiệm — bấm Gửi tiền trước";
         saving.withdrawal(new WithdrawalCmd(id, 300_000L, "VND", false, null, null, null, "Rút tiết kiệm"));
         yield "Rút tiết kiệm 300,000đ";
       }
       case "sav_interest" -> {
-        UUID id = currentSavingAccount();
+        Long id = currentSavingAccount();
         if (id == null) yield "Chưa có sổ tiết kiệm để tính lãi";
         long bal = saving.findAccount(id).availableBalance();
         long interest = SavInterestCalc.compute(bal, 650, 30); // 6.5%/năm × 30 ngày
         if (interest <= 0) yield "Số dư quá nhỏ, lãi 30 ngày = 0";
         saving.accrueInterest(java.util.List.of(
-            new AccrueInterestCmd(id, interest, "VND", UUID.randomUUID())));
+            new AccrueInterestCmd(id, interest, "VND", UUID.randomUUID().getMostSignificantBits())));
         yield "Tính lãi 30 ngày @6.5%: +" + fmt(interest) + "đ";
       }
       default -> throw new IllegalArgumentException("unknown flow: " + flow);
@@ -565,7 +568,7 @@ public final class ControlPlaneServer {
           <div class="panel">
             <h2>Tra cứu giao dịch</h2>
             <div style="display:flex;gap:8px">
-              <input id="txq" placeholder="trans_id (UUID) hoặc ref_id"
+              <input id="txq" placeholder="trans_id (BIGINT) hoặc ref_id"
                 style="flex:1;background:#0d1117;border:1px solid var(--line);border-radius:8px;
                 color:var(--txt);padding:8px 10px;font-size:12px;font-family:ui-monospace,monospace"
                 onkeydown="if(event.key==='Enter')lookupTx()">

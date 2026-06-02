@@ -5,7 +5,7 @@ import java.util.Comparator;
 import java.util.stream.Collectors;
 
 /**
- * All lifecycle values persisted in {@code payment_ledger.intent_status}. Declaration order defines
+ * All lifecycle values persisted in {@code led_payment.intent_status}. Declaration order defines
  * progression; {@link #EXPIRED} and everything after it are {@linkplain #isTerminal() terminal}.
  *
  * <p>New intent rows use {@link #defaultForNewIntentRow()} — the smallest ordinal among

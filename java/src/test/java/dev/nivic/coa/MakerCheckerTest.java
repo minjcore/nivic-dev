@@ -143,7 +143,7 @@ class MakerCheckerTest {
 
   @Test
   void approve_unknownProposal_notFound() {
-    assertThrows(ProposalNotFoundException.class, () -> ledger.approve(UUID.randomUUID(), "bob"));
+    assertThrows(ProposalNotFoundException.class, () -> ledger.approve(999999999L, "bob"));
   }
 
   // ── Reject ─────────────────────────────────────────────────────────────────────

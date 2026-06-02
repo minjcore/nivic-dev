@@ -9,12 +9,12 @@ import java.util.Currency;
 import java.util.Objects;
 import javax.sql.DataSource;
 
-/** PostgreSQL-backed append-only ledger table {@code wallet_ledger}. */
+/** PostgreSQL-backed append-only ledger table {@code led_wallet}. */
 public final class JdbcWalletLedger implements WalletLedger {
 
   private static final String DDL =
       """
-      CREATE TABLE IF NOT EXISTS wallet_ledger (
+      CREATE TABLE IF NOT EXISTS led_wallet (
         mid BIGINT NOT NULL,
         request_id BIGINT NOT NULL,
         order_id BIGINT NOT NULL,
@@ -30,7 +30,7 @@ public final class JdbcWalletLedger implements WalletLedger {
       """;
 
   private static final String INSERT =
-      "INSERT INTO wallet_ledger (mid, request_id, order_id, input, amount_minor, debit, credit,"
+      "INSERT INTO led_wallet (mid, request_id, order_id, input, amount_minor, debit, credit,"
           + " currency_code, extra_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
   private final DataSource dataSource;

@@ -2,7 +2,6 @@ package dev.nivic.saving;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * TigerBeetle-style savings ledger: Accounts + immutable Transfers.
@@ -43,14 +42,14 @@ public interface SavingLedger {
    *
    * @throws SavTransferPhaseException if transfer is not PENDING or already settled
    */
-  SavTransfer postPending(UUID pendingTransferId);
+  SavTransfer postPending(long pendingTransferId);
 
   /**
    * Cancels a PENDING withdrawal: {@code debits_pending -= amount}, no net debit.
    *
    * @throws SavTransferPhaseException if transfer is not PENDING or already settled
    */
-  SavTransfer voidPending(UUID pendingTransferId);
+  SavTransfer voidPending(long pendingTransferId);
 
   /**
    * Batch interest accrual: credits each savings account from the system reserve account.
@@ -65,22 +64,22 @@ public interface SavingLedger {
    *
    * @throws IllegalStateException if balance is non-zero or account does not belong to ownerMid
    */
-  SavAccount closeAccount(UUID accountId, long ownerMid);
+  SavAccount closeAccount(long accountId, long ownerMid);
 
   /**
    * Paginated statement: transfers where the account is debit or credit, ordered by
    * {@code created_at DESC}. Use {@code before = Instant.now()} for the first page;
    * use the last entry's {@code createdAt} as the cursor for subsequent pages.
    */
-  List<SavTransfer> statement(UUID accountId, Instant before, int limit);
+  List<SavTransfer> statement(long accountId, Instant before, int limit);
 
   /** Returns the current account snapshot, or {@code null} if not found. */
-  SavAccount findAccount(UUID id);
+  SavAccount findAccount(long id);
 
   /**
    * Returns the full bút toán view for one transfer: header + enriched lines with
    * {@code account_no} and {@code account_kind} from {@code sav_account}.
    * Returns {@code null} if not found.
    */
-  SavTransView findTransfer(UUID transId);
+  SavTransView findTransfer(long transId);
 }

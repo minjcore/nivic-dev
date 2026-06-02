@@ -76,10 +76,10 @@ import javax.sql.DataSource;
  * <p>Idempotency on {@code (mid, requestId)} (see {@code wallet_idempotency}; {@code order_id}).
  * When {@code wallet_mid_secret.payment_check_order} is true for that {@code mid}, the {@code mid}
  * is in <strong>order payment</strong> mode: duplicate retries must reuse the same {@code orderId}
- * ( {@link OrderIdMismatchException} ), WAL plus initial {@code payment_ledger} row (no
- * {@code debit}/{@code credit}). {@code wallet_ledger}/journal stay deferred until a settle/replay
+ * ( {@link OrderIdMismatchException} ), WAL plus initial {@code led_payment} row (no
+ * {@code debit}/{@code credit}). {@code led_wallet}/journal stay deferred until a settle/replay
  * path. When false, idempotency ignores {@code orderId} on duplicates; after WAL,
- * {@code wallet_ledger}+journal run first, then {@code payment_ledger} is upserted in a separate
+ * {@code led_wallet}+journal run first, then {@code led_payment} is upserted in a separate
  * JDBC transaction (settled row with accounts).</p>
  *
  * <p>Init parameter {@code maxBodyBytes} (default 1048576). Init parameter {@code
@@ -100,16 +100,16 @@ import javax.sql.DataSource;
  * mvn exec:java -Dexec.args="path/to/wal pub.der"}.</p>
  *
  * <p>Order intents: init {@code paymentIntentTtlMinutes} (default {@code 15}). TTL expiry job runs
- * every minute when JDBC {@code payment_ledger} is active.</p>
+ * every minute when JDBC {@code led_payment} is active.</p>
  *
- * <p>Ledger row in {@code wallet_ledger} (or in-memory / noop): init {@code ledgerStorage} = {@code
+ * <p>Ledger row in {@code led_wallet} (or in-memory / noop): init {@code ledgerStorage} = {@code
  * auto} (default), {@code jdbc}, {@code memory}, or {@code skip}. {@code auto} uses JDBC when a
  * {@link javax.sql.DataSource} is on the context, else in-memory. Init {@code ledgerCurrency}
  * (ISO 4217, default {@code USD}) labels how wire {@code amount} maps to minor units. Non-order
- * mids: append runs after WAL, then {@code payment_ledger} ( {@code paymentLedgerStorage} ). Order
- * mids: only {@code payment_ledger} initial row after WAL until settle.</p>
+ * mids: append runs after WAL, then {@code led_payment} ( {@code paymentLedgerStorage} ). Order
+ * mids: only {@code led_payment} initial row after WAL until settle.</p>
  *
- * <p>Journal (double-entry): tables {@code wallet_journal_entry} + {@code wallet_journal_line}, init
+ * <p>Journal (double-entry): tables {@code acct_journal_entry} + {@code acct_journal_line}, init
  * {@code journalStorage} = {@code auto} (default), {@code jdbc}, {@code memory}, or {@code skip}.
  * {@code auto} matches ledger behavior. Each payload becomes one entry and two lines: debit
  * {@code debit} / credit {@code credit} accounts with {@code amount} as minor units
@@ -227,7 +227,7 @@ public class SevletWalletPayloadServlet extends HttpServlet {
     if (lmode == null || lmode.isBlank() || "auto".equalsIgnoreCase(lmode.trim())) {
       try {
         ledger = new JdbcWalletLedger(PostgresContextListener.getDataSource(ctx));
-        ctx.log("Ledger: JDBC (wallet_ledger)");
+        ctx.log("Ledger: JDBC (led_wallet)");
       } catch (IllegalStateException e) {
         ledger = new MemoryWalletLedger();
         ctx.log("Ledger: in-memory (no DataSource on context)");
@@ -250,7 +250,7 @@ public class SevletWalletPayloadServlet extends HttpServlet {
     if (jmode == null || jmode.isBlank() || "auto".equalsIgnoreCase(jmode.trim())) {
       try {
         journal = new JdbcWalletJournal(PostgresContextListener.getDataSource(ctx));
-        ctx.log("Journal: JDBC (wallet_journal_*)");
+        ctx.log("Journal: JDBC (acct_journal_*)");
       } catch (IllegalStateException e) {
         journal = new MemoryWalletJournal();
         ctx.log("Journal: in-memory (no DataSource on context)");
@@ -272,7 +272,7 @@ public class SevletWalletPayloadServlet extends HttpServlet {
     try {
       DataSource holdDs = PostgresContextListener.getDataSource(ctx);
       accountHolds = new JdbcAccountHoldStore(holdDs);
-      ctx.log("Account holds: JDBC (wallet_account_hold)");
+      ctx.log("Account holds: JDBC (acct_account_hold)");
     } catch (IllegalStateException e) {
       ctx.log("Account holds: noop (no DataSource on context)");
     }
@@ -283,7 +283,7 @@ public class SevletWalletPayloadServlet extends HttpServlet {
       try {
         paymentLedger =
             new JdbcPaymentLedger(PostgresContextListener.getDataSource(ctx), accountHolds);
-        ctx.log("Payment ledger: JDBC (payment_ledger)");
+        ctx.log("Payment ledger: JDBC (led_payment)");
       } catch (IllegalStateException e) {
         paymentLedger = new MemoryPaymentLedger();
         ctx.log("Payment ledger: in-memory (no DataSource on context)");

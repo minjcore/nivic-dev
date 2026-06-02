@@ -5,17 +5,21 @@ Digital wallet payment processing engine (Java 21, Jakarta Servlet 6.0, PostgreS
 ## Quick Start
 
 ```bash
-# Không cần DB — chạy in-memory ngay
-./dev-start.sh
+# Một entrypoint dev (khuyến nghị)
+chmod +x dev-java.sh
 
-# Gửi test payment (terminal 2)
-python3 -c "
-import struct, urllib.request
-body = struct.pack('>3x qqqqq ii 32s', 0, 1, 100, 200, 50000, 1, 2, b'\x00'*32)
-req = urllib.request.Request('http://localhost:8080/sevlet/wallet/payload', data=body)
-print(urllib.request.urlopen(req).read().decode())
-"
+# Không cần DB — in-memory + hot-path test
+./dev-java.sh memory    # terminal 1
+./dev-java.sh test        # terminal 2
+./dev-java.sh smoke       # POST wallet payload
+
+# Có Postgres (createdb nivic; cp .env.example .env)
+./dev-java.sh migrate
+./dev-java.sh start       # Tomcat :8080 + JDBC
+./dev-java.sh all         # migrate + start nền + smoke
 ```
+
+Legacy scripts: `./dev-start.sh` (memory), `./dev-server.sh` (JDBC).
 
 ## Build Pipeline
 
@@ -71,8 +75,10 @@ Tất cả storage mode `memory`, không cần DB, WAL ghi vào `java.io.tmpdir`
 
 Parse `src/main/resources/db/schema.sql` → constants type-safe:
 ```java
-DbSchema.WALLET_LEDGER           // "wallet_ledger"
-DbSchema.WALLET_LEDGER_.AMOUNT_MINOR  // "amount_minor"
+DbSchema.LED_WALLET              // "led_wallet"
+DbSchema.LED_WALLET_.AMOUNT_MINOR     // "amount_minor"
+DbSchema.ACCT_JOURNAL_ENTRY      // "acct_journal_entry"
+DbSchema.LED_PAYMENT             // "led_payment"
 ```
 
 ## Documentation Generation
@@ -124,6 +130,27 @@ Binary body (SevletWalletCodec format), `Content-Type: application/octet-stream`
 
 **Response:** JSON 200 OK / 400/401/403/409/413.
 
+### Web Login + App Allow (Tomcat)
+
+Minimal login approval flow (in-memory, for integration/dev):
+
+- `POST /api/auth/web/login/start`  
+  Body: `{"userHint":"alice@example.com"}` (optional)  
+  Returns: `requestId`, `userCode`, `status=PENDING`, expiry.
+- `GET /api/auth/web/login/status?requestId=...`  
+  Poll from web. When approved, servlet creates HTTP session and returns `authenticated=true`.
+- `GET /api/auth/web/me`  
+  Check current authenticated session.
+- `POST /api/auth/app/login/approve`  
+  Header: `Authorization: Bearer <APP_APPROVAL_TOKEN>`  
+  Body: `{"requestId":"...","decision":"approve","appUserId":"u123"}`  
+  (`decision="deny"` to reject).
+
+Env knobs:
+
+- `APP_APPROVAL_TOKEN` (default: `dev-allow-token`)
+- `WEB_LOGIN_REQUEST_TTL_SECONDS` (default: `180`)
+
 ## Architecture
 
 ```
@@ -135,24 +162,28 @@ POST /sevlet/wallet/payload
   → WalletAcceptService.claimAndPersist
     → IdempotencyGate (dedup mid+requestId)
     → WalService.append (file WAL, crash-safe)
-    → LedgerService.record (wallet_ledger + journal)
-    → PaymentLedger (appendAfterWallet / settleIntentByOrder)
+    → LedgerService.record (led_wallet + acct_journal_*)
+    → PaymentLedger (led_payment — appendAfterWallet / settleIntentByOrder)
 ```
 
 Packages: `sevlet` (HTTP), `payment` (business), `wal` (WAL), `ledger`/`journal` (accounting), `command` (opcodes), `money` (value types), `party` (neo-bank `mid` conventions), `wal` (WAL signing).
 
+## Relationship to `saving/` (Wire TCP rail)
+
+This module is the **servlet CORE rail** (built first). [`saving/`](../saving/) is the **Wire TCP CORE rail** for the mobile superapp — same product role (money, intents, `mid`), different transport and tables (`payment_ledger` vs `payment_intents`). See [**ADR 004**](../docs/adr/004-dual-core-rails-java-and-saving.md). Wire App clients use **saving**, not this servlet endpoint.
+
 ## Neo-bank domain alignment
 
-Canonical write-up: [**ADR 003**](../docs/adr/003-neo-bank-mid-and-merchant-id.md) (single brain, `mid` / `merchant_id`, treasury, bootstrap seed, idempotency caveat).
+Canonical write-up: [**ADR 003**](../docs/adr/003-neo-bank-mid-and-merchant-id.md) (single brain **on this servlet rail**, `mid` / `merchant_id`, treasury, bootstrap seed, idempotency caveat) and [**ADR 004**](../docs/adr/004-dual-core-rails-java-and-saving.md) (dual rails vs `saving/`).
 
-**Single brain (source of truth).** All money movement is decided in one place: verify → idempotency → WAL → `wallet_ledger` / journal / `payment_ledger` (see `WalletAcceptService`). Do not maintain a second “balance” or payment-hub ledger that can disagree with the core append path. Future bank rails or adapters should only **submit commands** into this pipeline, not own customer liability truth.
+**Single brain (source of truth) on the servlet rail.** All money movement on this path is decided in one place: verify → idempotency → WAL → `led_wallet` / `acct_journal_*` / `led_payment` (see `WalletAcceptService`). Table prefixes: **`led_*`** ledger projections, **`acct_*`** accounting (journal, holds). Do not maintain a second authoritative ledger **on this rail** that can disagree with the core append path. The Wire superapp uses the separate **saving** rail (ADR 004); do not conflate the two without a documented bridge.
 
 **One `mid` namespace.** End-users, merchants, and the internal **treasury / omnibus** leg are all identified by a `long` `mid` (see `dev.nivic.party.MidConventions`, `PartyKind`). **Merchant rows:** `mid` **is** `merchant_id` (DB + wire). In this scope the product **is** the bank: there is **no** separate external-bank integration layer—treasury is just **one reserved `mid`** (`TREASURY_MID`, same ledger mechanics as a merchant leg; system-signed only, not a second schema).
 
 - **P2P:** debit/credit reference two user mids (or user ↔ user).
 - **Leg vs treasury:** when cash-in/out or omnibus is modeled, one leg uses `MidConventions.TREASURY_MID` alongside holder mids.
 
-**Deferred renames (migration backlog).** Renaming `payment_ledger` → `payment_transaction`, or renaming `merchant` types/packages → `party`, is intentionally **not** done here—requires coordinated SQL + JDBC + codegen (`DbSchema`). Track when you schedule a migration window.
+**Table prefixes (2026).** Ledger tables use **`led_*`** (`led_wallet`, `led_payment`); accounting tables use **`acct_*`** (`acct_journal_entry`, `acct_journal_line`, `acct_account_hold`). Legacy names: apply `db/schema/11_rename_legacy_led_acct_prefixes.sql`. Further rename `led_payment` → `payment_transaction` remains a separate backlog item.
 
 **Known limitation: idempotency before WAL.** `wallet_idempotency` claims `(mid, requestId)` before `WalService.append`. If WAL or ledger projection fails after the insert, clients may see **5xx** while retries get **409 Conflict**—there is no automatic replay yet. Mitigations: WAL-backed replay workers, reconciliation jobs, or restructuring claim order (trade-offs documented with `WalletAcceptService.claimAndPersist`).
 
