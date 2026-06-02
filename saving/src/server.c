@@ -161,7 +161,10 @@ static void *push_writer(void *arg) {
     int      fd;
     uint8_t  buf[WIRE_MAX_FRAME];
     size_t   len;
-    struct timespec ts = {0, 50000};  /* 50 µs idle sleep */
+    /* Adaptive backoff: poll hot at 50 µs while there is traffic, escalate
+     * toward 1 ms when the ring stays empty so an idle server burns ~no CPU.
+     * Any dequeue snaps the interval back to 50 µs for responsiveness. */
+    long idle_ns = 50000;  /* 50 µs */
 
     while (1) {
         int drained = 0;
@@ -169,7 +172,16 @@ static void *push_writer(void *arg) {
             wire_send_raw(fd, buf, len);
             drained = 1;
         }
-        if (!drained) nanosleep(&ts, NULL);
+        if (drained) {
+            idle_ns = 50000;
+        } else {
+            struct timespec ts = {0, idle_ns};
+            nanosleep(&ts, NULL);
+            if (idle_ns < 1000000) {           /* escalate, cap at 1 ms */
+                idle_ns *= 2;
+                if (idle_ns > 1000000) idle_ns = 1000000;
+            }
+        }
     }
 
     return NULL;

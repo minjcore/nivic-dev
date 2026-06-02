@@ -3,11 +3,18 @@
 #include <time.h>
 #include <sched.h>
 
-/* Bounded spin: tight loop first, then 1 µs nanosleep.
- * This gives ultra-low latency on an uncontested path while
- * yielding the CPU when the ring is truly full/empty. */
+/* Adaptive backoff: hot spin first for ultra-low latency on the uncontested
+ * path, then escalate the sleep the longer the ring stays empty/full so a quiet
+ * server burns ~no CPU. The caller's `count` is local to one wait episode and
+ * starts at 0, so as soon as a frame arrives the loop exits and the next wait
+ * begins hot again — under load we never leave the PAUSE tier.
+ *
+ *   count <  128   : PAUSE/ISB        (busy path — sub-µs latency, no syscall)
+ *   count < 1024   : nanosleep 1 µs   (warm — still sub-ms latency)
+ *   else           : nanosleep 1 ms   (deep idle — negligible CPU) */
 static inline void spin_once(int *count) {
-    if (++(*count) < 128) {
+    int c = ++(*count);
+    if (c < 128) {
         /* On x86 this becomes PAUSE; on ARM it's ISB or NOP — keeps the
          * pipeline sane without burning memory bandwidth. */
 #if defined(__x86_64__) || defined(__i386__)
@@ -17,10 +24,13 @@ static inline void spin_once(int *count) {
 #else
         atomic_thread_fence(memory_order_seq_cst);
 #endif
-    } else {
-        struct timespec ts = {0, 1000};   /* 1 µs */
+    } else if (c < 1024) {
+        struct timespec ts = {0, 1000};      /* 1 µs */
         nanosleep(&ts, NULL);
-        *count = 0;
+    } else {
+        struct timespec ts = {0, 1000000};   /* 1 ms */
+        nanosleep(&ts, NULL);
+        if (c > (1 << 20)) *count = 1024;    /* clamp: stay in deep-idle tier, avoid overflow */
     }
 }
 
