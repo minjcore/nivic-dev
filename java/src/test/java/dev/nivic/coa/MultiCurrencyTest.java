@@ -152,6 +152,75 @@ class MultiCurrencyTest {
         ledger.fxExchange(new FxExchangeCmd(1_000L, 1_000L, true, "FX-CCY", null)));
   }
 
+  // ── FX revaluation ─────────────────────────────────────────────────────────────
+
+  @Test
+  void revalue_gain_whenUsdAppreciates() {
+    // Mua 100 USD @ 24,000 (cost 2.4M). USD lên 25,000 → lãi 100,000.
+    ledger.fxExchange(new FxExchangeCmd(2_400_000L, 10_000L, true, "RV-FX", null));
+    assertEquals(2_400_000L, ledger.getBalance("1920"));
+
+    ledger.fxRevalue(new FxRevalueCmd(25_000L, "RV-1", null));
+
+    assertEquals(2_500_000L, ledger.getBalance("1920"), "1920 mark-to-market @25,000");
+    assertEquals(-100_000L, ledger.getBalance("4170"), "lãi tỷ giá (revenue, credit-normal)");
+    assertEquals(0L, ledger.getBalance("5300"), "không có lỗ");
+    assertTrue(ledger.isDoubleEntryBalanced());
+  }
+
+  @Test
+  void revalue_loss_whenUsdDepreciates() {
+    ledger.fxExchange(new FxExchangeCmd(2_400_000L, 10_000L, true, "RV-FX2", null));
+    // USD xuống 23,000 → giá trị 2.3M < cost 2.4M → lỗ 100,000.
+    ledger.fxRevalue(new FxRevalueCmd(23_000L, "RV-2", null));
+
+    assertEquals(2_300_000L, ledger.getBalance("1920"), "1920 mark xuống");
+    assertEquals(100_000L, ledger.getBalance("5300"), "lỗ tỷ giá (expense)");
+    assertTrue(ledger.isDoubleEntryBalanced());
+  }
+
+  @Test
+  void revalue_reflectedInPnl() {
+    ledger.fxExchange(new FxExchangeCmd(2_400_000L, 10_000L, true, "RV-FX3", null));
+    ledger.fxRevalue(new FxRevalueCmd(25_000L, "RV-3", null));
+
+    var pl = new dev.nivic.coa.report.FundFlowReports(ds).profitAndLoss();
+    assertEquals(100_000L, pl.totalRevenue(), "lãi tỷ giá vào doanh thu P&L");
+    assertEquals(100_000L, pl.netProfit());
+  }
+
+  @Test
+  void revalue_incremental_acrossRates() {
+    ledger.fxExchange(new FxExchangeCmd(2_400_000L, 10_000L, true, "RV-FX4", null));
+    ledger.fxRevalue(new FxRevalueCmd(25_000L, "RV-4a", null)); // +100k lãi, 1920=2.5M
+    ledger.fxRevalue(new FxRevalueCmd(26_000L, "RV-4b", null)); // +100k nữa, 1920=2.6M
+
+    assertEquals(2_600_000L, ledger.getBalance("1920"));
+    assertEquals(-200_000L, ledger.getBalance("4170"), "tổng lãi 2 lần = 200k");
+  }
+
+  @Test
+  void revalue_noPosition_throws() {
+    assertThrows(dev.nivic.coa.error.NothingToRevalueException.class,
+        () -> ledger.fxRevalue(new FxRevalueCmd(25_000L, "RV-NONE", null)));
+  }
+
+  @Test
+  void revalue_rateUnchanged_throws() {
+    ledger.fxExchange(new FxExchangeCmd(2_400_000L, 10_000L, true, "RV-FX5", null));
+    assertThrows(dev.nivic.coa.error.NothingToRevalueException.class,
+        () -> ledger.fxRevalue(new FxRevalueCmd(24_000L, "RV-SAME", null)));
+  }
+
+  @Test
+  void revalue_idempotent() {
+    ledger.fxExchange(new FxExchangeCmd(2_400_000L, 10_000L, true, "RV-FX6", null));
+    var a = ledger.fxRevalue(new FxRevalueCmd(25_000L, "RV-IDEM", null));
+    var b = ledger.fxRevalue(new FxRevalueCmd(25_000L, "RV-IDEM", null));
+    assertEquals(a.id(), b.id());
+    assertEquals(2_500_000L, ledger.getBalance("1920"), "no double revalue");
+  }
+
   // ── VND-only flows unaffected ──────────────────────────────────────────────────
 
   @Test

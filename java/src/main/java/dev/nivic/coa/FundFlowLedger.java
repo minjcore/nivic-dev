@@ -53,6 +53,14 @@ public interface FundFlowLedger {
    */
   CoaTrans fxExchange(dev.nivic.coa.cmd.FxExchangeCmd cmd);
 
+  /**
+   * Đánh giá lại vị thế FX theo tỷ giá hiện tại → ghi nhận lãi/lỗ chênh lệch tỷ giá (mark-to-market
+   * vị thế VND 1920). DR 1920 / CR 4170 (lãi) hoặc DR 5300 / CR 1920 (lỗ).
+   *
+   * @throws dev.nivic.coa.error.NothingToRevalueException nếu không có vị thế FX mở hoặc tỷ giá không đổi
+   */
+  CoaTrans fxRevalue(dev.nivic.coa.cmd.FxRevalueCmd cmd);
+
   // ── Savings ví ↔ Sổ cái (control account 2140 + chi phí lãi 5200) ─────────────
 
   /**

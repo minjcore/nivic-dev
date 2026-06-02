@@ -235,6 +235,8 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
       {"4150", "Doanh thu Phí Chi Lương/Chi hộ",  "REVENUE"},
       {"5100", "Chi phí Phí NH / Napas",          "EXPENSE"},
       {"5200", "Chi phí lãi tiền gửi",            "EXPENSE"},
+      {"5300", "Lỗ chênh lệch tỷ giá",            "EXPENSE"},
+      {"4170", "Lãi chênh lệch tỷ giá",           "REVENUE"},
       {"6000", "Vốn chủ sở hữu",                  "EQUITY"},
       {"6100", "Lợi nhuận giữ lại",               "EQUITY"},
   };
@@ -254,6 +256,9 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
   /** Vị thế FX (giữ số dư mở khi đổi tiền). */
   static final String FX_POSITION_VND = "1920";
   static final String FX_POSITION_USD = "1921";
+  /** Lãi/lỗ chênh lệch tỷ giá (khi đánh giá lại vị thế). */
+  static final String FX_GAIN = "4170";
+  static final String FX_LOSS = "5300";
 
   /** Retained-earnings account closing entries flow into. */
   private static final String RETAINED_EARNINGS = "6100";
@@ -1035,6 +1040,47 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
               + " VND ↔ " + cmd.usdAmount() + " USD");
     } catch (SQLException e) {
       throw new IllegalStateException("fxExchange failed: " + cmd.requestRef(), e);
+    }
+  }
+
+  @Override
+  public CoaTrans fxRevalue(FxRevalueCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.requestRef());
+      if (existing != null) return existing;
+
+      // Vị thế USD nắm giữ (1921 credit-normal: balance âm khi long USD).
+      long usdPosMinor = -getBalance(FX_POSITION_USD); // dương = USD đang giữ (minor, 2 chữ số thập phân)
+      if (usdPosMinor == 0) throw new NothingToRevalueException("no open FX position (1921 = 0)");
+
+      long current1920 = getBalance(FX_POSITION_VND);
+      // Giá trị thị trường VND của vị thế USD = usd × rate (usd có 2 chữ số thập phân).
+      long targetVnd = Math.multiplyExact(usdPosMinor, cmd.rateVndPerUsd()) / 100;
+      long delta = targetVnd - current1920;
+      if (delta == 0) throw new NothingToRevalueException("rate unchanged — nothing to revalue");
+
+      List<JournalLine> lines;
+      if (delta > 0) {
+        // Lãi: nâng vị thế VND lên giá thị trường, ghi nhận doanh thu chênh lệch tỷ giá.
+        lines = List.of(
+            new JournalLine(FX_POSITION_VND, delta, 0L),
+            new JournalLine(FX_GAIN, 0L, delta));
+      } else {
+        // Lỗ: giảm vị thế VND, ghi nhận chi phí chênh lệch tỷ giá.
+        lines = List.of(
+            new JournalLine(FX_LOSS, -delta, 0L),
+            new JournalLine(FX_POSITION_VND, 0L, -delta));
+      }
+      return postJournal(lines, cmd.requestRef(),
+          cmd.memo() != null ? cmd.memo()
+              : "FX revalue @" + cmd.rateVndPerUsd() + ": " + (delta > 0 ? "lãi " : "lỗ ")
+              + Math.abs(delta) + "đ");
+    } catch (NothingToRevalueException e) {
+      throw e;
+    } catch (SQLException e) {
+      throw new IllegalStateException("fxRevalue failed: " + cmd.requestRef(), e);
     }
   }
 

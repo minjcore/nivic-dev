@@ -376,9 +376,11 @@ INSERT INTO coa_account (code, name, kind) VALUES
   ('4130', 'Doanh thu Phí chuyển tiền',       'REVENUE'),
   ('4140', 'Doanh thu Phí MDR',               'REVENUE'),
   ('4150', 'Doanh thu Phí Chi Lương/Chi hộ',  'REVENUE'),
+  ('4170', 'Lãi chênh lệch tỷ giá',           'REVENUE'),
   -- Nhóm 5: Chi phí
   ('5100', 'Chi phí Phí NH / Napas',          'EXPENSE'),
   ('5200', 'Chi phí lãi tiền gửi',            'EXPENSE'),
+  ('5300', 'Lỗ chênh lệch tỷ giá',            'EXPENSE'),
   -- Nhóm 6: Vốn
   ('6000', 'Vốn chủ sở hữu',                  'EQUITY'),
   ('6100', 'Lợi nhuận giữ lại',               'EQUITY')

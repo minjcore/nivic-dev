@@ -281,6 +281,11 @@ public final class ControlPlaneServer {
         ledger.fxExchange(new FxExchangeCmd(2_400_000L, 10_000L, true, ref + "-FX", null));
         yield "FX: mua 100.00 USD = 2,400,000đ (rate 24,000) → 1111−, 1121+";
       }
+      case "fx_revalue" -> {
+        // Đánh giá lại vị thế @25,000 → lãi/lỗ tỷ giá
+        ledger.fxRevalue(new FxRevalueCmd(25_000L, ref + "-RV", null));
+        yield "FX revalue @25,000 → lãi/lỗ tỷ giá vào 4170/5300";
+      }
       // ── Savings ──
       case "sav_open" -> {
         SavAccount a = saving.openAccount(OpenAccountCmd.demand(DEMO_SAVING_MID, "VND"));
@@ -552,6 +557,7 @@ public final class ControlPlaneServer {
               <button onclick="run('disbursement')">Chi hộ</button>
               <button class="wide" onclick="run('eod')">EOD Settlement &amp; Clearing</button>
               <button class="wide" onclick="run('fx')">💱 Đổi tiền (FX) VND→USD</button>
+              <button class="wide" onclick="run('fx_revalue')">📈 FX revalue @25,000 (lãi/lỗ tỷ giá)</button>
               <button class="wide" onclick="run('close')">📕 Khoá sổ cuối kỳ</button>
               <button class="wide reset" onclick="reset()">⟲ Reset toàn bộ</button>
             </div>

@@ -84,6 +84,8 @@ public final class FundFlowApi {
       return ApiResponse.error(409, "ALREADY_REVERSED", e.getMessage());
     } catch (NothingToCloseException e) {
       return ApiResponse.error(409, "NOTHING_TO_CLOSE", e.getMessage());
+    } catch (dev.nivic.coa.error.NothingToRevalueException e) {
+      return ApiResponse.error(409, "NOTHING_TO_REVALUE", e.getMessage());
     } catch (TransactionNotFoundException e) {
       return ApiResponse.error(404, "NOT_FOUND", e.getMessage());
     } catch (RuntimeException e) {
@@ -167,6 +169,13 @@ public final class FundFlowApi {
           new ReversalCmd(b.reqString("originalRef"), b.reqString("reversalRef"), b.optString("memo")));
       case "period/close" -> ledger.closePeriod(
           new PeriodCloseCmd(b.reqString("closeRef"), b.optString("memo")));
+
+      case "fx/exchange" -> ledger.fxExchange(
+          new FxExchangeCmd(b.reqLong("vndAmount"), b.reqLong("usdAmount"),
+              b.has("buyUsd") && Boolean.parseBoolean(b.reqString("buyUsd")),
+              b.reqString("requestRef"), b.optString("memo")));
+      case "fx/revalue" -> ledger.fxRevalue(
+          new FxRevalueCmd(b.reqLong("rateVndPerUsd"), b.reqString("requestRef"), b.optString("memo")));
 
       default -> null;
     };
