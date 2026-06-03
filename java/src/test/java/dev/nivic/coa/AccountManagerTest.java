@@ -132,7 +132,7 @@ class AccountManagerTest {
         Optional.of("1200"), "Child", "user");
 
     // Should fail to deactivate parent
-    assertThrows(AccountHasDescendantsException.class, () ->
+    assertThrows(AccountException.HasDescendants.class, () ->
         accountManager.deactivate("1200", "admin"));
   }
 
@@ -170,7 +170,7 @@ class AccountManagerTest {
     accountManager.deactivate("1111", "admin");
 
     // Should fail when account inactive
-    assertThrows(AccountInactiveException.class, () ->
+    assertThrows(AccountException.InactiveException.class, () ->
         accountManager.validatePostingAllowed("1111"));
   }
 

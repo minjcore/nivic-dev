@@ -182,13 +182,13 @@ public class JdbcAccountManager implements AccountManager {
 
     // Validate code is unique
     if (findByCode(code).isPresent()) {
-      throw new AccountAlreadyExistsException(code);
+      throw new AccountException.AlreadyExists(code);
     }
 
     // Validate parent exists if specified
     if (parentCode.isPresent()) {
       if (!findByCode(parentCode.get()).isPresent()) {
-        throw new InvalidAccountHierarchyException("Parent account not found: " + parentCode.get());
+        throw new AccountException.InvalidHierarchy("Parent account not found: " + parentCode.get());
       }
     }
 
@@ -223,14 +223,14 @@ public class JdbcAccountManager implements AccountManager {
   @Override
   public CoaAccountExt deactivate(String accountCode, String deactivatedBy) {
     CoaAccountExt account = findByCode(accountCode)
-        .orElseThrow(() -> new AccountNotFoundException(accountCode));
+        .orElseThrow(() -> new AccountException.NotFound(accountCode));
 
     if (!account.isActive()) {
-      throw new AccountActiveException(accountCode);
+      throw new AccountException.ActiveException(accountCode);
     }
 
     if (!findChildren(accountCode).isEmpty()) {
-      throw new AccountHasDescendantsException(accountCode);
+      throw new AccountException.HasDescendants(accountCode);
     }
 
     String sql = """
@@ -254,7 +254,7 @@ public class JdbcAccountManager implements AccountManager {
   @Override
   public CoaAccountExt activate(String accountCode, String activatedBy) {
     CoaAccountExt account = findByCode(accountCode)
-        .orElseThrow(() -> new AccountNotFoundException(accountCode));
+        .orElseThrow(() -> new AccountException.NotFound(accountCode));
 
     String sql = """
         UPDATE coa_account_ext SET status = 'ACTIVE', updated_at = ?, updated_by = ?
@@ -277,10 +277,10 @@ public class JdbcAccountManager implements AccountManager {
   @Override
   public CoaAccountExt archive(String accountCode, String archivedBy) {
     CoaAccountExt account = findByCode(accountCode)
-        .orElseThrow(() -> new AccountNotFoundException(accountCode));
+        .orElseThrow(() -> new AccountException.NotFound(accountCode));
 
     if (account.balanceMinor() != 0) {
-      throw new AccountHasBalanceException(accountCode, account.balanceMinor());
+      throw new AccountException.HasBalance(accountCode, account.balanceMinor());
     }
 
     String sql = """
@@ -409,15 +409,15 @@ public class JdbcAccountManager implements AccountManager {
   @Override
   public void validatePostingAllowed(String accountCode) throws IllegalStateException {
     CoaAccountExt account = findByCode(accountCode)
-        .orElseThrow(() -> new AccountNotFoundException(accountCode));
+        .orElseThrow(() -> new AccountException.NotFound(accountCode));
 
     if (!account.isActive()) {
-      throw new AccountInactiveException(accountCode);
+      throw new AccountException.InactiveException(accountCode);
     }
 
     Optional<AccountingPeriod> period = currentPeriod();
     if (period.isEmpty() || !period.get().canPost()) {
-      throw new PeriodClosedException(LocalDate.now());
+      throw new AccountException.PeriodClosed(LocalDate.now());
     }
   }
 

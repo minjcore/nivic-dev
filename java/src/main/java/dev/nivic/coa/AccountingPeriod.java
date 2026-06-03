@@ -4,12 +4,6 @@ import java.time.LocalDate;
 import java.time.Instant;
 import java.util.Objects;
 
-public enum PeriodStatus {
-  OPEN,
-  CLOSED,
-  LOCKED
-}
-
 /**
  * Accounting period: controls when postings are allowed.
  * OPEN: posting allowed
