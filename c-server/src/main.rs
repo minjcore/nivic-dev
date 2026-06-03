@@ -97,11 +97,15 @@ async fn main() {
             .await
     });
 
-    let server = axum::Server::bind(&addr.parse().unwrap())
-        .serve(app.into_make_service_with_connect_info::<std::net::SocketAddr>())
-        .await;
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    info!("Server listening on {}", addr);
 
-    if let Err(e) = server {
+    if let Err(e) = axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await
+    {
         warn!("Server error: {}", e);
     }
 
