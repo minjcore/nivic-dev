@@ -95,10 +95,10 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8090/actuator/prometheus"]
+      test: ["CMD", "nc", "-z", "localhost", "8090"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 3
 
 volumes:
   postgres_data:
