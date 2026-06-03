@@ -211,6 +211,7 @@ dev/nivic/wal/SignedWalVerifier$VerifiedRecord.class
 dev/nivic/saving/OpenAccountCmd.class
 dev/nivic/payment/disruptor/WalletPersistDisruptor$1.class
 dev/nivic/coa/cmd/QrPosCreditMerchantCmd.class
+dev/nivic/ledger/RabbitConfig.class
 dev/nivic/db/Postgres$Config.class
 dev/nivic/sevlet/api/FormDefinitionJson.class
 dev/nivic/coa/PeriodStatus.class
@@ -242,6 +243,7 @@ dev/nivic/saving/AccrueInterestCmd.class
 dev/nivic/sevlet/secret/MidSecretResolver.class
 dev/nivic/coa/cmd/DisbursementSettleCmd.class
 dev/nivic/analytics/WalIncrementalReader.class
+dev/nivic/ledger/CryptoDepositListener.class
 dev/nivic/saving/SavTransLineView.class
 dev/nivic/coa/CoaAccountKind.class
 dev/nivic/saving/SavingLedger.class
