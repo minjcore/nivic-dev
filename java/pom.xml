@@ -72,6 +72,13 @@
         <artifactId>xnio-nio</artifactId>
         <version>3.8.16.Final</version>
       </dependency>
+    <!-- SLF4J API for consistent logging across libraries -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>2.0.11</version>
+    </dependency>
+    <!-- Log4j2 backend for SLF4J -->
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-api</artifactId>
