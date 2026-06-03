@@ -110,6 +110,22 @@ services:
       timeout: 5s
       retries: 5
 
+  # Blockchain listener (Go service)
+  blockchain-listener:
+    build:
+      context: ./listener
+      dockerfile: Dockerfile
+    environment:
+      BLOCKCHAIN_RPC_URL: https://eth-mainnet.g.alchemy.com/v2/demo
+      RABBITMQ_URL: amqp://gtel-c-server:password@rabbitmq:5672/gtel-prod
+      RABBITMQ_EXCHANGE: gtel-events
+      RABBITMQ_ROUTING_KEY: ledger.crypto
+      CUSTODY_WALLET: "0x1234567890123456789012345678901234567890"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
 volumes:
   postgres_data:
   rabbitmq_data:
