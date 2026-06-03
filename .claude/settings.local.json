@@ -480,7 +480,27 @@
       "Bash(DOCKER_HOST=unix:///Users/khangdc/.colima/default/docker.sock mvn test -Dtest=StagingValidationTest -q)",
       "Bash(DOCKER_HOST=unix:///Users/khangdc/.colima/default/docker.sock mvn test -Dtest=StagingValidationTest::step4_ConcurrentMultiUserLoad -q)",
       "Bash(DOCKER_HOST=unix:///Users/khangdc/.colima/default/docker.sock mvn test -Dtest=StagingValidationTest#step4_ConcurrentMultiUserLoad -q)",
-      "Bash(DOCKER_HOST=unix:///Users/khangdc/.colima/default/docker.sock mvn test -Dtest=StagingValidationTest)"
+      "Bash(DOCKER_HOST=unix:///Users/khangdc/.colima/default/docker.sock mvn test -Dtest=StagingValidationTest)",
+      "Bash(jar -tf /Users/khangdc/Desktop/nivic-dev/java/target/sevlet-wallet-1.0.0-SNAPSHOT.war)",
+      "Bash(docker-compose -f docker-compose.prod.yml up)",
+      "Bash(mvn jetty:run -DskipTests)",
+      "Bash(java -jar target/sevlet-wallet-1.0.0-SNAPSHOT.war)",
+      "Bash(pkill -f ControlPlaneServer)",
+      "Bash(jar -tf target/sevlet-wallet-1.0.0-SNAPSHOT.war)",
+      "Bash(echo \"  Classes: $\\(jar -tf target/sevlet-wallet-1.0.0-SNAPSHOT.war)",
+      "Bash(nohup /Users/khangdc/Desktop/nivic-dev/start-control-plane.sh)",
+      "Bash(mvn -DskipTests clean compile)",
+      "Bash(docker-compose *)",
+      "Bash(./infra/kafka-cluster/setup-cluster.sh *)",
+      "Bash(/Users/khangdc/Desktop/nivic-dev/test-event-pipeline.sh)",
+      "Bash(unzip -p java/target/sevlet-wallet-1.0.0-SNAPSHOT.jar BOOT-INF/classes/application-ledger.yml)",
+      "Bash(unzip -l java/target/sevlet-wallet-1.0.0-SNAPSHOT.jar)",
+      "Bash(unzip *)",
+      "Bash(cp target/sevlet-wallet-1.0.0-SNAPSHOT.jar target/ledger.jar)",
+      "Bash(cp target/sevlet-wallet-1.0.0-SNAPSHOT.jar target/gateway.jar)",
+      "Bash(./test-event-pipeline.sh)",
+      "Bash(mvn package *)",
+      "Bash(mvn help:active-profiles *)"
     ]
   }
 }

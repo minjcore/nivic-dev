@@ -1,10 +1,12 @@
 package dev.nivic.gateway.controller;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import dev.nivic.gateway.model.LedgerEvent;
 import dev.nivic.gateway.service.EventService;
 import dev.nivic.gateway.service.RateLimitService;
 import dev.nivic.gateway.service.AuthService;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,10 +15,11 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.Map;
 
-@Slf4j
 @RestController
 @RequestMapping("/api/events")
 public class EventController {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(EventController.class);
+
 
     @Autowired
     private EventService eventService;
@@ -74,13 +77,7 @@ public class EventController {
             // 6. Enqueue for async processing (fire-and-forget)
             eventService.enqueueEvent(event);
 
-            log.info("event_received",
-                () -> Map.of(
-                    "event_id", event.getEventId(),
-                    "event_type", event.getEventType(),
-                    "client", clientId,
-                    "user_id", event.getUserId() != null ? event.getUserId() : "unknown"
-                ));
+            log.debug("Event received: event_id={}, type={}, client={}", event.getEventId(), event.getEventType(), clientId);
 
             // 7. Immediate response (< 10ms)
             return ResponseEntity.ok(Map.of(

@@ -1,7 +1,9 @@
 package dev.nivic.gateway.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import dev.nivic.gateway.model.LedgerEvent;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -12,9 +14,10 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-@Slf4j
 @Service
 public class EventService {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(EventService.class);
+
 
     @Autowired
     private EventDeduplicator deduplicator;
@@ -93,12 +96,7 @@ public class EventService {
         }
 
         long elapsed = System.currentTimeMillis() - startTime;
-        log.info("batch_processed",
-            () -> Map.of(
-                "batch_size", batch.size(),
-                "elapsed_ms", elapsed,
-                "avg_ms_per_event", batch.isEmpty() ? 0 : elapsed / batch.size()
-            ));
+        log.debug("Batch processed: size={}, elapsed_ms={}", batch.size(), elapsed);
 
         lastBatchTime = System.currentTimeMillis();
     }
@@ -179,11 +177,7 @@ public class EventService {
      */
     @Scheduled(fixedDelay = 10000)  // Every 10 seconds
     public void reportMetrics() {
-        log.info("gateway_metrics",
-            () -> Map.of(
-                "queue_size", getQueueSize(),
-                "circuit_breaker", getCircuitBreakerState(),
-                "dedup_cache_size", deduplicator.getCacheSize()
-            ));
+        log.debug("Gateway metrics: queue_size={}, circuit_breaker={}, dedup_cache={}",
+            getQueueSize(), getCircuitBreakerState(), deduplicator.getCacheSize());
     }
 }

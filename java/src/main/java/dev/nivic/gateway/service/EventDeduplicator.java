@@ -1,15 +1,18 @@
 package dev.nivic.gateway.service;
 
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 
-@Slf4j
 @Service
 public class EventDeduplicator {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(EventDeduplicator.class);
+
 
     @Autowired
     private RedisTemplate<String, String> redis;

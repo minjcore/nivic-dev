@@ -1,7 +1,9 @@
 package dev.nivic.gateway.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import dev.nivic.gateway.model.LedgerEvent;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,9 +13,10 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.util.Map;
 
-@Slf4j
 @Service
 public class EventPublisher {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(EventPublisher.class);
+
 
     @Autowired
     private RabbitTemplate rabbitTemplate;
@@ -44,12 +47,7 @@ public class EventPublisher {
                 return message;
             });
 
-            log.info("event_published",
-                () -> Map.of(
-                    "event_id", event.getEventId(),
-                    "event_type", event.getEventType(),
-                    "routing_key", routingKey
-                ));
+            log.debug("Event published: event_id={}, type={}, routing_key={}", event.getEventId(), event.getEventType(), routingKey);
 
         } catch (Exception e) {
             log.error("Error publishing event to ledger: event_id={}", event.getEventId(), e);

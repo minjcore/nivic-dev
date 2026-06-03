@@ -1,14 +1,17 @@
 package dev.nivic.gateway.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import dev.nivic.gateway.model.LedgerEvent;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
 
-@Slf4j
 @Service
 public class EventEnricher {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(EventEnricher.class);
+
 
     /**
      * Enrich event with additional context

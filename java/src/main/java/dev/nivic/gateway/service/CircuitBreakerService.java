@@ -1,7 +1,9 @@
 package dev.nivic.gateway.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import dev.nivic.gateway.model.LedgerEvent;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -12,9 +14,10 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-@Slf4j
 @Service
 public class CircuitBreakerService {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CircuitBreakerService.class);
+
 
     enum State {
         CLOSED,      // Normal: publish to RabbitMQ
@@ -167,12 +170,10 @@ public class CircuitBreakerService {
     @Scheduled(fixedDelay = 10000)  // Every 10 seconds
     public void reportMetrics() {
         if (state != State.CLOSED) {
-            log.warn("circuit_breaker_metrics",
-                () -> Map.of(
-                    "state", state.toString(),
-                    "buffer_size", localBuffer.size(),
-                    "uptime_open_ms", state == State.CLOSED ? 0 : System.currentTimeMillis() - openedAt
-                ));
+            log.warn("circuit_breaker_metrics: state={}, buffer_size={}, uptime_open_ms={}",
+                state.toString(),
+                localBuffer.size(),
+                state == State.CLOSED ? 0 : System.currentTimeMillis() - openedAt);
         }
     }
 }

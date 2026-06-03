@@ -1,18 +1,21 @@
 package dev.nivic.gateway.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.util.concurrent.RateLimiter;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
-@Slf4j
 @Service
 public class RateLimitService {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RateLimitService.class);
+
 
     private final LoadingCache<String, RateLimiter> rateLimiters = CacheBuilder.newBuilder()
         .expireAfterAccess(1, TimeUnit.HOURS)

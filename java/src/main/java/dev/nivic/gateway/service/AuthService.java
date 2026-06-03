@@ -1,15 +1,18 @@
 package dev.nivic.gateway.service;
 
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
 import java.util.Map;
 
-@Slf4j
 @Service
 public class AuthService {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AuthService.class);
+
 
     @Value("${gateway.api-keys:c-server-1=secret1,c-server-2=secret2}")
     private String apiKeysConfig;
