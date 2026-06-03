@@ -49,6 +49,35 @@ services:
     volumes:
       - redis_data:/data
 
+  # Saving-Gateway (Java Spring Boot)
+  saving-gateway:
+    build:
+      context: ./java
+      dockerfile: Dockerfile.gateway
+    environment:
+      GATEWAY_PORT: 8091
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: gtel-c-server
+      RABBITMQ_PASSWORD: password
+      RABBITMQ_VHOST: /gtel-prod
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      GATEWAY_API_KEYS: "c-server-1=secret1,test-server=test-key"
+      SPRING_PROFILES_ACTIVE: gateway
+    ports:
+      - "8091:8091"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8091/api/events/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # C-Server (Wallet + Blockchain Listener)
   c-server:
     build:
