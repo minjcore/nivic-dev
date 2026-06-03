@@ -1,0 +1,126 @@
+version: '3.8'
+
+services:
+  # RabbitMQ Cluster Node 1 (Primary)
+  rabbitmq-1:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rabbitmq-1
+    hostname: rabbitmq-1
+    environment:
+      RABBITMQ_DEFAULT_USER: gtel-c-server
+      RABBITMQ_DEFAULT_PASS: password
+      RABBITMQ_DEFAULT_VHOST: /gtel-prod
+      RABBITMQ_ERLANG_COOKIE: gtel-secret-cookie
+      RABBITMQ_NODE_PORT: 5672
+    volumes:
+      - rabbitmq-1-data:/var/lib/rabbitmq
+      - ./infra/rabbitmq-cluster/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    ports:
+      - "5672:5672"      # AMQP
+      - "15672:15672"    # Management UI
+      - "25672:25672"    # Cluster communication
+    networks:
+      - gtel-cluster
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      - rabbitmq-1-init
+
+  # RabbitMQ Cluster Node 2
+  rabbitmq-2:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rabbitmq-2
+    hostname: rabbitmq-2
+    environment:
+      RABBITMQ_DEFAULT_USER: gtel-c-server
+      RABBITMQ_DEFAULT_PASS: password
+      RABBITMQ_DEFAULT_VHOST: /gtel-prod
+      RABBITMQ_ERLANG_COOKIE: gtel-secret-cookie
+      RABBITMQ_NODE_PORT: 5672
+    volumes:
+      - rabbitmq-2-data:/var/lib/rabbitmq
+      - ./infra/rabbitmq-cluster/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    ports:
+      - "5673:5672"      # AMQP (mapped to different host port)
+      - "15673:15672"    # Management UI
+      - "25673:25672"    # Cluster communication
+    networks:
+      - gtel-cluster
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      - rabbitmq-1
+
+  # RabbitMQ Cluster Node 3
+  rabbitmq-3:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rabbitmq-3
+    hostname: rabbitmq-3
+    environment:
+      RABBITMQ_DEFAULT_USER: gtel-c-server
+      RABBITMQ_DEFAULT_PASS: password
+      RABBITMQ_DEFAULT_VHOST: /gtel-prod
+      RABBITMQ_ERLANG_COOKIE: gtel-secret-cookie
+      RABBITMQ_NODE_PORT: 5672
+    volumes:
+      - rabbitmq-3-data:/var/lib/rabbitmq
+      - ./infra/rabbitmq-cluster/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    ports:
+      - "5674:5672"      # AMQP (mapped to different host port)
+      - "15674:15672"    # Management UI
+      - "25674:25672"    # Cluster communication
+    networks:
+      - gtel-cluster
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      - rabbitmq-1
+
+  # HAProxy Load Balancer
+  haproxy:
+    image: haproxy:2.8-alpine
+    container_name: rabbitmq-haproxy
+    hostname: rabbitmq-lb
+    volumes:
+      - ./infra/rabbitmq-cluster/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "5672:5672"      # AMQP load balanced
+      - "15672:15672"    # Management UI load balanced
+      - "8404:8404"      # HAProxy stats
+    networks:
+      - gtel-cluster
+    depends_on:
+      - rabbitmq-1
+      - rabbitmq-2
+      - rabbitmq-3
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8404/stats"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Init container to set up cluster (one-time setup)
+  rabbitmq-1-init:
+    image: busybox:latest
+    container_name: rabbitmq-1-init
+    command: "true"
+    networks:
+      - gtel-cluster
+
+volumes:
+  rabbitmq-1-data:
+  rabbitmq-2-data:
+  rabbitmq-3-data:
+
+networks:
+  gtel-cluster:
+    name: gtel-rabbitmq-cluster
