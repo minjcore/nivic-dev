@@ -1,6 +1,14 @@
 # C Server Event Integration Guide
 
-**Quick Start: Implement Event Publishing in C Server**
+**Quick Start: Implement Event Publishing to Saving-Gateway**
+
+```
+Architecture:
+  C Server → HTTP POST /api/events (Saving-Gateway)
+             └─ Immediate ACK (< 10ms)
+             └─ Fire-and-forget (no wait for Java response)
+             └─ Retry locally if gateway unreachable
+```
 
 ---
 
@@ -115,107 +123,142 @@ void event_free(LedgerEvent *event) {
 
 ---
 
-## 3. RabbitMQ Publisher (C)
+## 3. HTTP Publisher to Saving-Gateway (C)
 
 ```c
-#include <amqp.h>
-#include <amqp_tcp_socket.h>
+#include <curl/curl.h>
+#include <cjson/cJSON.h>
 
 typedef struct {
-    amqp_connection_state_t conn;
-    char *host;
-    int port;
-    char *username;
-    char *password;
-    char *vhost;
-} RabbitMQPool;
+    char *gateway_url;         // "https://saving-gateway.internal/api/events"
+    char *api_key;             // Bearer token for auth
+    CURL *curl;
+} GatewayClient;
 
-// Initialize RabbitMQ connection
-RabbitMQPool* rabbitmq_init(const char *host, int port, 
-                            const char *user, const char *pass,
-                            const char *vhost) {
-    RabbitMQPool *pool = malloc(sizeof(RabbitMQPool));
+// Initialize gateway client
+GatewayClient* gateway_init(const char *url, const char *key) {
+    GatewayClient *client = malloc(sizeof(GatewayClient));
+    client->gateway_url = strdup(url);
+    client->api_key = strdup(key);
+    client->curl = curl_easy_init();
     
-    pool->conn = amqp_new_connection();
-    amqp_socket_t *socket = amqp_tcp_socket_new(pool->conn);
-    
-    int status = amqp_socket_open(socket, host, port);
-    if (status < 0) {
-        fprintf(stderr, "Failed to open RabbitMQ socket\n");
+    if (!client->curl) {
+        fprintf(stderr, "Failed to init CURL\n");
+        free(client);
         return NULL;
     }
     
-    amqp_login(pool->conn, vhost, 0, 131072, 60, AMQP_SASL_METHOD_PLAIN,
-               user, pass);
+    // Set default options
+    curl_easy_setopt(client->curl, CURLOPT_TIMEOUT, 5L);  // 5 second timeout
+    curl_easy_setopt(client->curl, CURLOPT_NOSIGNAL, 1L);  // Thread-safe
     
-    amqp_channel_open(pool->conn, 1);
-    
-    return pool;
+    return client;
 }
 
-// Publish event to RabbitMQ
-int rabbitmq_publish_event(RabbitMQPool *pool, LedgerEvent *event) {
-    char routing_key[128];
-    switch (event->event_type) {
-        case EVENT_TRANSACTION_POSTED:
-            strcpy(routing_key, "ledger.transaction_posted");
-            break;
-        case EVENT_PAYMENT_SETTLED:
-            strcpy(routing_key, "ledger.payment_settled");
-            break;
-        case EVENT_FRAUD_DETECTED:
-            strcpy(routing_key, "ledger.fraud_detected");
-            break;
-        // ... etc
+// Publish event to Saving-Gateway
+int gateway_publish_event(GatewayClient *client, LedgerEvent *event) {
+    // 1. Serialize event to JSON
+    cJSON *json = cJSON_CreateObject();
+    cJSON_AddNumberToObject(json, "event_id", event->event_id);
+    cJSON_AddStringToObject(json, "event_type", event_type_str(event->event_type));
+    cJSON_AddNumberToObject(json, "timestamp", event->timestamp);
+    cJSON_AddStringToObject(json, "source", "wire-c-server");
+    cJSON_AddStringToObject(json, "request_id", event->request_id);
+    cJSON_AddStringToObject(json, "user_id", event->user_id);
+    cJSON_AddNumberToObject(json, "correlation_id", event->correlation_id);
+    
+    // Add data payload
+    cJSON *data = cJSON_Parse(event->data_json);
+    cJSON_AddItemToObject(json, "data", data);
+    
+    char *json_str = cJSON_Print(json);
+    
+    // 2. Build headers with auth
+    struct curl_slist *headers = NULL;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    
+    char auth_header[512];
+    snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s", 
+             client->api_key);
+    headers = curl_slist_append(headers, auth_header);
+    
+    // 3. POST to gateway
+    curl_easy_setopt(client->curl, CURLOPT_URL, client->gateway_url);
+    curl_easy_setopt(client->curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(client->curl, CURLOPT_POSTFIELDS, json_str);
+    
+    struct MemoryStruct response = {0};
+    curl_easy_setopt(client->curl, CURLOPT_WRITEFUNCTION, write_callback);
+    curl_easy_setopt(client->curl, CURLOPT_WRITEDATA, &response);
+    
+    CURLcode res = curl_easy_perform(client->curl);
+    
+    // 4. Check response
+    int success = 0;
+    if (res == CURLE_OK) {
+        long http_code = 0;
+        curl_easy_getinfo(client->curl, CURLINFO_RESPONSE_CODE, &http_code);
+        
+        if (http_code == 200) {
+            // Gateway accepted event
+            log_debug("Event accepted by gateway: event_id=%ld", 
+                      event->event_id);
+            success = 1;
+        } else if (http_code == 429) {
+            // Rate limited
+            log_warn("Gateway rate limit: event_id=%ld", event->event_id);
+            success = 0;  // Will retry
+        } else {
+            log_error("Gateway error: http_code=%ld", http_code);
+            success = 0;
+        }
+    } else {
+        log_error("CURL error: %s", curl_easy_strerror(res));
+        success = 0;
     }
     
-    // Serialize event to JSON
-    char json_buffer[4096];
-    event_to_json(event, json_buffer, sizeof(json_buffer));
+    // Cleanup
+    cJSON_Delete(json);
+    free(json_str);
+    curl_slist_free_all(headers);
+    free(response.memory);
     
-    // Publish with mandatory flag
-    amqp_basic_properties_t properties;
-    properties.flags = AMQP_BASIC_CONTENT_TYPE_FLAG | 
-                       AMQP_BASIC_PERSISTENT_FLAG;
-    properties.content_type = amqp_cstring_bytes("application/json");
-    properties.delivery_mode = 2;  // Persistent
-    
-    int res = amqp_basic_publish(
-        pool->conn,
-        1,                          // channel
-        amqp_cstring_bytes("gtel-events"),
-        amqp_cstring_bytes(routing_key),
-        1,  // mandatory
-        0,  // immediate
-        &properties,
-        amqp_cstring_bytes(json_buffer)
-    );
-    
-    if (res < 0) {
-        fprintf(stderr, "Failed to publish event\n");
-        return -1;
-    }
-    
-    // Wait for confirm
-    amqp_rpc_reply_t reply = amqp_get_rpc_reply(pool->conn);
-    if (reply.reply_type != AMQP_RESPONSE_NORMAL) {
-        fprintf(stderr, "Publish failed: %d\n", reply.reply_type);
-        return -1;
-    }
-    
-    return 0;
+    return success ? 0 : -1;
 }
 
-void rabbitmq_close(RabbitMQPool *pool) {
-    amqp_connection_close(pool->conn, AMQP_REPLY_SUCCESS);
-    amqp_destroy_connection(pool->conn);
-    free(pool);
+void gateway_close(GatewayClient *client) {
+    if (client) {
+        curl_easy_cleanup(client->curl);
+        free(client->gateway_url);
+        free(client->api_key);
+        free(client);
+    }
+}
+
+// Helper: response handler
+struct MemoryStruct {
+    char *memory;
+    size_t size;
+};
+
+static size_t write_callback(void *contents, size_t size, size_t nmemb, void *userp) {
+    size_t realsize = size * nmemb;
+    struct MemoryStruct *mem = (struct MemoryStruct *)userp;
+    char *ptr = realloc(mem->memory, mem->size + realsize + 1);
+    if (!ptr) return 0;
+    
+    mem->memory = ptr;
+    memcpy(&(mem->memory[mem->size]), contents, realsize);
+    mem->size += realsize;
+    mem->memory[mem->size] = 0;
+    
+    return realsize;
 }
 ```
 
 ---
 
-## 4. Event Publishing (Integration)
+## 4. Event Publishing to Saving-Gateway (Integration)
 
 ```c
 // Hook: After transaction posted to Java ledger
@@ -234,10 +277,10 @@ void on_transaction_posted(const char *user_id, int64_t trans_id,
     
     event_set_data(event, json_data);
     
-    // Publish to RabbitMQ
-    if (rabbitmq_publish_event(&rabbitmq_pool, event) != 0) {
-        // Fallback: queue for retry
-        queue_event_for_retry(event, 5000);
+    // Publish to Saving-Gateway (fire-and-forget)
+    if (gateway_publish_event(&gateway_client, event) != 0) {
+        // Failed to reach gateway: queue for retry
+        queue_event_for_retry(event, 1000);  // Retry in 1 second
     }
     
     event_free(event);
@@ -256,7 +299,11 @@ void on_payment_settled(const char *user_id, int64_t trans_id,
         trans_id, amount, merchant_id, current_time_ms());
     
     event_set_data(event, json_data);
-    rabbitmq_publish_event(&rabbitmq_pool, event);
+    
+    // Publish to gateway
+    if (gateway_publish_event(&gateway_client, event) != 0) {
+        queue_event_for_retry(event, 1000);
+    }
     
     event_free(event);
 }
@@ -272,7 +319,11 @@ void on_fraud_detected(const char *user_id, int num_txns, int time_window) {
         num_txns, time_window);
     
     event_set_data(event, json_data);
-    rabbitmq_publish_event(&rabbitmq_pool, event);
+    
+    // Publish to gateway
+    if (gateway_publish_event(&gateway_client, event) != 0) {
+        queue_event_for_retry(event, 1000);
+    }
     
     event_free(event);
 }
@@ -280,73 +331,13 @@ void on_fraud_detected(const char *user_id, int num_txns, int time_window) {
 
 ---
 
-## 5. Fallback: HTTP Webhook Publisher (C)
+## 5. Retry Queue (Local Buffer)
 
-```c
-#include <curl/curl.h>
-#include <openssl/hmac.h>
-
-// Compute HMAC-SHA256
-char* hmac_sha256(const char *data, const char *secret) {
-    unsigned char hash[EVP_MAX_MD_SIZE];
-    unsigned int hash_len = 0;
-    
-    HMAC(EVP_sha256(),
-         (unsigned char*)secret, strlen(secret),
-         (unsigned char*)data, strlen(data),
-         hash, &hash_len);
-    
-    char *hex = malloc(hash_len * 2 + 1);
-    for (unsigned int i = 0; i < hash_len; i++) {
-        sprintf(hex + i * 2, "%02x", hash[i]);
-    }
-    hex[hash_len * 2] = '\0';
-    return hex;
-}
-
-// POST event to Java webhook
-int webhook_publish_event(LedgerEvent *event) {
-    CURL *curl = curl_easy_init();
-    if (!curl) return -1;
-    
-    char json_body[4096];
-    event_to_json(event, json_body, sizeof(json_body));
-    
-    // Generate signature
-    char *signature = hmac_sha256(json_body, webhook_secret);
-    
-    // Build headers
-    struct curl_slist *headers = NULL;
-    headers = curl_slist_append(headers, "Content-Type: application/json");
-    
-    char auth_header[256];
-    snprintf(auth_header, sizeof(auth_header), 
-             "X-Event-Signature: %s", signature);
-    headers = curl_slist_append(headers, auth_header);
-    
-    char timestamp_header[64];
-    snprintf(timestamp_header, sizeof(timestamp_header),
-             "X-Timestamp: %ld", current_time_ms());
-    headers = curl_slist_append(headers, timestamp_header);
-    
-    curl_easy_setopt(curl, CURLOPT_URL, "http://java-ledger:8090/api/events/push");
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_body);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
-    
-    CURLcode res = curl_easy_perform(curl);
-    
-    curl_slist_free_all(headers);
-    curl_easy_cleanup(curl);
-    free(signature);
-    
-    return (res == CURLE_OK) ? 0 : -1;
-}
-```
+If gateway is unreachable, C server buffers events locally and retries with exponential backoff.
 
 ---
 
-## 6. Retry Queue (C)
+## 6. Local Retry Queue (Gateway Unreachable)
 
 ```c
 typedef struct {
@@ -463,47 +454,108 @@ int main(int argc, char *argv[]) {
     // 1. Initialize Snowflake ID generator
     memset(&gen, 0, sizeof(SnowflakeGen));
     pthread_mutex_init(&gen.mutex, NULL);
+    log_info("Snowflake ID generator initialized (datacenter=1, worker=5)");
     
-    // 2. Initialize RabbitMQ connection
-    rabbitmq_pool = rabbitmq_init("rabbitmq.internal", 5672,
-                                  "gtel-c-server", "secret", "/gtel-prod");
-    if (!rabbitmq_pool) {
-        fprintf(stderr, "Failed to connect to RabbitMQ\n");
+    // 2. Initialize Saving-Gateway HTTP client
+    const char *gateway_url = getenv("GATEWAY_URL") ?: 
+                              "https://saving-gateway.internal/api/events";
+    const char *api_key = getenv("GATEWAY_API_KEY");
+    
+    if (!api_key) {
+        fprintf(stderr, "GATEWAY_API_KEY environment variable not set\n");
         return 1;
     }
     
-    // 3. Initialize retry queue
-    retry_queue.capacity = 100;
-    retry_queue.events = malloc(100 * sizeof(QueuedEvent));
-    pthread_mutex_init(&retry_queue.mutex, NULL);
+    gateway_client = gateway_init(gateway_url, api_key);
+    if (!gateway_client) {
+        fprintf(stderr, "Failed to initialize gateway client\n");
+        return 1;
+    }
+    log_info("Gateway client initialized: url=%s", gateway_url);
     
-    // 4. Start retry thread
+    // 3. Initialize local retry queue
+    retry_queue.capacity = 1000;
+    retry_queue.events = malloc(1000 * sizeof(QueuedEvent));
+    pthread_mutex_init(&retry_queue.mutex, NULL);
+    log_info("Local retry queue initialized (capacity=%d)", retry_queue.capacity);
+    
+    // 4. Start retry thread (process retries every 1 second)
     pthread_t retry_tid;
     pthread_create(&retry_tid, NULL, retry_thread, NULL);
+    log_info("Retry thread started");
     
-    // 5. Start wire protocol server
-    start_wire_server(7474);
+    // 5. Start metrics reporter (every 10 seconds)
+    pthread_t metrics_tid;
+    pthread_create(&metrics_tid, NULL, metrics_thread, NULL);
+    log_info("Metrics reporter started");
+    
+    // 6. Start wire protocol server
+    if (start_wire_server(7474) != 0) {
+        fprintf(stderr, "Failed to start wire server\n");
+        return 1;
+    }
+    log_info("Wire protocol server started on :7474");
     
     return 0;
+}
+
+// Metrics reporting (for monitoring)
+void* metrics_thread(void *arg) {
+    while (1) {
+        sleep(10);
+        
+        log_info("metrics",
+            kv("events_sent", stats.total_sent),
+            kv("events_failed", stats.total_failed),
+            kv("gateway_timeout", stats.gateway_timeout_count),
+            kv("retry_queue_size", retry_queue.count),
+            kv("uptime_seconds", uptime())
+        );
+    }
+    return NULL;
 }
 ```
 
 ---
 
-## Integration Checklist
+## Integration Checklist (C Server)
 
+**Core:**
 - [ ] Snowflake ID generator working
-- [ ] RabbitMQ connection pool initialized
-- [ ] Event creation (TRANSACTION_POSTED, PAYMENT_SETTLED, etc.)
-- [ ] RabbitMQ publisher (with retry logic)
-- [ ] Webhook fallback (HTTP POST with HMAC)
-- [ ] Retry queue with exponential backoff
-- [ ] Event hooks integrated into transaction flow
-- [ ] Fraud detection events
-- [ ] Session lifecycle events
-- [ ] Load testing (1000 events/sec)
-- [ ] Monitoring + alerting
-- [ ] Dead-letter queue monitoring
+- [ ] HTTP client to Saving-Gateway (TLS + auth)
+- [ ] Event creation (TRANSACTION_POSTED, PAYMENT_SETTLED, FRAUD_DETECTED, etc.)
+- [ ] Event serialization to JSON (with data payload)
+
+**Publishing:**
+- [ ] Send to Saving-Gateway POST /api/events
+- [ ] Fire-and-forget (immediate ACK, don't wait for Java)
+- [ ] Validate HTTP 200 response
+- [ ] Handle HTTP 429 (rate limit) → retry
+
+**Reliability:**
+- [ ] Local retry queue (exponential backoff: 1s, 2s, 4s, 8s, 16s, 32s)
+- [ ] Circuit breaker pattern (if gateway unreachable for 10s)
+- [ ] Max retry attempts: 6
+- [ ] Metrics: total_sent, total_failed, retry_queue_size
+
+**Integration Points:**
+- [ ] on_transaction_posted() hook
+- [ ] on_payment_settled() hook
+- [ ] on_fraud_detected() hook
+- [ ] on_session_created() hook
+- [ ] on_user_balance_updated() hook
+
+**Testing:**
+- [ ] Unit: event serialization
+- [ ] Unit: Snowflake ID generation (monotonic, unique)
+- [ ] Integration: send event to gateway mock
+- [ ] Load: 1000 events/sec sustained
+- [ ] Chaos: gateway timeout → verify local retry queue
+
+**Monitoring:**
+- [ ] Metrics: events_sent, events_failed, retry_queue_size
+- [ ] Logging: INFO on success, WARN on retry, ERROR on max retries
+- [ ] Dashboard: retry queue depth trend
 
 ---
 
