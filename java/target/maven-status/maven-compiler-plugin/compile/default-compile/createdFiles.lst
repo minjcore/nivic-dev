@@ -39,6 +39,7 @@ dev/nivic/sevlet/idempotency/OrderIdMismatchException.class
 dev/nivic/wal/SignedWalVerifier.class
 dev/nivic/ledger/NoopWalletLedger.class
 dev/nivic/db/package-info.class
+dev/nivic/ledger/LedgerConfig.class
 dev/nivic/saving/SavTransferPhaseException.class
 dev/nivic/coa/cmd/IbftInitCmd.class
 dev/nivic/payment/NoopAccountHoldStore.class

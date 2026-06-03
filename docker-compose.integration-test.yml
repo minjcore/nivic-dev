@@ -62,8 +62,6 @@ services:
       SPRING_RABBITMQ_USERNAME: gtel-c-server
       SPRING_RABBITMQ_PASSWORD: password
       SPRING_RABBITMQ_VIRTUAL_HOST: /gtel-prod
-      SPRING_REDIS_HOST: redis
-      SPRING_REDIS_PORT: 6379
       SPRING_PROFILES_ACTIVE: ledger
     ports:
       - "8090:8090"

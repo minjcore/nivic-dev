@@ -210,42 +210,60 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
 
   private static final Object[][] ACCOUNTS = {
       // code,   name,                           kind
+      {"1100", "Crypto - USDT",                   "ASSET"},
+      {"1101", "Crypto - ETH",                    "ASSET"},
+      {"1102", "Crypto - BTC",                    "ASSET"},
       {"1111", "TK Vietinbank Chuyên dùng",      "ASSET"},
       {"1112", "TK Napas Clearing",               "ASSET"},
       {"1113", "TK VPBank - QR/POS",              "ASSET"},
+      {"1200", "Crypto FX Buffer",                "ASSET"},
+      {"1300", "Merchant Balance (Crypto)",       "ASSET"},
+      {"2100", "User Payable",                    "LIABILITY"},
       {"2110", "Wallet Balance - User",           "LIABILITY"},
       {"2120", "Wallet Balance Merchant",         "LIABILITY"},
       {"2130", "Ký quỹ - Đối tác Chi hộ",         "LIABILITY"},
       {"2140", "Tiền gửi tiết kiệm",              "LIABILITY"},
+      {"2200", "Settlement Pending",              "LIABILITY"},
+      {"2300", "FX Payable",                      "LIABILITY"},
       {"3100", "Transit - Nạp tiền",              "TRANSIT"},
       {"3200", "Transit - Rút tiền",              "TRANSIT"},
       {"3300", "Transit - Chuyển tiền nội bộ",    "TRANSIT"},
       {"3400", "Transit - IBFT",                  "TRANSIT"},
       {"3500", "Transit - Thanh toán",            "TRANSIT"},
+      {"3501", "Transit - USDT Convert",          "TRANSIT"},
+      {"3502", "Transit - Merchant Receive",      "TRANSIT"},
+      {"3510", "Transit - FX Conversion",         "TRANSIT"},
       {"3600", "Transit - Chi Lương",             "TRANSIT"},
       {"3700", "Transit - Chi hộ",                "TRANSIT"},
       {"3800", "Transit - Clearing",              "TRANSIT"},
       {"3810", "Transit - Settlement Outbound",   "TRANSIT"},
       {"3820", "Transit - MDR Holdback",          "TRANSIT"},
+      {"4100", "FX Gain",                         "REVENUE"},
       {"4110", "Doanh thu Phí nạp tiền",          "REVENUE"},
       {"4120", "Doanh thu Phí rút tiền",          "REVENUE"},
       {"4130", "Doanh thu Phí chuyển tiền",       "REVENUE"},
       {"4140", "Doanh thu Phí MDR",               "REVENUE"},
       {"4150", "Doanh thu Phí Chi Lương/Chi hộ",  "REVENUE"},
-      {"5100", "Chi phí Phí NH / Napas",          "EXPENSE"},
+      {"4170", "Lãi chênh lệch tỷ giá",           "REVENUE"},
+      {"5100", "Custody Fee",                     "EXPENSE"},
       {"5200", "Chi phí lãi tiền gửi",            "EXPENSE"},
       {"5300", "Lỗ chênh lệch tỷ giá",            "EXPENSE"},
-      {"4170", "Lãi chênh lệch tỷ giá",           "REVENUE"},
+      {"4200", "FX Loss",                         "EXPENSE"},
       {"6000", "Vốn chủ sở hữu",                  "EQUITY"},
       {"6100", "Lợi nhuận giữ lại",               "EQUITY"},
   };
 
   /** Tài khoản ngoại tệ + vị thế FX (currency ≠ VND). {code, name, kind, ccy}. */
   private static final Object[][] FX_ACCOUNTS = {
+      {"1100", "Crypto - USDT",           "ASSET",   "USDT"},
+      {"1101", "Crypto - ETH",            "ASSET",   "ETH"},
+      {"1102", "Crypto - BTC",            "ASSET",   "BTC"},
       {"1121", "TK ngân hàng USD",        "ASSET",   "USD"},
       {"1920", "Vị thế FX - VND",         "ASSET",   "VND"},
       {"1921", "Vị thế FX - USD",         "ASSET",   "USD"},
       {"2150", "Ví ngoại tệ User - USD",  "LIABILITY", "USD"},
+      {"3500", "Transit - Crypto Receive", "TRANSIT", "USDT"},
+      {"3600", "Transit - Settlement TX",  "TRANSIT", "USDT"},
   };
 
   /** Control account cho tiền gửi tiết kiệm (subledger = sav_account per-user). */
@@ -1182,6 +1200,25 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
           cmd.memo() != null ? cmd.memo() : "Lãi tiền gửi tiết kiệm: " + cmd.amount());
     } catch (SQLException e) {
       throw new IllegalStateException("savingsInterest failed: " + cmd.requestRef(), e);
+    }
+  }
+
+  @Override
+  public CoaTrans postCryptoDeposit(dev.nivic.coa.cmd.CryptoDepositCmd cmd) {
+    Objects.requireNonNull(cmd, "cmd");
+    try {
+      ensureSchema();
+      CoaTrans existing = findByRefId(cmd.refId());
+      if (existing != null) return existing;
+      // Step 1: DR 1100 (Crypto Received) / CR 3500 (Transit - crypto receive)
+      List<JournalLine> lines = List.of(
+          new JournalLine("1100", cmd.amountMinor(), 0L).inCurrency(cmd.currency()),
+          new JournalLine("3500", 0L, cmd.amountMinor()).inCurrency(cmd.currency()));
+      String memo = String.format("Crypto deposit: %s tx=%s block=%d",
+          cmd.currency(), cmd.txHash(), cmd.blockHeight());
+      return postJournal(lines, cmd.refId(), memo);
+    } catch (SQLException e) {
+      throw new IllegalStateException("postCryptoDeposit failed: " + cmd.refId(), e);
     }
   }
 

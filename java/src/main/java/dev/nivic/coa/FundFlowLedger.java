@@ -94,6 +94,13 @@ public interface FundFlowLedger {
   CoaTrans findTransByRefId(String refId);
 
   /**
+   * Crypto deposit from blockchain received.
+   * Step 1: Posts DR 1100 (Crypto Received) / CR 3500 (Transit - crypto receive).
+   * Idempotent on {@link dev.nivic.coa.cmd.CryptoDepositCmd#refId()}.
+   */
+  CoaTrans postCryptoDeposit(dev.nivic.coa.cmd.CryptoDepositCmd cmd);
+
+  /**
    * Step 1 — User khởi tạo rút tiền.
    * Posts: DR 2110 (amount + fee) / CR 3200 (Transit Rút, amount + fee).
    * Idempotent on {@link WithdrawInitCmd#requestRef()}.

@@ -35,7 +35,7 @@ public class CryptoDepositListener {
     private static final Logger log = LoggerFactory.getLogger(CryptoDepositListener.class);
     private final ObjectMapper mapper = new ObjectMapper();
 
-    @Autowired(required = false)
+    @Autowired
     private FundFlowLedger ledger;
 
     @RabbitListener(queues = "crypto.deposits")
@@ -61,47 +61,18 @@ public class CryptoDepositListener {
             log.info("Processing CRYPTO_DEPOSIT_INITIATED: id={} currency={} amount={} tx={} block={}",
                 depositId, currency, amount, txHash, blockHeight);
 
-            if (ledger == null) {
-                log.warn("Ledger not available, skipping posting");
-                return;
-            }
-
             // Idempotency key: deposit-{depositId}
             String refId = "crypto-" + depositId;
 
             // Step 1: Receive crypto on-chain
             // DR 1100 (Crypto Received) / CR 3500 (Transit)
-            postCryptoReceived(refId, depositId, amount, currency, txHash, blockHeight);
+            CryptoDepositCmd cryptoCmd = new CryptoDepositCmd(refId, amount, currency, txHash, blockHeight);
+            var trans = ledger.postCryptoDeposit(cryptoCmd);
 
-            log.info("✓ Posted crypto deposit: {} {} (ref={})", amount, currency, refId);
+            log.info("✓ Posted crypto deposit: {} {} (trans_id={}, ref={})", amount, currency, trans.id(), refId);
 
         } catch (Exception e) {
             log.error("Error processing crypto deposit event", e);
-        }
-    }
-
-    /**
-     * Step 1: Post receipt of crypto from blockchain.
-     * Creates balanced journal entry:
-     *   DR 1100-CRYPTO / CR 3500-TRANSIT
-     */
-    private void postCryptoReceived(String refId, String depositId, long amount,
-                                     String currency, String txHash, long blockHeight) {
-        String memo = String.format("Crypto deposit from blockchain tx=%s block=%d", txHash, blockHeight);
-
-        try {
-            // TODO: Use a proper CryptoDepositCmd interface or implement via reflection
-            // For now, log what would be posted
-            log.info("Would post journal entry: refId={}", refId);
-            log.info("  DR 1100-CRYPTO {} {} (from blockchain {})", amount, currency, txHash);
-            log.info("  CR 3500-TRANSIT {} {} (transit buffer)", amount, currency);
-
-            // In production, would call:
-            // ledger.postCryptoDeposit(new CryptoDepositCmd(refId, amount, currency, ...));
-
-        } catch (Exception e) {
-            log.error("Error posting crypto deposit to ledger", e);
-            throw new RuntimeException("Failed to post crypto deposit: " + e.getMessage(), e);
         }
     }
 
