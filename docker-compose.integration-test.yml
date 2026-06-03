@@ -49,6 +49,27 @@ services:
     volumes:
       - redis_data:/data
 
+  # C-Server (Wallet + Blockchain Listener)
+  c-server:
+    build:
+      context: ./c-server
+      dockerfile: Dockerfile
+    environment:
+      C_SERVER_PORT: 8080
+      BLOCKCHAIN_RPC_URL: https://eth-mainnet.g.alchemy.com/v2/demo
+      RABBITMQ_URL: amqp://gtel-c-server:password@rabbitmq:5672/gtel-prod
+      CUSTODY_WALLET: "0x1234567890123456789012345678901234567890"
+    ports:
+      - "8080:8080"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Java Ledger (COA accounting)
   java-ledger:
     build:
