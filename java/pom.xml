@@ -19,13 +19,11 @@
     <maven.compiler.release>21</maven.compiler.release>
     <postgresql.version>42.7.5</postgresql.version>
     <hikaricp.version>6.2.1</hikaricp.version>
-    <cargo.version>1.10.14</cargo.version>
     <disruptor.version>3.4.4</disruptor.version>
-    <undertow.version>2.3.18.Final</undertow.version>
     <docker.socket.path>/var/run/docker.sock</docker.socket.path>
     <docker.host.uri>unix://${user.home}/.colima/default/docker.sock</docker.host.uri>
     <log4j.version>2.24.3</log4j.version>
-    <main.class>dev.nivic.gateway.SavingGatewayApplication</main.class>
+    <main.class>dev.nivic.ledger.LedgerApplication</main.class>
   </properties>
   <dependencies>
     <!-- Spring Boot -->
@@ -154,22 +152,4 @@
       </plugin>
     </plugins>
   </build>
-
-  <profiles>
-    <profile>
-      <id>ledger</id>
-      <properties>
-        <main.class>dev.nivic.ledger.LedgerApplication</main.class>
-      </properties>
-    </profile>
-    <profile>
-      <id>gateway</id>
-      <activation>
-        <activeByDefault>true</activeByDefault>
-      </activation>
-      <properties>
-        <main.class>dev.nivic.gateway.SavingGatewayApplication</main.class>
-      </properties>
-    </profile>
-  </profiles>
 </project>

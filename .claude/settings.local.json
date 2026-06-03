@@ -500,7 +500,8 @@
       "Bash(cp target/sevlet-wallet-1.0.0-SNAPSHOT.jar target/gateway.jar)",
       "Bash(./test-event-pipeline.sh)",
       "Bash(mvn package *)",
-      "Bash(mvn help:active-profiles *)"
+      "Bash(mvn help:active-profiles *)",
+      "Bash(awk '{print \"  - \" $NF}')"
     ]
   }
 }

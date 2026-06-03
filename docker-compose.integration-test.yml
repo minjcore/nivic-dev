@@ -49,35 +49,6 @@ services:
     volumes:
       - redis_data:/data
 
-  # Saving-Gateway (orchestration)
-  saving-gateway:
-    build:
-      context: ./java
-      dockerfile: Dockerfile.gateway
-    environment:
-      GATEWAY_PORT: 8091
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USER: gtel-c-server
-      RABBITMQ_PASSWORD: password
-      RABBITMQ_VHOST: /gtel-prod
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      GATEWAY_API_KEYS: "c-server-1=secret1,test-server=test-key"
-      SPRING_PROFILES_ACTIVE: gateway
-    ports:
-      - "8091:8091"
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8091/api/events/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   # Java Ledger (COA accounting)
   java-ledger:
     build:
@@ -105,26 +76,10 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8090/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8090/actuator/health"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # Blockchain listener (Go service)
-  blockchain-listener:
-    build:
-      context: ./listener
-      dockerfile: Dockerfile
-    environment:
-      BLOCKCHAIN_RPC_URL: https://eth-mainnet.g.alchemy.com/v2/demo
-      RABBITMQ_URL: amqp://gtel-c-server:password@rabbitmq:5672/gtel-prod
-      RABBITMQ_EXCHANGE: gtel-events
-      RABBITMQ_ROUTING_KEY: ledger.crypto
-      CUSTODY_WALLET: "0x1234567890123456789012345678901234567890"
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    restart: on-failure
 
 volumes:
   postgres_data:
