@@ -1,4 +1,4 @@
-FROM rust:1.75 as builder
+FROM rust:latest as builder
 RUN apt-get update && apt-get install -y pkg-config libssl-dev
 WORKDIR /build
 COPY Cargo.* ./

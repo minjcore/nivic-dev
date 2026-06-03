@@ -122,55 +122,56 @@ async fn scan_block(
     publisher: Arc<EventPublisher>,
     metrics: Arc<tokio::sync::RwLock<Metrics>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let block = web3.eth().block_with_txs(block_num.into()).await?;
+    let block = web3.eth().block_with_txs(block_num).await?;
 
     if let Some(block) = block {
         let custody_lower = wallet.to_lowercase();
 
         for tx in block.transactions {
             if let Some(to) = tx.to {
-                let to_lower = to.to_string().to_lowercase();
+                let to_lower = format!("{:?}", to).to_lowercase();
 
                 // Check if it's a token transfer to our wallet
                 if (to_lower.contains(&usdt.to_lowercase()) ||
-                    to_lower.contains(&usdc.to_lowercase())) &&
-                    tx.input.len() >= 68 {
+                    to_lower.contains(&usdc.to_lowercase())) {
 
-                    let input = &tx.input.to_vec();
-                    // Check ERC20 Transfer signature
-                    if hex::encode(&input[0..4]) == "a9059cbb" {
+                    let input_bytes = tx.input.0.clone();
+                    // Check ERC20 Transfer signature and minimum length
+                    if input_bytes.len() >= 68 && input_bytes[0..4] == [0xa9, 0x05, 0x9c, 0xbb] {
                         // Decode recipient (bytes 4-36)
-                        if let Ok(recipient) = hex::encode(&input[4..36]) {
-                            if recipient.ends_with(&custody_lower) {
-                                // Decode amount (bytes 36-68)
-                                let amount = hex::encode(&input[36..68]);
+                        let recipient_bytes = &input_bytes[4..36];
+                        let recipient = hex::encode(recipient_bytes);
 
-                                let tx_hash = format!("{:x}", tx.hash);
-                                let processed_lock = processed.read().await;
+                        if recipient.ends_with(&custody_lower) {
+                            // Decode amount (bytes 36-68)
+                            let amount = hex::encode(&input_bytes[36..68]);
 
-                                if !processed_lock.contains(&tx_hash) {
-                                    drop(processed_lock);
+                            let tx_hash = format!("{:x}", tx.hash);
+                            let processed_lock = processed.read().await;
 
-                                    let token_type = if to_lower.contains(&usdt.to_lowercase()) {
-                                        "USDT"
-                                    } else {
-                                        "USDC"
-                                    };
+                            if !processed_lock.contains(&tx_hash) {
+                                drop(processed_lock);
 
-                                    info!("Deposit detected: {} {} from {}", amount, token_type, tx.from);
+                                let token_type = if to_lower.contains(&usdt.to_lowercase()) {
+                                    "USDT"
+                                } else {
+                                    "USDC"
+                                };
 
-                                    // Publish event
-                                    let _ = publisher.publish_deposit_initiated(
-                                        &format!("dep-{}", &tx_hash[..8]),
-                                        token_type,
-                                        &amount,
-                                        &tx_hash,
-                                        block_num,
-                                    ).await;
+                                let from_addr = format!("{:?}", tx.from);
+                                info!("Deposit detected: {} {} from {}", amount, token_type, from_addr);
 
-                                    metrics.write().await.deposits_detected += 1;
-                                    processed.write().await.insert(tx_hash);
-                                }
+                                // Publish event
+                                let _ = publisher.publish_deposit_initiated(
+                                    &format!("dep-{}", &tx_hash[..8.min(tx_hash.len())]),
+                                    token_type,
+                                    &amount,
+                                    &tx_hash,
+                                    block_num,
+                                ).await;
+
+                                metrics.write().await.deposits_detected += 1;
+                                processed.write().await.insert(tx_hash);
                             }
                         }
                     }
