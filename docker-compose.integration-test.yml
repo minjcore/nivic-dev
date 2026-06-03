@@ -49,7 +49,7 @@ services:
     volumes:
       - redis_data:/data
 
-  # C-Server (Wallet + Blockchain Listener)
+  # C-Server (Wallet + Blockchain Listener) — stub mode
   c-server:
     build:
       context: ./c-server
@@ -64,11 +64,6 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   # Java Ledger (COA accounting)
   java-ledger:
@@ -94,11 +89,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "8090"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
 
 volumes:
   postgres_data:

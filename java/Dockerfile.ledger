@@ -6,4 +6,4 @@ COPY target/ledger.jar app.jar
 
 EXPOSE 8090
 
-ENTRYPOINT ["sh", "-c", "java -Dspring.profiles.active=ledger -jar app.jar"]
+ENTRYPOINT ["sh", "-c", "java -Dspring.profiles.active=ledger -Dspring.redis.host=${SPRING_REDIS_HOST:-redis} -Dspring.redis.port=${SPRING_REDIS_PORT:-6379} -jar app.jar"]
