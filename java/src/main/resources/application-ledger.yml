@@ -5,6 +5,7 @@ spring:
     exclude:
       - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
       - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.cache.CacheAutoConfiguration
   jpa:
     hibernate:
       ddl-auto: validate
@@ -48,6 +49,9 @@ management:
   health:
     redis:
       enabled: false
+    status:
+      http-mapping:
+        DOWN: 200
 
 logging:
   level:
