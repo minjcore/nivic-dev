@@ -1,6 +1,10 @@
 spring:
   application:
     name: COA-Ledger
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
   jpa:
     hibernate:
       ddl-auto: validate
@@ -19,9 +23,10 @@ spring:
     username: gtel-c-server
     password: password
     virtual-host: /gtel-prod
-  redis:
-    host: redis
-    port: 6379
+  # Redis disabled for ledger profile (not required for accounting)
+  # redis:
+  #   host: redis
+  #   port: 6379
 
 server:
   port: 8090
