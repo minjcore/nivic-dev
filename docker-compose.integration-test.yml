@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  # PostgreSQL (for Java Ledger)
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: gtelpay_prod
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # RabbitMQ (message queue)
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: gtel-c-server
+      RABBITMQ_DEFAULT_PASS: password
+      RABBITMQ_DEFAULT_VHOST: /gtel-prod
+    ports:
+      - "5672:5672"      # AMQP
+      - "15672:15672"    # Management UI
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  # Redis (cache + dedup store)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis_data:/data
+
+  # Saving-Gateway (orchestration)
+  saving-gateway:
+    build:
+      context: ./java
+      dockerfile: Dockerfile.gateway
+    environment:
+      GATEWAY_PORT: 8091
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: gtel-c-server
+      RABBITMQ_PASSWORD: password
+      RABBITMQ_VHOST: /gtel-prod
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      GATEWAY_API_KEYS: "c-server-1=secret1,test-server=test-key"
+      SPRING_PROFILES_ACTIVE: gateway
+    ports:
+      - "8091:8091"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8091/api/events/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Java Ledger (COA accounting)
+  java-ledger:
+    build:
+      context: ./java
+      dockerfile: Dockerfile.ledger
+    environment:
+      JDBC_URL: jdbc:postgresql://postgres:5432/gtelpay_prod
+      JDBC_USER: postgres
+      JDBC_PASSWORD: postgres
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: gtel-c-server
+      RABBITMQ_PASSWORD: password
+      RABBITMQ_VHOST: /gtel-prod
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SPRING_PROFILES_ACTIVE: ledger
+    ports:
+      - "8090:8090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  redis_data:
+
+networks:
+  default:
+    name: gtel-integration-test
