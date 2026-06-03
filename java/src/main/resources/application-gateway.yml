@@ -14,16 +14,14 @@ spring:
     publisher-confirms: true
     publisher-returns: true
 
-    # Connection pool
+    # Connection pool (CHANNEL cache mode only supports channel size, not connection size)
     cache:
       channel:
-        size: 10
-      connection:
         size: 10
 
   # Redis Configuration
   redis:
-    host: ${REDIS_HOST:localhost}
+    host: ${REDIS_HOST:redis}
     port: ${REDIS_PORT:6379}
     password: ${REDIS_PASSWORD:}
     database: ${REDIS_DB:0}
