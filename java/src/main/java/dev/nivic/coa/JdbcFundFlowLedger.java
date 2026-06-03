@@ -42,6 +42,10 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
   private static final String DDL_ACCOUNT_CCY_ALTER =
       "ALTER TABLE coa_account ADD COLUMN IF NOT EXISTS currency_code VARCHAR(3) NOT NULL DEFAULT 'VND'";
 
+  /** Extend currency_code to support USDT, ETH, BTC (4+ char codes). */
+  private static final String DDL_ACCOUNT_CCY_EXTEND =
+      "ALTER TABLE coa_account ALTER COLUMN currency_code TYPE VARCHAR(10)";
+
   private static final String DDL_ACCOUNT = """
       CREATE TABLE IF NOT EXISTS coa_account (
         code          VARCHAR(10)  PRIMARY KEY,
@@ -210,9 +214,6 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
 
   private static final Object[][] ACCOUNTS = {
       // code,   name,                           kind
-      {"1100", "Crypto - USDT",                   "ASSET"},
-      {"1101", "Crypto - ETH",                    "ASSET"},
-      {"1102", "Crypto - BTC",                    "ASSET"},
       {"1111", "TK Vietinbank Chuyên dùng",      "ASSET"},
       {"1112", "TK Napas Clearing",               "ASSET"},
       {"1113", "TK VPBank - QR/POS",              "ASSET"},
@@ -229,11 +230,9 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
       {"3200", "Transit - Rút tiền",              "TRANSIT"},
       {"3300", "Transit - Chuyển tiền nội bộ",    "TRANSIT"},
       {"3400", "Transit - IBFT",                  "TRANSIT"},
-      {"3500", "Transit - Thanh toán",            "TRANSIT"},
       {"3501", "Transit - USDT Convert",          "TRANSIT"},
       {"3502", "Transit - Merchant Receive",      "TRANSIT"},
       {"3510", "Transit - FX Conversion",         "TRANSIT"},
-      {"3600", "Transit - Chi Lương",             "TRANSIT"},
       {"3700", "Transit - Chi hộ",                "TRANSIT"},
       {"3800", "Transit - Clearing",              "TRANSIT"},
       {"3810", "Transit - Settlement Outbound",   "TRANSIT"},
@@ -282,7 +281,7 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
 
   private static final String UPSERT_ACCOUNT =
       "INSERT INTO coa_account (code, name, kind, currency_code) VALUES (?, ?, ?, ?)"
-          + " ON CONFLICT (code) DO NOTHING";
+          + " ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, kind = EXCLUDED.kind, currency_code = EXCLUDED.currency_code";
 
   // ── DML ───────────────────────────────────────────────────────────────────────
 
@@ -1686,6 +1685,7 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
           Statement st = c.createStatement()) {
         st.execute(DDL_ACCOUNT);
         st.execute(DDL_ACCOUNT_CCY_ALTER);
+        st.execute(DDL_ACCOUNT_CCY_EXTEND);
         st.execute(DDL_TRANS);
         st.execute(DDL_TRANS_ALTER);
         st.execute(DDL_TRANS_DATA);
