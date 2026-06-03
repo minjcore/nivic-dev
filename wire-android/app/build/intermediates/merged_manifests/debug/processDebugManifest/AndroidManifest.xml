@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="dev.nivic.wire"
-    android:versionCode="1"
-    android:versionName="1.0" >
+    package="app.saving.wire"
+    android:versionCode="2"
+    android:versionName="1.1-reffix" >
 
     <uses-sdk
         android:minSdkVersion="26"
@@ -16,15 +16,15 @@
         android:required="false" />
 
     <permission
-        android:name="dev.nivic.wire.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        android:name="app.saving.wire.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
         android:protectionLevel="signature" />
 
-    <uses-permission android:name="dev.nivic.wire.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" /> <!-- Although the *SdkVersion is captured in gradle build files, this is required for non gradle builds -->
+    <uses-permission android:name="app.saving.wire.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" /> <!-- Although the *SdkVersion is captured in gradle build files, this is required for non gradle builds -->
     <!-- <uses-sdk android:minSdkVersion="14"/> -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
-        android:name="dev.nivic.wire.WireApp"
+        android:name="app.saving.wire.WireApp"
         android:allowBackup="true"
         android:appComponentFactory="androidx.core.app.CoreComponentFactory"
         android:debuggable="true"
@@ -33,7 +33,7 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" >
         <activity
-            android:name="dev.nivic.wire.MainActivity"
+            android:name="app.saving.wire.MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:exported="true"
             android:windowSoftInputMode="adjustResize" >
@@ -41,6 +41,28 @@
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- saving:// deep links (QR codes, merchant links) -->
+            <intent-filter android:autoVerify="true" >
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="saving" />
+            </intent-filter>
+
+            <!-- https://bmap.nivic.dev and *.nivic.dev web links -->
+            <intent-filter android:autoVerify="true" >
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="*.nivic.dev"
+                    android:scheme="https" />
             </intent-filter>
         </activity>
 
@@ -69,7 +91,7 @@
 
         <provider
             android:name="com.google.mlkit.common.internal.MlKitInitProvider"
-            android:authorities="dev.nivic.wire.mlkitinitprovider"
+            android:authorities="app.saving.wire.mlkitinitprovider"
             android:exported="false"
             android:initOrder="99" />
 
@@ -84,7 +106,7 @@
 
         <provider
             android:name="androidx.startup.InitializationProvider"
-            android:authorities="dev.nivic.wire.androidx-startup"
+            android:authorities="app.saving.wire.androidx-startup"
             android:exported="false" >
             <meta-data
                 android:name="androidx.emoji2.text.EmojiCompatInitializer"

@@ -1,0 +1,18 @@
+[Unit]
+Description=go.nivic.dev — Go vanity import server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/root/app/vanity-go
+Restart=on-failure
+RestartSec=5
+
+Environment=VANITY_ADDR=127.0.0.1:8086
+
+WorkingDirectory=/root/app
+StandardOutput=append:/var/log/vanity-go.log
+StandardError=append:/var/log/vanity-go.log
+
+[Install]
+WantedBy=multi-user.target

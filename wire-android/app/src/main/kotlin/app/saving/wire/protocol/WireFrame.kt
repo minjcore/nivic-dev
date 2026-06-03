@@ -176,6 +176,7 @@ fun WireFrame.Companion.confirmIntent(token: ByteArray, merchantId: Long, reques
 fun WireFrame.Companion.qrPay(token: ByteArray, merchantId: Long, amount: Long,
                                ts: Long, ref: String, sig: ByteArray, acsUrl: String, seq: Int): WireFrame {
     val refBytes = ref.toByteArray(Charsets.UTF_8)
+    android.util.Log.i("QRPAY", "ref='$ref' len=${refBytes.size} hex=${refBytes.joinToString(""){ "%02x".format(it) }}")
     return WireFrame(WireCmd.QR_PAY, seq,
         token + merchantId.toUInt32Bytes() + amount.toInt64Bytes() +
         ts.toInt64Bytes() + sig +

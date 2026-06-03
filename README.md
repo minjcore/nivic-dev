@@ -19,33 +19,38 @@ A privacy-first super app — no phone number, 4-byte user IDs, social recovery.
 
 ## Architecture
 
+Two **CORE rails** share the same product role (money, intents, `mid`) but different transports — see [ADR 004](docs/adr/004-dual-core-rails-java-and-saving.md).
+
 ```
-iPhone (iOS 17+)
+iPhone (iOS 17+) / Android
   │  Wire TCP (binary)       HTTP/JSON
-  ├──────────────────▶ saving (Wire server)
-  ├──────────────────▶ Merchants  :8090
+  ├──────────────────▶ saving (CORE Wire rail, :7474)
+  ├──────────────────▶ Merchants  :8090  (Mcs — not CORE)
   └──────────────────▶ Cards      :8091
-                              │
+
+Partner / servlet clients
+  └──────────────────▶ java (CORE Servlet rail, :8080)
+
                          RabbitMQ
                               │
-                        TopupWorker
-                              │
-                         Wire TCP
+                        TopupWorker → saving (Wire TCP)
 ```
 
-| Component | Stack | Port |
-|-----------|-------|------|
-| **saving** | C + PostgreSQL | 7474 TCP |
-| **Merchants** | Go | 8090 |
-| **Cards** | Go + SQLite | 8091 |
-| **TopupWorker** | Go | — (AMQP consumer) |
-| **Tomcats** | Go | — (notification service, APNs + FCM) |
-| **saving-ios** | Swift / SwiftUI | iOS 17+ |
-| **wire** | Xcode host app | — |
-| **wire-android** | Kotlin / Jetpack Compose | Android 8+ (API 26) |
-| **java** | Java / Undertow + PostgreSQL | server-side wallet |
+| Component | Stack | Port | Role |
+|-----------|-------|------|------|
+| **saving** | C + PostgreSQL | 7474 TCP | **CORE Wire rail** — Wire App, `payment_intents` |
+| **java** | Java / Undertow + PostgreSQL | 8080 HTTP | **CORE Servlet rail** — Sevlet wallet, `led_*` / `acct_*`, WAL |
+| **Merchants** | Go | 8090 | Mcs (multi-tenant Mc; not authoritative balances) |
+| **Cards** | Go + SQLite | 8091 | Card top-up UI |
+| **TopupWorker** | Go | — | AMQP consumer → saving credit |
+| **Tomcats** | Go | — | APNs + FCM notifications |
+| **saving-ios** | Swift / SwiftUI | — | Wire App (iOS) |
+| **wire** | Xcode | — | iOS host app |
+| **wire-android** | Kotlin / Compose | — | Wire App (Android) |
 
-## Wire Protocol
+Wire TCP protocol details below apply to the **saving** rail. Servlet partners use **java** (`SevletWalletCodec`) — [ADR 004](docs/adr/004-dual-core-rails-java-and-saving.md).
+
+## Wire Protocol (saving rail)
 
 Binary TCP — `len(4 BE) | type(1) | seq(4 BE) | body | HMAC-SHA256(32)`
 

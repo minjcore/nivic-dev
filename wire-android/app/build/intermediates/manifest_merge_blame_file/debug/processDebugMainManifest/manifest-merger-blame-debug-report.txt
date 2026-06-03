@@ -1,8 +1,8 @@
 1<?xml version="1.0" encoding="utf-8"?>
 2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-3    package="dev.nivic.wire"
-4    android:versionCode="1"
-5    android:versionName="1.0" >
+3    package="app.saving.wire"
+4    android:versionCode="2"
+5    android:versionName="1.1-reffix" >
 6
 7    <uses-sdk
 8        android:minSdkVersion="26"
@@ -24,12 +24,12 @@
 17
 18    <permission
 18-->[androidx.core:core:1.15.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/03cc3a79bb9a8e3e9d9ca3829aef36c3/transformed/core-1.15.0/AndroidManifest.xml:22:5-24:47
-19        android:name="dev.nivic.wire.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+19        android:name="app.saving.wire.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
 19-->[androidx.core:core:1.15.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/03cc3a79bb9a8e3e9d9ca3829aef36c3/transformed/core-1.15.0/AndroidManifest.xml:23:9-81
 20        android:protectionLevel="signature" />
 20-->[androidx.core:core:1.15.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/03cc3a79bb9a8e3e9d9ca3829aef36c3/transformed/core-1.15.0/AndroidManifest.xml:24:9-44
 21
-22    <uses-permission android:name="dev.nivic.wire.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" /> <!-- Although the *SdkVersion is captured in gradle build files, this is required for non gradle builds -->
+22    <uses-permission android:name="app.saving.wire.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" /> <!-- Although the *SdkVersion is captured in gradle build files, this is required for non gradle builds -->
 22-->[androidx.core:core:1.15.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/03cc3a79bb9a8e3e9d9ca3829aef36c3/transformed/core-1.15.0/AndroidManifest.xml:26:5-97
 22-->[androidx.core:core:1.15.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/03cc3a79bb9a8e3e9d9ca3829aef36c3/transformed/core-1.15.0/AndroidManifest.xml:26:22-94
 23    <!-- <uses-sdk android:minSdkVersion="14"/> -->
@@ -38,8 +38,8 @@
 24-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/46184ab200fd91e5dbb4b5a81665446c/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:25:22-76
 25
 26    <application
-26-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:9:5-25:19
-27        android:name="dev.nivic.wire.WireApp"
+26-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:9:5-41:19
+27        android:name="app.saving.wire.WireApp"
 27-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:10:9-32
 28        android:allowBackup="true"
 28-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:12:9-35
@@ -54,8 +54,8 @@
 34        android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" >
 34-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:14:9-68
 35        <activity
-35-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:15:9-24:20
-36            android:name="dev.nivic.wire.MainActivity"
+35-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:15:9-40:20
+36            android:name="app.saving.wire.MainActivity"
 36-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:16:13-41
 37            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
 37-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:18:13-87
@@ -73,173 +73,216 @@
 43-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:22:17-77
 43-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:22:27-74
 44            </intent-filter>
-45        </activity>
-46
-47        <service
-47-->[androidx.camera:camera-camera2:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/62e87460454557791f026bb6b4eb5d10/transformed/jetified-camera-camera2-1.4.1/AndroidManifest.xml:24:9-33:19
-48            android:name="androidx.camera.core.impl.MetadataHolderService"
-48-->[androidx.camera:camera-camera2:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/62e87460454557791f026bb6b4eb5d10/transformed/jetified-camera-camera2-1.4.1/AndroidManifest.xml:25:13-75
-49            android:enabled="false"
-49-->[androidx.camera:camera-camera2:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/62e87460454557791f026bb6b4eb5d10/transformed/jetified-camera-camera2-1.4.1/AndroidManifest.xml:26:13-36
-50            android:exported="false" >
-50-->[androidx.camera:camera-camera2:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/62e87460454557791f026bb6b4eb5d10/transformed/jetified-camera-camera2-1.4.1/AndroidManifest.xml:27:13-37
-51            <meta-data
-51-->[androidx.camera:camera-camera2:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/62e87460454557791f026bb6b4eb5d10/transformed/jetified-camera-camera2-1.4.1/AndroidManifest.xml:30:13-32:89
-52                android:name="androidx.camera.core.impl.MetadataHolderService.DEFAULT_CONFIG_PROVIDER"
-52-->[androidx.camera:camera-camera2:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/62e87460454557791f026bb6b4eb5d10/transformed/jetified-camera-camera2-1.4.1/AndroidManifest.xml:31:17-103
-53                android:value="androidx.camera.camera2.Camera2Config$DefaultProvider" />
-53-->[androidx.camera:camera-camera2:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/62e87460454557791f026bb6b4eb5d10/transformed/jetified-camera-camera2-1.4.1/AndroidManifest.xml:32:17-86
-54        </service>
-55        <service
-55-->[com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/5293a521be1cce5c366c5b118e7dcebd/transformed/jetified-play-services-mlkit-barcode-scanning-18.3.1/AndroidManifest.xml:9:9-15:19
-56            android:name="com.google.mlkit.common.internal.MlKitComponentDiscoveryService"
-56-->[com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/5293a521be1cce5c366c5b118e7dcebd/transformed/jetified-play-services-mlkit-barcode-scanning-18.3.1/AndroidManifest.xml:10:13-91
-57            android:directBootAware="true"
-57-->[com.google.mlkit:common:18.11.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/872408d8d85841cb6f1715e9e3887bff/transformed/jetified-common-18.11.0/AndroidManifest.xml:17:13-43
-58            android:exported="false" >
-58-->[com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/5293a521be1cce5c366c5b118e7dcebd/transformed/jetified-play-services-mlkit-barcode-scanning-18.3.1/AndroidManifest.xml:11:13-37
-59            <meta-data
-59-->[com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/5293a521be1cce5c366c5b118e7dcebd/transformed/jetified-play-services-mlkit-barcode-scanning-18.3.1/AndroidManifest.xml:12:13-14:85
-60                android:name="com.google.firebase.components:com.google.mlkit.vision.barcode.internal.BarcodeRegistrar"
-60-->[com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/5293a521be1cce5c366c5b118e7dcebd/transformed/jetified-play-services-mlkit-barcode-scanning-18.3.1/AndroidManifest.xml:13:17-120
-61                android:value="com.google.firebase.components.ComponentRegistrar" />
-61-->[com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/5293a521be1cce5c366c5b118e7dcebd/transformed/jetified-play-services-mlkit-barcode-scanning-18.3.1/AndroidManifest.xml:14:17-82
-62            <meta-data
-62-->[com.google.mlkit:vision-common:17.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/c4696d82df0458a3729bf5d5b1a04473/transformed/jetified-vision-common-17.3.0/AndroidManifest.xml:12:13-14:85
-63                android:name="com.google.firebase.components:com.google.mlkit.vision.common.internal.VisionCommonRegistrar"
-63-->[com.google.mlkit:vision-common:17.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/c4696d82df0458a3729bf5d5b1a04473/transformed/jetified-vision-common-17.3.0/AndroidManifest.xml:13:17-124
-64                android:value="com.google.firebase.components.ComponentRegistrar" />
-64-->[com.google.mlkit:vision-common:17.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/c4696d82df0458a3729bf5d5b1a04473/transformed/jetified-vision-common-17.3.0/AndroidManifest.xml:14:17-82
-65            <meta-data
-65-->[com.google.mlkit:common:18.11.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/872408d8d85841cb6f1715e9e3887bff/transformed/jetified-common-18.11.0/AndroidManifest.xml:20:13-22:85
-66                android:name="com.google.firebase.components:com.google.mlkit.common.internal.CommonComponentRegistrar"
-66-->[com.google.mlkit:common:18.11.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/872408d8d85841cb6f1715e9e3887bff/transformed/jetified-common-18.11.0/AndroidManifest.xml:21:17-120
-67                android:value="com.google.firebase.components.ComponentRegistrar" />
-67-->[com.google.mlkit:common:18.11.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/872408d8d85841cb6f1715e9e3887bff/transformed/jetified-common-18.11.0/AndroidManifest.xml:22:17-82
-68        </service>
-69
-70        <provider
-70-->[com.google.mlkit:common:18.11.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/872408d8d85841cb6f1715e9e3887bff/transformed/jetified-common-18.11.0/AndroidManifest.xml:9:9-13:38
-71            android:name="com.google.mlkit.common.internal.MlKitInitProvider"
-71-->[com.google.mlkit:common:18.11.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/872408d8d85841cb6f1715e9e3887bff/transformed/jetified-common-18.11.0/AndroidManifest.xml:10:13-78
-72            android:authorities="dev.nivic.wire.mlkitinitprovider"
-72-->[com.google.mlkit:common:18.11.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/872408d8d85841cb6f1715e9e3887bff/transformed/jetified-common-18.11.0/AndroidManifest.xml:11:13-69
-73            android:exported="false"
-73-->[com.google.mlkit:common:18.11.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/872408d8d85841cb6f1715e9e3887bff/transformed/jetified-common-18.11.0/AndroidManifest.xml:12:13-37
-74            android:initOrder="99" />
-74-->[com.google.mlkit:common:18.11.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/872408d8d85841cb6f1715e9e3887bff/transformed/jetified-common-18.11.0/AndroidManifest.xml:13:13-35
-75
-76        <activity
-76-->[com.google.android.gms:play-services-base:18.5.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/e3b615a93b7327360682bde41176ce36/transformed/jetified-play-services-base-18.5.0/AndroidManifest.xml:5:9-173
-77            android:name="com.google.android.gms.common.api.GoogleApiActivity"
-77-->[com.google.android.gms:play-services-base:18.5.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/e3b615a93b7327360682bde41176ce36/transformed/jetified-play-services-base-18.5.0/AndroidManifest.xml:5:19-85
-78            android:exported="false"
-78-->[com.google.android.gms:play-services-base:18.5.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/e3b615a93b7327360682bde41176ce36/transformed/jetified-play-services-base-18.5.0/AndroidManifest.xml:5:146-170
-79            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-79-->[com.google.android.gms:play-services-base:18.5.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/e3b615a93b7327360682bde41176ce36/transformed/jetified-play-services-base-18.5.0/AndroidManifest.xml:5:86-145
-80
-81        <meta-data
-81-->[com.google.android.gms:play-services-basement:18.4.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/9990a292fe34202fef8f9dd983962812/transformed/jetified-play-services-basement-18.4.0/AndroidManifest.xml:6:9-122
-82            android:name="com.google.android.gms.version"
-82-->[com.google.android.gms:play-services-basement:18.4.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/9990a292fe34202fef8f9dd983962812/transformed/jetified-play-services-basement-18.4.0/AndroidManifest.xml:6:20-65
-83            android:value="@integer/google_play_services_version" />
-83-->[com.google.android.gms:play-services-basement:18.4.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/9990a292fe34202fef8f9dd983962812/transformed/jetified-play-services-basement-18.4.0/AndroidManifest.xml:6:66-119
-84
-85        <provider
-85-->[androidx.emoji2:emoji2:1.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/550dd8616e845f561900016a7bf4095a/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
-86            android:name="androidx.startup.InitializationProvider"
-86-->[androidx.emoji2:emoji2:1.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/550dd8616e845f561900016a7bf4095a/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:25:13-67
-87            android:authorities="dev.nivic.wire.androidx-startup"
-87-->[androidx.emoji2:emoji2:1.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/550dd8616e845f561900016a7bf4095a/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:26:13-68
-88            android:exported="false" >
-88-->[androidx.emoji2:emoji2:1.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/550dd8616e845f561900016a7bf4095a/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:27:13-37
-89            <meta-data
-89-->[androidx.emoji2:emoji2:1.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/550dd8616e845f561900016a7bf4095a/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
-90                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-90-->[androidx.emoji2:emoji2:1.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/550dd8616e845f561900016a7bf4095a/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:30:17-75
-91                android:value="androidx.startup" />
-91-->[androidx.emoji2:emoji2:1.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/550dd8616e845f561900016a7bf4095a/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:31:17-49
-92            <meta-data
-92-->[androidx.lifecycle:lifecycle-process:2.8.7] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/5d5d9f3cbd46402546a341421b0a2f08/transformed/jetified-lifecycle-process-2.8.7/AndroidManifest.xml:29:13-31:52
-93                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-93-->[androidx.lifecycle:lifecycle-process:2.8.7] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/5d5d9f3cbd46402546a341421b0a2f08/transformed/jetified-lifecycle-process-2.8.7/AndroidManifest.xml:30:17-78
-94                android:value="androidx.startup" />
-94-->[androidx.lifecycle:lifecycle-process:2.8.7] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/5d5d9f3cbd46402546a341421b0a2f08/transformed/jetified-lifecycle-process-2.8.7/AndroidManifest.xml:31:17-49
-95            <meta-data
-95-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:29:13-31:52
-96                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-96-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:30:17-85
-97                android:value="androidx.startup" />
-97-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:31:17-49
-98        </provider>
-99
-100        <receiver
-100-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:34:9-52:20
-101            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-101-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:35:13-76
-102            android:directBootAware="false"
-102-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:36:13-44
-103            android:enabled="true"
-103-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:37:13-35
-104            android:exported="true"
-104-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:38:13-36
-105            android:permission="android.permission.DUMP" >
-105-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:39:13-57
-106            <intent-filter>
-106-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:40:13-42:29
-107                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
-107-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:41:17-91
-107-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:41:25-88
-108            </intent-filter>
-109            <intent-filter>
-109-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:43:13-45:29
-110                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
-110-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:44:17-85
-110-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:44:25-82
-111            </intent-filter>
-112            <intent-filter>
-112-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:46:13-48:29
-113                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
-113-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:47:17-88
-113-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:47:25-85
-114            </intent-filter>
-115            <intent-filter>
-115-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:49:13-51:29
-116                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
-116-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:50:17-95
-116-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:50:25-92
-117            </intent-filter>
-118        </receiver>
-119
-120        <service
-120-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/46184ab200fd91e5dbb4b5a81665446c/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:29:9-35:19
-121            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
-121-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/46184ab200fd91e5dbb4b5a81665446c/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:30:13-103
-122            android:exported="false" >
-122-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/46184ab200fd91e5dbb4b5a81665446c/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:31:13-37
-123            <meta-data
-123-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/46184ab200fd91e5dbb4b5a81665446c/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:32:13-34:39
-124                android:name="backend:com.google.android.datatransport.cct.CctBackendFactory"
-124-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/46184ab200fd91e5dbb4b5a81665446c/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:33:17-94
-125                android:value="cct" />
-125-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/46184ab200fd91e5dbb4b5a81665446c/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:34:17-36
-126        </service>
-127        <service
-127-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d872190df5c6e50312e70240b0dd179f/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:26:9-30:19
-128            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
-128-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d872190df5c6e50312e70240b0dd179f/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:27:13-117
-129            android:exported="false"
-129-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d872190df5c6e50312e70240b0dd179f/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:28:13-37
-130            android:permission="android.permission.BIND_JOB_SERVICE" >
-130-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d872190df5c6e50312e70240b0dd179f/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:29:13-69
-131        </service>
-132
-133        <receiver
-133-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d872190df5c6e50312e70240b0dd179f/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:32:9-34:40
-134            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
-134-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d872190df5c6e50312e70240b0dd179f/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:33:13-132
-135            android:exported="false" />
-135-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d872190df5c6e50312e70240b0dd179f/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:34:13-37
-136    </application>
-137
-138</manifest>
+45
+46            <!-- saving:// deep links (QR codes, merchant links) -->
+47            <intent-filter android:autoVerify="true" >
+47-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:26:13-31:29
+47-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:26:28-53
+48                <action android:name="android.intent.action.VIEW" />
+48-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:27:17-69
+48-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:27:25-66
+49
+50                <category android:name="android.intent.category.DEFAULT" />
+50-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:28:17-76
+50-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:28:27-73
+51                <category android:name="android.intent.category.BROWSABLE" />
+51-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:29:17-78
+51-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:29:27-75
+52
+53                <data android:scheme="saving" />
+53-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:30:17-49
+53-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:30:23-46
+54            </intent-filter>
+55
+56            <!-- https://bmap.nivic.dev and *.nivic.dev web links -->
+57            <intent-filter android:autoVerify="true" >
+57-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:34:13-39:29
+57-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:34:28-53
+58                <action android:name="android.intent.action.VIEW" />
+58-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:27:17-69
+58-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:27:25-66
+59
+60                <category android:name="android.intent.category.DEFAULT" />
+60-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:28:17-76
+60-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:28:27-73
+61                <category android:name="android.intent.category.BROWSABLE" />
+61-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:29:17-78
+61-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:29:27-75
+62
+63                <data
+63-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:30:17-49
+64                    android:host="*.nivic.dev"
+64-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:38:46-72
+65                    android:scheme="https" />
+65-->/Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:30:23-46
+66            </intent-filter>
+67        </activity>
+68
+69        <service
+69-->[androidx.camera:camera-camera2:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/62e87460454557791f026bb6b4eb5d10/transformed/jetified-camera-camera2-1.4.1/AndroidManifest.xml:24:9-33:19
+70            android:name="androidx.camera.core.impl.MetadataHolderService"
+70-->[androidx.camera:camera-camera2:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/62e87460454557791f026bb6b4eb5d10/transformed/jetified-camera-camera2-1.4.1/AndroidManifest.xml:25:13-75
+71            android:enabled="false"
+71-->[androidx.camera:camera-camera2:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/62e87460454557791f026bb6b4eb5d10/transformed/jetified-camera-camera2-1.4.1/AndroidManifest.xml:26:13-36
+72            android:exported="false" >
+72-->[androidx.camera:camera-camera2:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/62e87460454557791f026bb6b4eb5d10/transformed/jetified-camera-camera2-1.4.1/AndroidManifest.xml:27:13-37
+73            <meta-data
+73-->[androidx.camera:camera-camera2:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/62e87460454557791f026bb6b4eb5d10/transformed/jetified-camera-camera2-1.4.1/AndroidManifest.xml:30:13-32:89
+74                android:name="androidx.camera.core.impl.MetadataHolderService.DEFAULT_CONFIG_PROVIDER"
+74-->[androidx.camera:camera-camera2:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/62e87460454557791f026bb6b4eb5d10/transformed/jetified-camera-camera2-1.4.1/AndroidManifest.xml:31:17-103
+75                android:value="androidx.camera.camera2.Camera2Config$DefaultProvider" />
+75-->[androidx.camera:camera-camera2:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/62e87460454557791f026bb6b4eb5d10/transformed/jetified-camera-camera2-1.4.1/AndroidManifest.xml:32:17-86
+76        </service>
+77        <service
+77-->[com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/5293a521be1cce5c366c5b118e7dcebd/transformed/jetified-play-services-mlkit-barcode-scanning-18.3.1/AndroidManifest.xml:9:9-15:19
+78            android:name="com.google.mlkit.common.internal.MlKitComponentDiscoveryService"
+78-->[com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/5293a521be1cce5c366c5b118e7dcebd/transformed/jetified-play-services-mlkit-barcode-scanning-18.3.1/AndroidManifest.xml:10:13-91
+79            android:directBootAware="true"
+79-->[com.google.mlkit:common:18.11.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/872408d8d85841cb6f1715e9e3887bff/transformed/jetified-common-18.11.0/AndroidManifest.xml:17:13-43
+80            android:exported="false" >
+80-->[com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/5293a521be1cce5c366c5b118e7dcebd/transformed/jetified-play-services-mlkit-barcode-scanning-18.3.1/AndroidManifest.xml:11:13-37
+81            <meta-data
+81-->[com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/5293a521be1cce5c366c5b118e7dcebd/transformed/jetified-play-services-mlkit-barcode-scanning-18.3.1/AndroidManifest.xml:12:13-14:85
+82                android:name="com.google.firebase.components:com.google.mlkit.vision.barcode.internal.BarcodeRegistrar"
+82-->[com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/5293a521be1cce5c366c5b118e7dcebd/transformed/jetified-play-services-mlkit-barcode-scanning-18.3.1/AndroidManifest.xml:13:17-120
+83                android:value="com.google.firebase.components.ComponentRegistrar" />
+83-->[com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/5293a521be1cce5c366c5b118e7dcebd/transformed/jetified-play-services-mlkit-barcode-scanning-18.3.1/AndroidManifest.xml:14:17-82
+84            <meta-data
+84-->[com.google.mlkit:vision-common:17.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/c4696d82df0458a3729bf5d5b1a04473/transformed/jetified-vision-common-17.3.0/AndroidManifest.xml:12:13-14:85
+85                android:name="com.google.firebase.components:com.google.mlkit.vision.common.internal.VisionCommonRegistrar"
+85-->[com.google.mlkit:vision-common:17.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/c4696d82df0458a3729bf5d5b1a04473/transformed/jetified-vision-common-17.3.0/AndroidManifest.xml:13:17-124
+86                android:value="com.google.firebase.components.ComponentRegistrar" />
+86-->[com.google.mlkit:vision-common:17.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/c4696d82df0458a3729bf5d5b1a04473/transformed/jetified-vision-common-17.3.0/AndroidManifest.xml:14:17-82
+87            <meta-data
+87-->[com.google.mlkit:common:18.11.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/872408d8d85841cb6f1715e9e3887bff/transformed/jetified-common-18.11.0/AndroidManifest.xml:20:13-22:85
+88                android:name="com.google.firebase.components:com.google.mlkit.common.internal.CommonComponentRegistrar"
+88-->[com.google.mlkit:common:18.11.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/872408d8d85841cb6f1715e9e3887bff/transformed/jetified-common-18.11.0/AndroidManifest.xml:21:17-120
+89                android:value="com.google.firebase.components.ComponentRegistrar" />
+89-->[com.google.mlkit:common:18.11.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/872408d8d85841cb6f1715e9e3887bff/transformed/jetified-common-18.11.0/AndroidManifest.xml:22:17-82
+90        </service>
+91
+92        <provider
+92-->[com.google.mlkit:common:18.11.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/872408d8d85841cb6f1715e9e3887bff/transformed/jetified-common-18.11.0/AndroidManifest.xml:9:9-13:38
+93            android:name="com.google.mlkit.common.internal.MlKitInitProvider"
+93-->[com.google.mlkit:common:18.11.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/872408d8d85841cb6f1715e9e3887bff/transformed/jetified-common-18.11.0/AndroidManifest.xml:10:13-78
+94            android:authorities="app.saving.wire.mlkitinitprovider"
+94-->[com.google.mlkit:common:18.11.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/872408d8d85841cb6f1715e9e3887bff/transformed/jetified-common-18.11.0/AndroidManifest.xml:11:13-69
+95            android:exported="false"
+95-->[com.google.mlkit:common:18.11.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/872408d8d85841cb6f1715e9e3887bff/transformed/jetified-common-18.11.0/AndroidManifest.xml:12:13-37
+96            android:initOrder="99" />
+96-->[com.google.mlkit:common:18.11.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/872408d8d85841cb6f1715e9e3887bff/transformed/jetified-common-18.11.0/AndroidManifest.xml:13:13-35
+97
+98        <activity
+98-->[com.google.android.gms:play-services-base:18.5.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/e3b615a93b7327360682bde41176ce36/transformed/jetified-play-services-base-18.5.0/AndroidManifest.xml:5:9-173
+99            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+99-->[com.google.android.gms:play-services-base:18.5.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/e3b615a93b7327360682bde41176ce36/transformed/jetified-play-services-base-18.5.0/AndroidManifest.xml:5:19-85
+100            android:exported="false"
+100-->[com.google.android.gms:play-services-base:18.5.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/e3b615a93b7327360682bde41176ce36/transformed/jetified-play-services-base-18.5.0/AndroidManifest.xml:5:146-170
+101            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+101-->[com.google.android.gms:play-services-base:18.5.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/e3b615a93b7327360682bde41176ce36/transformed/jetified-play-services-base-18.5.0/AndroidManifest.xml:5:86-145
+102
+103        <meta-data
+103-->[com.google.android.gms:play-services-basement:18.4.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/9990a292fe34202fef8f9dd983962812/transformed/jetified-play-services-basement-18.4.0/AndroidManifest.xml:6:9-122
+104            android:name="com.google.android.gms.version"
+104-->[com.google.android.gms:play-services-basement:18.4.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/9990a292fe34202fef8f9dd983962812/transformed/jetified-play-services-basement-18.4.0/AndroidManifest.xml:6:20-65
+105            android:value="@integer/google_play_services_version" />
+105-->[com.google.android.gms:play-services-basement:18.4.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/9990a292fe34202fef8f9dd983962812/transformed/jetified-play-services-basement-18.4.0/AndroidManifest.xml:6:66-119
+106
+107        <provider
+107-->[androidx.emoji2:emoji2:1.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/550dd8616e845f561900016a7bf4095a/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
+108            android:name="androidx.startup.InitializationProvider"
+108-->[androidx.emoji2:emoji2:1.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/550dd8616e845f561900016a7bf4095a/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:25:13-67
+109            android:authorities="app.saving.wire.androidx-startup"
+109-->[androidx.emoji2:emoji2:1.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/550dd8616e845f561900016a7bf4095a/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:26:13-68
+110            android:exported="false" >
+110-->[androidx.emoji2:emoji2:1.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/550dd8616e845f561900016a7bf4095a/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:27:13-37
+111            <meta-data
+111-->[androidx.emoji2:emoji2:1.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/550dd8616e845f561900016a7bf4095a/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
+112                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+112-->[androidx.emoji2:emoji2:1.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/550dd8616e845f561900016a7bf4095a/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:30:17-75
+113                android:value="androidx.startup" />
+113-->[androidx.emoji2:emoji2:1.3.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/550dd8616e845f561900016a7bf4095a/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:31:17-49
+114            <meta-data
+114-->[androidx.lifecycle:lifecycle-process:2.8.7] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/5d5d9f3cbd46402546a341421b0a2f08/transformed/jetified-lifecycle-process-2.8.7/AndroidManifest.xml:29:13-31:52
+115                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+115-->[androidx.lifecycle:lifecycle-process:2.8.7] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/5d5d9f3cbd46402546a341421b0a2f08/transformed/jetified-lifecycle-process-2.8.7/AndroidManifest.xml:30:17-78
+116                android:value="androidx.startup" />
+116-->[androidx.lifecycle:lifecycle-process:2.8.7] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/5d5d9f3cbd46402546a341421b0a2f08/transformed/jetified-lifecycle-process-2.8.7/AndroidManifest.xml:31:17-49
+117            <meta-data
+117-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:29:13-31:52
+118                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+118-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:30:17-85
+119                android:value="androidx.startup" />
+119-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:31:17-49
+120        </provider>
+121
+122        <receiver
+122-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:34:9-52:20
+123            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+123-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:35:13-76
+124            android:directBootAware="false"
+124-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:36:13-44
+125            android:enabled="true"
+125-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:37:13-35
+126            android:exported="true"
+126-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:38:13-36
+127            android:permission="android.permission.DUMP" >
+127-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:39:13-57
+128            <intent-filter>
+128-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:40:13-42:29
+129                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+129-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:41:17-91
+129-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:41:25-88
+130            </intent-filter>
+131            <intent-filter>
+131-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:43:13-45:29
+132                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+132-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:44:17-85
+132-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:44:25-82
+133            </intent-filter>
+134            <intent-filter>
+134-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:46:13-48:29
+135                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+135-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:47:17-88
+135-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:47:25-85
+136            </intent-filter>
+137            <intent-filter>
+137-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:49:13-51:29
+138                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+138-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:50:17-95
+138-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d64ebb5a639a0df4256eb878f00c56d6/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:50:25-92
+139            </intent-filter>
+140        </receiver>
+141
+142        <service
+142-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/46184ab200fd91e5dbb4b5a81665446c/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:29:9-35:19
+143            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+143-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/46184ab200fd91e5dbb4b5a81665446c/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:30:13-103
+144            android:exported="false" >
+144-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/46184ab200fd91e5dbb4b5a81665446c/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:31:13-37
+145            <meta-data
+145-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/46184ab200fd91e5dbb4b5a81665446c/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:32:13-34:39
+146                android:name="backend:com.google.android.datatransport.cct.CctBackendFactory"
+146-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/46184ab200fd91e5dbb4b5a81665446c/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:33:17-94
+147                android:value="cct" />
+147-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/46184ab200fd91e5dbb4b5a81665446c/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:34:17-36
+148        </service>
+149        <service
+149-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d872190df5c6e50312e70240b0dd179f/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:26:9-30:19
+150            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
+150-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d872190df5c6e50312e70240b0dd179f/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:27:13-117
+151            android:exported="false"
+151-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d872190df5c6e50312e70240b0dd179f/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:28:13-37
+152            android:permission="android.permission.BIND_JOB_SERVICE" >
+152-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d872190df5c6e50312e70240b0dd179f/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:29:13-69
+153        </service>
+154
+155        <receiver
+155-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d872190df5c6e50312e70240b0dd179f/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:32:9-34:40
+156            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
+156-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d872190df5c6e50312e70240b0dd179f/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:33:13-132
+157            android:exported="false" />
+157-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d872190df5c6e50312e70240b0dd179f/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:34:13-37
+158    </application>
+159
+160</manifest>

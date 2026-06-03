@@ -23,7 +23,7 @@ Dùng **Meilisearch** chỉ cho **discovery / catalog search** trong UI. Mọi t
 ## 2. Ranh giới cứng (out-of-scope / forbidden)
 
 - **Không** đưa vào index: toàn bộ `extraData` wire, `secret_key`, HMAC material, số dư tài khoản, số hold thô, `confirm_challenge`.
-- **Không** dùng Meilisearch làm nguồn sự thật cho: idempotency `(mid, request_id)`, trạng thái intent, journal lines. Các luồng đó vẫn là [WalService](../../java/src/main/java/dev/nivic/payment/WalService.java), [`payment_ledger`](../../java/src/main/resources/db/schema/06_payment_ledger.sql), và journal/wallet persistence tương ứng.
+- **Không** dùng Meilisearch làm nguồn sự thật cho: idempotency `(mid, request_id)`, trạng thái intent, journal lines. Các luồng đó vẫn là [WalService](../../java/src/main/java/dev/nivic/payment/WalService.java), [`led_payment`](../../java/src/main/resources/db/schema/06_led_payment.sql), và journal/wallet persistence tương ứng.
 - **Analytics / funnel** theo hướng [WAL → ClickHouse](../analytics/wal-to-clickhouse.md). Meili **không** thay ClickHouse cho OLAP; chỉ dùng dữ liệu đã **ẩn danh / tổng hợp** từ pipeline nếu có nhu cầu search trên metric (thường không cần).
 
 ## 3. Đồng bộ (boundary với Core / DB)

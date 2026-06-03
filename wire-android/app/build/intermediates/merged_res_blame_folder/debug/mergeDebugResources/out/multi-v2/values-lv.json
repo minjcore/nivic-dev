@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "dev.nivic.wire.app-mergeDebugResources-62:/values-lv/values-lv.xml",
+            "outputFile": "app.saving.wire.app-mergeDebugResources-62:/values-lv/values-lv.xml",
             "map": [
                 {
                     "source": "/Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/3570f6ed58cbcef86137420f9b8d0cb6/transformed/jetified-material3-release/res/values-lv/values-lv.xml",

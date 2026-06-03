@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "dev.nivic.wire.app-mergeDebugResources-62:/values-si/values-si.xml",
+            "outputFile": "app.saving.wire.app-mergeDebugResources-62:/values-si/values-si.xml",
             "map": [
                 {
                     "source": "/Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/03cc3a79bb9a8e3e9d9ca3829aef36c3/transformed/core-1.15.0/res/values-si/values-si.xml",

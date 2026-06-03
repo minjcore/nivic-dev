@@ -1,10 +1,12 @@
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/analytics/WalShipperTest.java
+/Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/AccountManagerTest.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/DisbursementFlowTest.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/EodSettlementFlowTest.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/FrozenRulesTest.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/HardeningCheckTest.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/IbftFlowTest.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/InternalTransferFlowTest.java
+/Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/LoadTestBigintIds.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/MakerCheckerTest.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/MultiCurrencyTest.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/PayrollFlowTest.java
@@ -12,6 +14,7 @@
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/QrPosFlowTest.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/ReversalFlowTest.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/SavingsGlTest.java
+/Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/StagingValidationTest.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/TopUpFlowTest.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/WalletPaymentFlowTest.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/WalletSubledgerTest.java
@@ -21,6 +24,7 @@
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/bridge/WalletAcceptMirrorTest.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/bridge/WalletGlBridgeTest.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/bridge/WalletReconcilerTest.java
+/Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/query/BalanceQueryServiceTest.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/coa/report/FundFlowReportsTest.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/ledger/MemoryPaymentIntentTest.java
 /Users/khangdc/Desktop/nivic-dev/java/src/test/java/dev/nivic/party/MidConventionsTest.java

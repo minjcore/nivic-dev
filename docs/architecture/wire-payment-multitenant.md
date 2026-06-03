@@ -4,9 +4,9 @@
 
 **VI:** Một tài liệu cho **Wire App**, **Wire Server (CORE)**, và **Mcs** (`Merchants/`) — **không** kiểu MoMo/Shoptify gọi API tạo order server-to-server, **không** redirect trình duyệt. Giao tiếp chính là **Wire TCP nhị phân** + HTTP tùy chọn; merchant chủ yếu **show QR** chờ app.
 
-Terminology: **Mc** (*Mờ Cê*), **Mcs** (*Mờ C S*), **CORE** = `saving/` Wire TCP + `payment_intents` + ledger.
+Terminology: **Mc** (*Mờ Cê*), **Mcs** (*Mờ C S*). **CORE (Wire rail)** = [`saving/`](../../saving/) Wire TCP + `payment_intents` + ledger. Equivalent servlet rail: [`java/`](../../java/) — see [ADR 004](../adr/004-dual-core-rails-java-and-saving.md).
 
-Related: [Wire ≠ MoMo](../wire-vs-momo.md), [Multi-tenant Mcs](../multi-tenant-mcs.md), [Payment flow (mini-app)](../payment-flow-miniapp.md).
+Related: [Wire ≠ MoMo](../wire-vs-momo.md), [Multi-tenant Mcs](../multi-tenant-mcs.md), [Payment flow (mini-app)](../payment-flow-miniapp.md), [ADR 004: Dual CORE rails](../adr/004-dual-core-rails-java-and-saving.md).
 
 ---
 
@@ -16,7 +16,7 @@ Related: [Wire ≠ MoMo](../wire-vs-momo.md), [Multi-tenant Mcs](../multi-tenant
 |-----------|---------|
 | **Client-driven** | Merchant **does not** call CORE to “create order” before the customer pays. Merchant shows **QR**; **Wire App** drives scan → intent → pay. |
 | **No browser redirect** | After pay, **USER POST** (native background) delivers proof to Mcs — not `window.location` / `returnUrl` from a web view. |
-| **CORE owns money** | Intent, verify, ledger, `payment_intents` live in **CORE**. Mcs does **not** hold authoritative balances. |
+| **CORE owns money** | Intent, verify, ledger, `payment_intents` live in **CORE (Wire rail = saving)**. Mcs does **not** hold authoritative balances. |
 | **Merchant polls CORE** | After USER POST, **Mcs** calls **`queryOrderStatus`** (or internal equivalent) — CORE does **not** push webhooks to merchants by default. |
 | **Shared DB + `mid`** | Multi-tenant isolation by **`mid` / `tenant_id`** on rows (see [ADR 003](../adr/003-neo-bank-mid-and-merchant-id.md)). |
 | **Crypto-first** | QR / wire payloads carry **signatures**; untrusted client data is never enough to mark PAID. |
@@ -28,9 +28,11 @@ Related: [Wire ≠ MoMo](../wire-vs-momo.md), [Multi-tenant Mcs](../multi-tenant
 | Actor | Repo | Role |
 |-------|------|------|
 | **Wire App** | `wire-android/`, `saving-ios/` | Customer: scan QR, `CREATE_INTENT` / `CONFIRM_INTENT`, receive ACK. |
-| **CORE** | `saving/` | Wire TCP, sessions, transfers, `payment_intents`, ledger, idempotency. |
+| **CORE (Wire rail)** | `saving/` | Wire TCP, sessions, transfers, `payment_intents`, ledger, idempotency. **Canonical for this doc.** |
+| **CORE (Servlet rail)** | `java/` | HTTP Sevlet wallet: WAL, `payment_ledger`, `wallet_journal_*`. **Parallel rail** — same `mid` namespace, not the Wire App TCP path. See [ADR 004](../adr/004-dual-core-rails-java-and-saving.md). |
 | **Mcs** | `Merchants/` | Mc orders, menu, loyalty, web entry (`*.nivic.dev`), deeplink helpers. Postgres: [`tenant_bills` + RLS](../Merchants/migrations/001_tenant_bills.up.sql). |
-| **Java Core** (optional) | `java/` | Separate HTTP wallet path (`payment_ledger`, WAL) for some mids — **not** the same TCP session as Wire App today. |
+
+**Equivalent role, different transport:** `java/` was built first (servlet); `saving/` serves the mobile Wire superapp. Do not assume one table serves both rails.
 
 ---
 
@@ -257,10 +259,10 @@ Not yet a dedicated public RPC document — implement as internal HTTP/gRPC from
 
 ```
 wire-android/     Wire App (customer) — WireFrame, deeplink, PaymentConfirmSheet
-saving/           CORE — TCP, payment_intents, transfers, gateway_notify → Mcs
+saving/           CORE Wire rail — TCP, payment_intents, transfers, gateway_notify → Mcs
+java/             CORE Servlet rail — HTTP payload, payment_ledger, WAL, journal (ADR 004)
 Merchants/        Mcs — orders, wire_urls, slug pages, /pay/.../wire
-java/             Optional servlet wallet (separate rail)
-docs/downstream-event-contract.md   Analytics export shape
+docs/downstream-event-contract.md   Analytics export shape (servlet rail)
 ```
 
 ---
@@ -279,3 +281,4 @@ docs/downstream-event-contract.md   Analytics export shape
 - [Product principles §3](../PRODUCT_PRINCIPLES.md) — many stalls, one ruleset
 - [Deterministic focus](../deterministic-focus.md) — WAL vs TCP truth
 - [Downstream event contract](../downstream-event-contract.md) — analytics envelope
+- [Nivic analytics pipeline (SDD)](nivic-analytics-pipeline.md) — unified warehouse design

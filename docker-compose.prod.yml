@@ -16,7 +16,7 @@ services:
   authservice:
     build:
       context: .
-      dockerfile: authservice/Dockerfile
+      dockerfile: auth-service/Dockerfile
     environment:
       WIRE_ADDR: wire:7474
       JWT_SECRET: ${JWT_SECRET}

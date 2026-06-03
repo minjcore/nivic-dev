@@ -10,8 +10,10 @@ dev/nivic/saving/SavInterestCalcTest.class
 dev/nivic/ledger/MemoryPaymentIntentTest.class
 dev/nivic/saving/JdbcSavingLedgerTest.class
 dev/nivic/coa/PeriodCloseFlowTest.class
+dev/nivic/coa/AccountManagerTest.class
 dev/nivic/coa/PayrollFlowTest.class
 dev/nivic/coa/EodSettlementFlowTest.class
+dev/nivic/coa/StagingValidationTest.class
 dev/nivic/wal/SignedWalChainTest.class
 dev/nivic/party/MidConventionsTest.class
 dev/nivic/coa/HardeningCheckTest.class
@@ -25,7 +27,9 @@ dev/nivic/coa/InternalTransferFlowTest.class
 dev/nivic/coa/bridge/WalletAcceptMirrorTest.class
 dev/nivic/coa/WithdrawFlowTest.class
 dev/nivic/coa/FrozenRulesTest.class
+dev/nivic/coa/query/BalanceQueryServiceTest.class
 dev/nivic/sevlet/ExtraDataPolicyTest.class
+dev/nivic/coa/LoadTestBigintIds.class
 dev/nivic/payment/HotPathTest.class
 dev/nivic/coa/WalletPaymentFlowTest.class
 dev/nivic/coa/bridge/WalletGlBridgeTest.class

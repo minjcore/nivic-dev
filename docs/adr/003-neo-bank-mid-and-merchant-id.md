@@ -14,13 +14,19 @@ Product framing treats the wallet engine as a **single bank boundary** (no separ
 
 ## Decision
 
-### 1. Single brain (SoT)
+### 0. Rail scope
 
-All customer-liability truth flows through one pipeline:
+This ADR describes the **servlet CORE rail** ([`java/`](../../java/)). The repo also has a **Wire TCP CORE rail** ([`saving/`](../../saving/)) with the same product role (money, intents, `mid`) but different transport and tables. See [ADR 004: Dual CORE rails](004-dual-core-rails-java-and-saving.md).
+
+“Single brain” below means **one authoritative pipeline per rail** — not that servlet and saving share one database or one ledger table.
+
+### 1. Single brain (SoT) — servlet rail
+
+All customer-liability truth on the **servlet rail** flows through one pipeline:
 
 `SevletWalletPayloadServlet` → `WalletVerificationService` → `WalletAcceptService.claimAndPersist` → `WalService` → `LedgerService` / `PaymentLedger`.
 
-Do **not** maintain a second authoritative balance or payment hub ledger that can diverge from this path. Future rails (if any) submit **commands** into the same pipeline; they do not own SoT.
+Do **not** maintain a second authoritative balance or payment hub ledger **on this rail** that can diverge from this path. Future servlet-side extensions submit **commands** into the same pipeline; they do not own SoT. (Wire-app money on the **saving rail** is documented in ADR 004.)
 
 Code: [`SevletWalletPayloadServlet.java`](../../java/src/main/java/dev/nivic/sevlet/SevletWalletPayloadServlet.java), [`WalletAcceptService.java`](../../java/src/main/java/dev/nivic/payment/WalletAcceptService.java).
 
@@ -42,8 +48,8 @@ Payload record: [`SevletWalletPayload`](../../java/src/main/java/dev/nivic/sevle
 |---------|----------------|
 | Merchant secret + order mode | `wallet_mid_secret` (`mid` = `merchant_id`) |
 | Optional merchant UI / flags | `merchant_config` (`mid` = `merchant_id`) |
-| Ledger (posted movement) | `wallet_ledger` (+ `wallet_journal_*` if enabled) |
-| Intents / two-phase payment | `payment_ledger` (rename to `payment_transaction` deferred — migration backlog) |
+| Ledger (posted movement) | `led_wallet` (+ `acct_journal_*` if enabled) |
+| Intents / two-phase payment | `led_payment` (optional rename to `payment_transaction` — separate backlog) |
 
 Column comments on `mid`: [`01_wallet_mid_secret.sql`](../../java/src/main/resources/db/schema/01_wallet_mid_secret.sql), [`09_merchant_config.sql`](../../java/src/main/resources/db/schema/09_merchant_config.sql).
 
@@ -57,6 +63,7 @@ Seed script (dev-only default secret): [`01_first_mid.sql`](../../java/src/main/
 
 ## Related
 
+- [ADR 004: Dual CORE rails (java + saving)](004-dual-core-rails-java-and-saving.md)
 - [ADR 001: Wire layout vs mental model](001-sevlet-wallet-wire.md)
 - [Product principles](../PRODUCT_PRINCIPLES.md) — WAL / ledger narrative
 - Generated schema: `java/docs/generated/schema.md` (after `./gendocs.sh`)

@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:2:1-27:12
-INJECTED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:2:1-27:12
-INJECTED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:2:1-27:12
-INJECTED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:2:1-27:12
+ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:2:1-43:12
+INJECTED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:2:1-43:12
+INJECTED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:2:1-43:12
+INJECTED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:2:1-43:12
 MERGED from [androidx.camera:camera-video:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/d3825181c8a8132060c6fff5a56c463a/transformed/jetified-camera-video-1.4.1/AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.camera:camera-view:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/8275b6f9e5f062e2a19d9407ac330977/transformed/jetified-camera-view-1.4.1/AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.camera:camera-lifecycle:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/ff0851cc482dd810db0b8c6442871c9d/transformed/jetified-camera-lifecycle-1.4.1/AndroidManifest.xml:2:1-7:12
@@ -114,8 +114,8 @@ ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidMan
 	android:name
 		ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:7:19-57
 application
-ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:9:5-25:19
-INJECTED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:9:5-25:19
+ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:9:5-41:19
+INJECTED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:9:5-41:19
 MERGED from [androidx.camera:camera-camera2:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/62e87460454557791f026bb6b4eb5d10/transformed/jetified-camera-camera2-1.4.1/AndroidManifest.xml:23:5-34:19
 MERGED from [androidx.camera:camera-camera2:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/62e87460454557791f026bb6b4eb5d10/transformed/jetified-camera-camera2-1.4.1/AndroidManifest.xml:23:5-34:19
 MERGED from [androidx.camera:camera-core:1.4.1] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/1363e8822614f4f1472e7f9df7a35d80/transformed/jetified-camera-core-1.4.1/AndroidManifest.xml:23:5-34:19
@@ -164,8 +164,8 @@ MERGED from [com.google.android.odml:image:1.0.0-beta1] /Users/khangdc/.gradle/c
 		ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:13:9-69
 	android:name
 		ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:10:9-32
-activity#dev.nivic.wire.MainActivity
-ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:15:9-24:20
+activity#app.saving.wire.MainActivity
+ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:15:9-40:20
 	android:windowSoftInputMode
 		ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:19:13-55
 	android:exported
@@ -184,6 +184,32 @@ category#android.intent.category.LAUNCHER
 ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:22:17-77
 	android:name
 		ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:22:27-74
+intent-filter#action:name:android.intent.action.VIEW+category:name:android.intent.category.BROWSABLE+category:name:android.intent.category.DEFAULT+data:scheme:saving
+ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:26:13-31:29
+	android:autoVerify
+		ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:26:28-53
+action#android.intent.action.VIEW
+ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:27:17-69
+	android:name
+		ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:27:25-66
+category#android.intent.category.DEFAULT
+ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:28:17-76
+	android:name
+		ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:28:27-73
+category#android.intent.category.BROWSABLE
+ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:29:17-78
+	android:name
+		ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:29:27-75
+data
+ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:30:17-49
+	android:host
+		ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:38:46-72
+	android:scheme
+		ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:30:23-46
+intent-filter#action:name:android.intent.action.VIEW+category:name:android.intent.category.BROWSABLE+category:name:android.intent.category.DEFAULT+data:host:*.nivic.dev+data:scheme:https
+ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:34:13-39:29
+	android:autoVerify
+		ADDED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml:34:28-53
 uses-sdk
 INJECTED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from /Users/khangdc/Desktop/nivic-dev/wire-android/app/src/main/AndroidManifest.xml
@@ -472,7 +498,7 @@ ADDED from [androidx.core:core:1.15.0] /Users/khangdc/.gradle/caches/9.0-milesto
 		ADDED from [androidx.core:core:1.15.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/03cc3a79bb9a8e3e9d9ca3829aef36c3/transformed/core-1.15.0/AndroidManifest.xml:24:9-44
 	android:name
 		ADDED from [androidx.core:core:1.15.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/03cc3a79bb9a8e3e9d9ca3829aef36c3/transformed/core-1.15.0/AndroidManifest.xml:23:9-81
-permission#dev.nivic.wire.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+permission#app.saving.wire.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
 ADDED from [androidx.core:core:1.15.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/03cc3a79bb9a8e3e9d9ca3829aef36c3/transformed/core-1.15.0/AndroidManifest.xml:22:5-24:47
 	android:protectionLevel
 		ADDED from [androidx.core:core:1.15.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/03cc3a79bb9a8e3e9d9ca3829aef36c3/transformed/core-1.15.0/AndroidManifest.xml:24:9-44
@@ -482,7 +508,7 @@ uses-permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
 ADDED from [androidx.core:core:1.15.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/03cc3a79bb9a8e3e9d9ca3829aef36c3/transformed/core-1.15.0/AndroidManifest.xml:26:5-97
 	android:name
 		ADDED from [androidx.core:core:1.15.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/03cc3a79bb9a8e3e9d9ca3829aef36c3/transformed/core-1.15.0/AndroidManifest.xml:26:22-94
-uses-permission#dev.nivic.wire.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+uses-permission#app.saving.wire.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
 ADDED from [androidx.core:core:1.15.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/03cc3a79bb9a8e3e9d9ca3829aef36c3/transformed/core-1.15.0/AndroidManifest.xml:26:5-97
 	android:name
 		ADDED from [androidx.core:core:1.15.0] /Users/khangdc/.gradle/caches/9.0-milestone-1/transforms/03cc3a79bb9a8e3e9d9ca3829aef36c3/transformed/core-1.15.0/AndroidManifest.xml:26:22-94

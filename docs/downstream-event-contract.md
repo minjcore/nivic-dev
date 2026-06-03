@@ -57,5 +57,6 @@ Optional (nên có khi pipeline cho phép):
 
 - Decode payload: `SevletWalletCodec` → `SevletWalletPayload`.
 - JSON debug (không phải contract downstream): `WalletPayloadJson.format` — khi implement producer, map sang **envelope** + quy tắc string ở trên.
+- **Phase 1 shipper (implemented):** `dev.nivic.analytics.WalShipper` + CLI `dev.nivic.cli.WalShipperMain` — tail file WAL → NDJSON; `./dev-java.sh ship` (see [Nivic analytics pipeline](../architecture/nivic-analytics-pipeline.md)).
 
 File JSON Schema mẫu: [`schemas/wallet_core_event_v1.schema.json`](schemas/wallet_core_event_v1.schema.json).

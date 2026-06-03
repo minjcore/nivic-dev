@@ -1,6 +1,6 @@
 [
     {
-        "merged": "dev.nivic.wire.app-debug-64:/xml_network_security_config.xml.flat",
-        "source": "dev.nivic.wire.app-main-66:/xml/network_security_config.xml"
+        "merged": "app.saving.wire.app-debug-64:/xml_network_security_config.xml.flat",
+        "source": "app.saving.wire.app-main-66:/xml/network_security_config.xml"
     }
 ]

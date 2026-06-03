@@ -18,15 +18,19 @@ Terminology: **Mc** (*Mờ Cê*), **Mcs** (*Mờ C S*) — [Wire ≠ MoMo](wire-
 |------|----------------------|
 | [`Merchants/`](../Merchants/) | **Mcs** — orders, slug pages, `pay/`, chat, loyalty, deeplink helpers |
 | [`wire-android/`](../wire-android/) | **Wire** app — same binary; opens **Mc** by `mid` / deeplink |
-| [`saving/`](../saving/) | **Wire Server** (TCP) — `payment_intents`, ledger per `mid` |
-| [`java/`](../java/) | **Core** (optional path) — `merchant_config`, `wallet_mid_secret` per `mid` |
+| [`saving/`](../saving/) | **CORE Wire rail** — TCP, `payment_intents`, ledger per `mid` (Wire App canonical) |
+| [`java/`](../java/) | **CORE Servlet rail** — `payment_ledger`, WAL, `wallet_mid_secret` per `mid` (partner POST; not Wire TCP). See [ADR 004](adr/004-dual-core-rails-java-and-saving.md). |
+
+**EN:** Mcs talks to **saving** for Wire pay today (`confirm`, `gateway_notify`). The **java** rail is equivalent in CORE role but a separate transport and schema — not optional for servlet clients.
+
+**VI:** Mcs hôm nay nói chuyện **saving** cho Wire pay. **java** cùng vai trò CORE nhưng rail servlet riêng — không thay thế nhau nếu chưa có bridge.
 
 ```
 nivic-dev/
   Merchants/     ← Mcs (multi-tenant Mc API + web entry)
   wire-android/  ← Wire host app
-  saving/        ← Wire TCP + payment_intents
-  java/          ← Sevlet wallet Core (per-mid secrets)
+  saving/        ← CORE Wire rail (TCP + payment_intents)
+  java/          ← CORE Servlet rail (Sevlet wallet; built first)
 ```
 
 **EN:** You do **not** add `Merchants/shop-a/` and `Merchants/shop-b/` per Mc—tenancy is **data** (`mid`, slug), not **folders**.
@@ -112,7 +116,8 @@ See also [Wire payment + multi-tenant](architecture/wire-payment-multitenant.md)
 ## Relation to other docs / Liên hệ doc khác
 
 - §3 in [Product principles](PRODUCT_PRINCIPLES.md) — many stalls, one ruleset
-- [ADR 003: `mid` / merchant_id](adr/003-neo-bank-mid-and-merchant-id.md) — single brain, tenant id on wire
+- [ADR 003: `mid` / merchant_id](adr/003-neo-bank-mid-and-merchant-id.md) — servlet rail, tenant id on wire
+- [ADR 004: Dual CORE rails](adr/004-dual-core-rails-java-and-saving.md) — `java/` ≈ `saving/` role, different transport
 - [Wire ≠ MoMo](wire-vs-momo.md) — superapp, not per-Mc apps
 - [Payment flow: MiniApp](payment-flow-miniapp.md) — one server, many `payment_intents` rows per `mid`
 

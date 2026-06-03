@@ -86,9 +86,9 @@ Trang này mô tả cách chúng ta thiết kế và **truyền đạt** nền t
 
 ## 9. Book-keeping / Sổ cái (kế toán kép)
 
-**EN:** After a payment is **accepted and settled** on the non–order-payment path, **double-entry book-keeping** is recorded: `wallet_journal_entry` (header) and `wallet_journal_line` (balanced debit/credit lines for the wire `amount`). That is the **accounting projection** of value movement—not the search index, not Meilisearch, and not raw `extraData` semantics. `payment_ledger` covers the **order-payment / intent** phase and may hold `debit`/`credit` only after settle; see schema comments in the repo.
+**EN:** After a payment is **accepted and settled** on the non–order-payment path, **double-entry book-keeping** is recorded: `acct_journal_entry` (header) and `acct_journal_line` (balanced debit/credit lines for the wire `amount`). That is the **accounting projection** (`acct_*` tables) of value movement—not the search index, not Meilisearch, and not raw `extraData` semantics. `led_payment` covers the **order-payment / intent** phase (`led_*` ledger projection) and may hold `debit`/`credit` only after settle; see schema comments in the repo.
 
-**VI:** Sau khi thanh toán **được chấp nhận và settle** (luồng không phải order-payment tức thời), hệ thống ghi **kế toán kép**: `wallet_journal_entry` (đầu bút) và `wallet_journal_line` (dòng nợ/có cân đối theo `amount` trên wire). Đó là **bút toán / sổ cái** phản ánh dòng giá trị—**không** phải index tìm kiếm, **không** phải Meilisearch, và **không** phải nghĩa nghiệp vụ thô của `extraData`. `payment_ledger` phục vụ **phase order-payment / intent**; cột `debit`/`credit` chỉ đầy đủ sau settle—xem comment schema trong repo.
+**VI:** Sau khi thanh toán **được chấp nhận và settle** (luồng không phải order-payment tức thời), hệ thống ghi **kế toán kép**: `acct_journal_entry` (đầu bút) và `acct_journal_line` (dòng nợ/có cân đối theo `amount` trên wire). Đó là **bút toán / sổ cái** (`acct_*`) phản ánh dòng giá trị—**không** phải index tìm kiếm, **không** phải Meilisearch, và **không** phải nghĩa nghiệp vụ thô của `extraData`. `led_payment` phục vụ **phase order-payment / intent** (`led_*`); cột `debit`/`credit` chỉ đầy đủ sau settle—xem comment schema trong repo.
 
 ---
 
@@ -98,23 +98,23 @@ Trang này mô tả cách chúng ta thiết kế và **truyền đạt** nền t
 
 | Table / artifact | Role |
 |------------------|------|
-| `wallet_ledger` | One append-only row per **accepted** wallet message (projection after WAL on immediate-settle path). |
-| `payment_ledger` | Order-payment **intent** row; **`PRIMARY KEY (mid, request_id)`** enforces **idempotency at ledger row level** (no duplicate intent for the same keys). Upsert after settle; `intent_status`, TTL, `confirm_challenge`. |
-| `wallet_journal_entry` | Double-entry **voucher header** per settled transfer. |
-| `wallet_journal_line` | Two balanced lines (debit / credit accounts, amounts). |
-| `wallet_account_hold` | Soft hold for intents (debit account + amount) when applicable. |
-| `wallet_idempotency` | **First-claim gate** before WAL/ledger writes: `INSERT … ON CONFLICT DO NOTHING` on `(mid, request_id)`; order-payment mids also enforce **stored `order_id`** on retries. Complements `payment_ledger` PK; see [`JdbcIdempotencyGate`](../java/src/main/java/dev/nivic/sevlet/idempotency/JdbcIdempotencyGate.java). |
+| `led_wallet` | One append-only row per **accepted** wallet message (`led_*` ledger projection after WAL on immediate-settle path). |
+| `led_payment` | Order-payment **intent** row (`led_*`); **`PRIMARY KEY (mid, request_id)`** enforces **idempotency at ledger row level**. Upsert after settle; `intent_status`, TTL, `confirm_challenge`. |
+| `acct_journal_entry` | Double-entry **voucher header** per settled transfer (`acct_*` accounting). |
+| `acct_journal_line` | Two balanced lines (debit / credit accounts, amounts). |
+| `acct_account_hold` | Soft hold for intents (debit account + amount) when applicable. |
+| `wallet_idempotency` | **First-claim gate** before WAL/ledger writes: `INSERT … ON CONFLICT DO NOTHING` on `(mid, request_id)`; order-payment mids also enforce **stored `order_id`** on retries. Complements `led_payment` PK; see [`JdbcIdempotencyGate`](../java/src/main/java/dev/nivic/sevlet/idempotency/JdbcIdempotencyGate.java). |
 
 **VI:** Repo **không** có bảng tên `ledgers_data`. Dữ liệu sổ / projection nằm ở các bảng **Postgres** sau (xem [schema.sql](../java/src/main/resources/db/schema.sql) và `db/schema/*.sql`):
 
 | Bảng | Vai trò |
 |------|--------|
-| `wallet_ledger` | Một dòng append-only mỗi tin ví **đã chấp nhận** (chiếu sau WAL, luồng settle ngay). |
-| `payment_ledger` | Dòng **intent** order-payment; **`PRIMARY KEY (mid, request_id)`** = **idempotency trực tiếp trên bảng** (không hai intent trùng khóa). Upsert sau settle; `intent_status`, TTL, `confirm_challenge`. |
-| `wallet_journal_entry` | **Đầu bút** kế toán kép mỗi lần transfer settle. |
-| `wallet_journal_line` | Hai dòng cân đối (tài khoản nợ/có, số tiền). |
-| `wallet_account_hold` | Hold mềm cho intent (khi có). |
-| `wallet_idempotency` | **Cổng claim trước** khi ghi WAL/ledger: `INSERT … ON CONFLICT` theo `(mid, request_id)`; mid order-payment còn khóa **`order_id`** khi retry. Bổ sung cho PK `payment_ledger`; xem [`JdbcIdempotencyGate`](../java/src/main/java/dev/nivic/sevlet/idempotency/JdbcIdempotencyGate.java). |
+| `led_wallet` | Một dòng append-only mỗi tin ví **đã chấp nhận** (`led_*`, chiếu sau WAL, luồng settle ngay). |
+| `led_payment` | Dòng **intent** order-payment (`led_*`); **`PRIMARY KEY (mid, request_id)`** = **idempotency trên bảng**. Upsert sau settle; `intent_status`, TTL, `confirm_challenge`. |
+| `acct_journal_entry` | **Đầu bút** kế toán kép mỗi lần transfer settle (`acct_*`). |
+| `acct_journal_line` | Hai dòng cân đối (tài khoản nợ/có, số tiền). |
+| `acct_account_hold` | Hold mềm cho intent (khi có). |
+| `wallet_idempotency` | **Cổng claim trước** khi ghi WAL/ledger: `INSERT … ON CONFLICT` theo `(mid, request_id)`; mid order-payment còn khóa **`order_id`** khi retry. Bổ sung cho PK `led_payment`; xem [`JdbcIdempotencyGate`](../java/src/main/java/dev/nivic/sevlet/idempotency/JdbcIdempotencyGate.java). |
 
 If you need a **named** `ledgers_data` for BI, define it as a **VIEW** or export job over these tables—do not treat it as a second source of truth.
 

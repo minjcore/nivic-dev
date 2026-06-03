@@ -15,7 +15,7 @@
  *   guardians          — up to 3 guardian links per account
  *   recovery_requests  — open device-switch requests
  *   wallet_idempotency — (mid, request_id) dedup   ← from Java JdbcIdempotencyGate
- *   wallet_ledger      — append-only audit trail    ← from Java JdbcWalletLedger
+ *   led_wallet         — append-only audit trail    ← from Java JdbcWalletLedger (led_* prefix)
  *
  *  Thread safety: all public functions are serialised under DB.mu.
  *  For higher concurrency, swap in a proper connection pool (pgBouncer).

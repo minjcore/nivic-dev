@@ -2,6 +2,8 @@
 
 This document describes a **reference pipeline** for turning append-only wallet WAL bytes into tenant-aware analytics. It is not wired into the Java runtime today; it informs operations and future connectors.
 
+**Full SDD (sources, SLOs, phases):** [Nivic analytics pipeline](../architecture/nivic-analytics-pipeline.md).
+
 ## Source: Core WAL
 
 - Raw POST bodies (post-HMAC acceptance) append to the file WAL (`WalService` / `SimpleWalLog`), optionally wrapped in **NVW2** signed frames when Ed25519 keys are configured (`SignedWalVerifier`).
@@ -22,6 +24,8 @@ flowchart LR
 2. **Publish** to a durable log (Kafka/Pulsar) with partition key = **tenant / `mid` prefix`** (or hashed `mid`) to preserve per-tenant ordering where needed.
 3. **Consumer** decodes `SevletWalletCodec`, extracts `mid`, `requestId`, `orderId`, `command`, `amount`, `debit`, `credit`, timestamps, and bounded `extraData` (or hashes it for PII).
 4. **Bulk insert** into **ClickHouse** `MergeTree` with `(mid, toStartOfHour(ts))` or `(tenant_id, ts)` ordering for dashboard queries, funnels, and ad-hoc SQL.
+
+**Phase 1 shipper (java):** `dev.nivic.analytics.WalShipper` reads the file WAL (legacy or NVW2), emits NDJSON matching [downstream event contract](../downstream-event-contract.md). Run: `cd java && ./dev-java.sh ship` (env: `WAL_PATH`, `ANALYTICS_OUT`, optional `WAL_PUBKEY_DER`).
 
 **Why ClickHouse first:** columnar storage, excellent compression, fast aggregations over billions of rows, and natural fit for **event warehouses** and BI (per-tenant dashboards, drop-off on parked orders, amount histograms).
 

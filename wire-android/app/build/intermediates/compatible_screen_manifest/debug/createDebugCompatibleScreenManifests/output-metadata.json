@@ -4,7 +4,7 @@
     "type": "COMPATIBLE_SCREEN_MANIFEST",
     "kind": "Directory"
   },
-  "applicationId": "dev.nivic.wire",
+  "applicationId": "app.saving.wire",
   "variantName": "debug",
   "elements": []
 }

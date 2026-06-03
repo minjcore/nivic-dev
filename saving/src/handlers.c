@@ -1102,6 +1102,18 @@ static void handle_qr_pay(DB *db, SessionTable *st, int fd, const WireFrame *f) 
     wr64(msg + 12, ts);
     memcpy(msg + 20, ref, ref_len);
     if (ed25519_verify(pubkey, sig, msg, 20 + ref_len) != 0) {
+        /* TEMP DEBUG: dump exactly what the client sent so we can see the mismatch. */
+        fprintf(stderr, "[QR_PAY BAD_SIG] mid=%u amount=%llu ts=%llu ref_len=%u ref='%.*s'\n",
+                merchant_id, (unsigned long long)amount, (unsigned long long)ts,
+                ref_len, ref_len, ref);
+        fprintf(stderr, "  msg(%d): ", 20 + ref_len);
+        for (int i = 0; i < 20 + ref_len; i++) fprintf(stderr, "%02x", msg[i]);
+        fprintf(stderr, "\n  sig:    ");
+        for (int i = 0; i < 64; i++) fprintf(stderr, "%02x", sig[i]);
+        fprintf(stderr, "\n  pubkey: ");
+        for (int i = 0; i < 32; i++) fprintf(stderr, "%02x", pubkey[i]);
+        fprintf(stderr, "\n");
+        fflush(stderr);
         send_ack(fd, f->seq, WIRE_ERR_BAD_SIG, NULL, 0); return;
     }
 

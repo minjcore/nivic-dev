@@ -7,8 +7,8 @@ import (
 )
 
 func main() {
-	addr    := envOr("OPS_ADDR",       ":9000")
-	token   := envOr("OPS_TOKEN",      "change-me-in-production")
+	addr    := envOr("OPS_ADDR",       ":9010")
+	token   := envOr("OPS_TOKEN",      "dev-ops-test")
 	dsn     := envOr("MERCHANTS_DB",   "postgres://postgres:postgres@localhost/merchants?sslmode=disable")
 	wireURL := envOr("WIRE_ADMIN_URL", "http://localhost:7475")
 	wireM2M := envOr("WIRE_M2M_TOKEN", "")

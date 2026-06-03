@@ -67,7 +67,7 @@ static const char SCHEMA[] =
     "ALTER TABLE wallet_idempotency ADD COLUMN IF NOT EXISTS create_time TIMESTAMPTZ NOT NULL DEFAULT NOW();"
 
     /* Append-only ledger — ported from Java JdbcWalletLedger */
-    "CREATE TABLE IF NOT EXISTS wallet_ledger ("
+    "CREATE TABLE IF NOT EXISTS led_wallet ("
     "  mid          BIGINT NOT NULL,"
     "  request_id   BIGINT NOT NULL,"
     "  order_id     BIGINT NOT NULL,"
@@ -491,7 +491,7 @@ int db_ledger_append(DB *db,
                      uint64_t command, uint64_t amount_minor,
                      const uint8_t *extra_data, uint16_t extra_len) {
     static const char SQL[] =
-        "INSERT INTO wallet_ledger"
+        "INSERT INTO led_wallet"
         "  (mid, request_id, order_id, command, amount_minor, extra_data)"
         "  VALUES ($1, $2, $3, $4, $5, $6)"
         "  ON CONFLICT DO NOTHING";   /* idempotency already checked, this is just safety */

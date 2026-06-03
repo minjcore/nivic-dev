@@ -4,15 +4,15 @@
     "type": "PROCESSED_RES",
     "kind": "Directory"
   },
-  "applicationId": "dev.nivic.wire",
+  "applicationId": "app.saving.wire",
   "variantName": "debug",
   "elements": [
     {
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 1,
-      "versionName": "1.0",
+      "versionCode": 2,
+      "versionName": "1.1-reffix",
       "outputFile": "resources-debug.ap_"
     }
   ],
