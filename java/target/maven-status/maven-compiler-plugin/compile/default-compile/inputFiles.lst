@@ -35,6 +35,7 @@
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/coa/bridge/ReconciliationReport.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/coa/bridge/WalletGlBridge.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/coa/bridge/WalletReconciler.java
+/Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/coa/cmd/CryptoDepositCmd.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/coa/cmd/CryptoDepositConfirmCmd.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/coa/cmd/CryptoToFiatConvertCmd.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/coa/cmd/DisbursementInitCmd.java

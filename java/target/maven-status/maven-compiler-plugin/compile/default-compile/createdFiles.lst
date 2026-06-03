@@ -64,6 +64,7 @@ dev/nivic/coa/error/AccountException$PeriodClosed.class
 dev/nivic/coa/api/FundFlowApi.class
 dev/nivic/coa/CoaTransLine.class
 dev/nivic/db/DbSchema$ACCT_JOURNAL_LINE_.class
+dev/nivic/coa/cmd/CryptoDepositCmd.class
 dev/nivic/sevlet/api/FormCodegenServlet.class
 dev/nivic/party/MidConventions.class
 dev/nivic/coa/query/BalanceQueryEventFactory.class
