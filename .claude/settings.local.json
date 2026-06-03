@@ -501,8 +501,7 @@
       "Bash(./test-event-pipeline.sh)",
       "Bash(mvn package *)",
       "Bash(mvn help:active-profiles *)",
-      "Bash(awk '{print \"  - \" $NF}')",
-      "Bash(awk '{print \"❌ \" $NF}')"
+      "Bash(awk '{print \"  - \" $NF}')"
     ]
   }
 }
