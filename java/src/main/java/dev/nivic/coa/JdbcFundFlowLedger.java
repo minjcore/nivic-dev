@@ -144,6 +144,10 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
   private static final String DDL_TRANS_DATA_ALTER =
       "ALTER TABLE coa_trans_data ADD COLUMN IF NOT EXISTS party_mid BIGINT";
 
+  /** Extend currency_code to support USDT, ETH, BTC (4+ char codes). */
+  private static final String DDL_TRANS_DATA_CCY_EXTEND =
+      "ALTER TABLE coa_trans_data ALTER COLUMN currency_code TYPE VARCHAR(10)";
+
   private static final String DDL_IDX_DATA_ACCOUNT =
       "CREATE INDEX IF NOT EXISTS coa_trans_data_account_idx ON coa_trans_data (account_code)";
 
@@ -1689,6 +1693,7 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
         st.execute(DDL_TRANS);
         st.execute(DDL_TRANS_ALTER);
         st.execute(DDL_TRANS_DATA);
+        st.execute(DDL_TRANS_DATA_CCY_EXTEND);
         st.execute(DDL_TRANS_DATA_ALTER);
         st.execute(DDL_IDX_DATA_ACCOUNT);
         st.execute(DDL_IDX_DATA_PARTY);
