@@ -1,0 +1,261 @@
+{
+  "dashboard": {
+    "title": "Saving-Gateway - Event Orchestration",
+    "tags": ["gateway", "events", "orchestration"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "Events Received vs Processed",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(gtel_gateway_events_received_total[1m])",
+            "legendFormat": "Received TPS",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(gtel_gateway_events_processed_total[1m])",
+            "legendFormat": "Processed TPS",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(gtel_gateway_events_failed_total[1m])",
+            "legendFormat": "Failed TPS",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "short",
+            "label": "Events/sec"
+          }
+        ]
+      },
+      {
+        "title": "Deduplication Cache Hit Rate",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(gtel_gateway_dedup_hits_total[5m]) / rate(gtel_gateway_events_received_total[5m])",
+            "legendFormat": "Hit Rate",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "percentunit"
+          }
+        ]
+      },
+      {
+        "title": "Batch Processing Metrics",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "gtel_gateway_batch_size_avg",
+            "legendFormat": "Avg Batch Size",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(gtel_gateway_batch_count_total[1m])",
+            "legendFormat": "Batches/sec",
+            "refId": "B"
+          }
+        ]
+      },
+      {
+        "title": "Circuit Breaker State",
+        "type": "stat",
+        "gridPos": {"x": 8, "y": 8, "w": 4, "h": 8},
+        "targets": [
+          {
+            "expr": "gtel_gateway_circuit_breaker_state",
+            "legendFormat": "State: {{ state }}"
+          }
+        ]
+      },
+      {
+        "title": "Local Event Buffer",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "gtel_gateway_local_buffer_size",
+            "legendFormat": "Buffered Events",
+            "refId": "A"
+          },
+          {
+            "expr": "gtel_gateway_local_buffer_max_size",
+            "legendFormat": "Max Capacity",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "short",
+            "label": "Events"
+          }
+        ]
+      },
+      {
+        "title": "Event Processing Latency",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, gtel_gateway_processing_latency_seconds)",
+            "legendFormat": "P50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, gtel_gateway_processing_latency_seconds)",
+            "legendFormat": "P95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, gtel_gateway_processing_latency_seconds)",
+            "legendFormat": "P99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ms"
+          }
+        ]
+      },
+      {
+        "title": "Rate Limiter Status",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(gtel_gateway_rate_limit_exceeded_total[5m])",
+            "legendFormat": "Rejected/sec"
+          },
+          {
+            "expr": "gtel_gateway_rate_limit_capacity",
+            "legendFormat": "Capacity: {{ client_id }}"
+          }
+        ]
+      },
+      {
+        "title": "Event Type Distribution",
+        "type": "piechart",
+        "gridPos": {"x": 0, "y": 24, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "increase(gtel_gateway_events_received_total{event_type!=\"\"}[5m])",
+            "legendFormat": "{{ event_type }}"
+          }
+        ]
+      },
+      {
+        "title": "Enrichment Success Rate",
+        "type": "stat",
+        "gridPos": {"x": 8, "y": 24, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "increase(gtel_gateway_enrichment_success_total[5m])",
+            "legendFormat": "Success"
+          },
+          {
+            "expr": "increase(gtel_gateway_enrichment_failed_total[5m])",
+            "legendFormat": "Failed"
+          }
+        ]
+      },
+      {
+        "title": "RabbitMQ Publishing Latency",
+        "type": "graph",
+        "gridPos": {"x": 16, "y": 24, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, gtel_gateway_rabbitmq_publish_latency_seconds)",
+            "legendFormat": "P95 Publish Time"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ms"
+          }
+        ]
+      },
+      {
+        "title": "Circuit Breaker History",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 32, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "increase(gtel_gateway_circuit_breaker_transitions_total{transition=\"open\"}[10m])",
+            "legendFormat": "→ OPEN"
+          },
+          {
+            "expr": "increase(gtel_gateway_circuit_breaker_transitions_total{transition=\"closed\"}[10m])",
+            "legendFormat": "→ CLOSED"
+          },
+          {
+            "expr": "increase(gtel_gateway_circuit_breaker_transitions_total{transition=\"half_open\"}[10m])",
+            "legendFormat": "→ HALF_OPEN"
+          }
+        ]
+      },
+      {
+        "title": "Drain History",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 32, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "increase(gtel_gateway_drain_total[5m])",
+            "legendFormat": "Drain Events"
+          },
+          {
+            "expr": "histogram_quantile(0.99, gtel_gateway_drain_latency_seconds)",
+            "legendFormat": "P99 Drain Time"
+          }
+        ]
+      },
+      {
+        "title": "Redis Cache Operations",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 40, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(gtel_gateway_redis_cache_hits_total[1m])",
+            "legendFormat": "Cache Hits"
+          },
+          {
+            "expr": "rate(gtel_gateway_redis_cache_misses_total[1m])",
+            "legendFormat": "Cache Misses"
+          },
+          {
+            "expr": "rate(gtel_gateway_redis_errors_total[1m])",
+            "legendFormat": "Errors"
+          }
+        ]
+      },
+      {
+        "title": "Event Queue Depth",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 40, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "gtel_gateway_event_queue_size",
+            "legendFormat": "Queue Size"
+          },
+          {
+            "expr": "gtel_gateway_event_queue_max_size",
+            "legendFormat": "Max Size"
+          }
+        ]
+      }
+    ],
+    "schemaVersion": 27,
+    "version": 1,
+    "refresh": "10s"
+  },
+  "overwrite": true
+}

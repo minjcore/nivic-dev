@@ -1,0 +1,279 @@
+{
+  "dashboard": {
+    "title": "COA Ledger - Core Performance Monitoring",
+    "tags": ["ledger", "accounting", "production"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "Transactions Per Second (TPS)",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(gtel_ledger_events_received_total[1m])",
+            "legendFormat": "Received TPS",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(gtel_ledger_events_processed_seconds_count[1m])",
+            "legendFormat": "Processed TPS",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(gtel_ledger_events_failed_total[1m])",
+            "legendFormat": "Failed TPS",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "short",
+            "label": "TPS",
+            "min": 0
+          }
+        ],
+        "alert": {
+          "name": "High Error Rate"
+        }
+      },
+      {
+        "title": "Transaction Processing Latency",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, gtel_ledger_events_processed_seconds)",
+            "legendFormat": "P50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, gtel_ledger_events_processed_seconds)",
+            "legendFormat": "P95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, gtel_ledger_events_processed_seconds)",
+            "legendFormat": "P99",
+            "refId": "C"
+          },
+          {
+            "expr": "histogram_quantile(0.999, gtel_ledger_events_processed_seconds)",
+            "legendFormat": "P99.9",
+            "refId": "D"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "s",
+            "label": "Latency"
+          }
+        ]
+      },
+      {
+        "title": "Disruptor Ring Buffer Status",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "gtel_disruptor_ring_buffer_available",
+            "legendFormat": "Available Slots",
+            "refId": "A"
+          },
+          {
+            "expr": "gtel_disruptor_ring_buffer_size - gtel_disruptor_ring_buffer_available",
+            "legendFormat": "Used Slots",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "short",
+            "label": "Slots"
+          }
+        ]
+      },
+      {
+        "title": "Double-Entry Validation",
+        "type": "stat",
+        "gridPos": {"x": 8, "y": 8, "w": 4, "h": 8},
+        "targets": [
+          {
+            "expr": "increase(gtel_ledger_double_entry_validated_total[5m])",
+            "legendFormat": "Valid",
+            "refId": "A"
+          },
+          {
+            "expr": "increase(gtel_ledger_double_entry_failed_total[5m])",
+            "legendFormat": "Failed",
+            "refId": "B"
+          }
+        ]
+      },
+      {
+        "title": "Saving-Gateway Status",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "gtel_gateway_circuit_breaker_state",
+            "legendFormat": "Circuit: {{ state }}",
+            "refId": "A"
+          },
+          {
+            "expr": "gtel_gateway_local_buffer_size",
+            "legendFormat": "Buffered Events",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(gtel_gateway_events_received_total[1m])",
+            "legendFormat": "Incoming TPS",
+            "refId": "C"
+          }
+        ]
+      },
+      {
+        "title": "RabbitMQ Queue Metrics",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rabbitmq_queue_messages_ready{queue=\"java-ledger-events\"}",
+            "legendFormat": "Messages Ready",
+            "refId": "A"
+          },
+          {
+            "expr": "rabbitmq_queue_messages_unacked{queue=\"java-ledger-events\"}",
+            "legendFormat": "Messages Unacked",
+            "refId": "B"
+          },
+          {
+            "expr": "rabbitmq_queue_consumers{queue=\"java-ledger-events\"}",
+            "legendFormat": "Consumers",
+            "refId": "C"
+          }
+        ]
+      },
+      {
+        "title": "Database Connection Pool",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "hikaricp_connections_active",
+            "legendFormat": "Active",
+            "refId": "A"
+          },
+          {
+            "expr": "hikaricp_connections_pending",
+            "legendFormat": "Pending",
+            "refId": "B"
+          },
+          {
+            "expr": "hikaricp_connections_max",
+            "legendFormat": "Max",
+            "refId": "C"
+          }
+        ]
+      },
+      {
+        "title": "Event Type Distribution (5m)",
+        "type": "piechart",
+        "gridPos": {"x": 0, "y": 24, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "increase(gtel_ledger_events_received_total{event_type!=\"\"}[5m])",
+            "legendFormat": "{{ event_type }}"
+          }
+        ]
+      },
+      {
+        "title": "Error Rate by Type",
+        "type": "graph",
+        "gridPos": {"x": 8, "y": 24, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "increase(gtel_ledger_events_failed_total{error_code!=\"\"}[5m])",
+            "legendFormat": "{{ error_code }}"
+          }
+        ]
+      },
+      {
+        "title": "JVM Memory Usage",
+        "type": "graph",
+        "gridPos": {"x": 16, "y": 24, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "jvm_memory_used_bytes{area=\"heap\"} / jvm_memory_max_bytes{area=\"heap\"}",
+            "legendFormat": "Heap Utilization",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "percentunit"
+          }
+        ]
+      },
+      {
+        "title": "GC Activity",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 32, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(jvm_gc_pause_seconds_count[1m])",
+            "legendFormat": "GC Events/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "jvm_gc_pause_seconds{quantile=\"0.99\"}",
+            "legendFormat": "P99 Pause Time",
+            "refId": "B"
+          }
+        ]
+      },
+      {
+        "title": "Deduplication Cache Stats",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 32, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "increase(gtel_gateway_dedup_hits_total[5m])",
+            "legendFormat": "Cache Hits",
+            "refId": "A"
+          },
+          {
+            "expr": "increase(gtel_ledger_duplicates_total[5m])",
+            "legendFormat": "Duplicates Found",
+            "refId": "B"
+          }
+        ]
+      },
+      {
+        "title": "Database Query Performance",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 40, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(pg_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "P95 Query Time",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(pg_queries_total[1m])",
+            "legendFormat": "Queries/sec",
+            "refId": "B"
+          }
+        ]
+      },
+      {
+        "title": "Alert Status",
+        "type": "alertlist",
+        "gridPos": {"x": 12, "y": 40, "w": 12, "h": 8}
+      }
+    ],
+    "schemaVersion": 27,
+    "version": 1,
+    "refresh": "10s"
+  },
+  "overwrite": true
+}

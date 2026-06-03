@@ -1,0 +1,159 @@
+groups:
+  - name: coa_ledger_alerts
+    interval: 30s
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: |
+          (rate(gtel_ledger_events_failed_total[5m]) /
+           rate(gtel_ledger_events_received_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate in ledger (> 5%)"
+          description: "Error rate: {{ $value | humanizePercentage }}"
+
+      # Transaction posting latency
+      - alert: HighTransactionLatency
+        expr: |
+          histogram_quantile(0.99, gtel_ledger_events_processed_seconds) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P99 transaction latency > 1s"
+          description: "P99: {{ $value }}s"
+
+      # Disruptor ring buffer full
+      - alert: DisruptorRingBufferFull
+        expr: |
+          gtel_disruptor_ring_buffer_available < 100
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disruptor ring buffer almost full"
+          description: "Available slots: {{ $value }}"
+
+      # Circuit breaker open
+      - alert: CircuitBreakerOpen
+        expr: |
+          gtel_gateway_circuit_breaker_state{state="OPEN"} == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Saving-Gateway circuit breaker is OPEN"
+          description: "Java Ledger may be down or unreachable"
+
+      # High queue depth
+      - alert: HighQueueDepth
+        expr: |
+          gtel_gateway_local_buffer_size > 50000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Gateway local buffer > 50k events"
+          description: "Buffer size: {{ $value }}"
+
+      # Double-entry validation failures
+      - alert: DoubleEntryValidationFailure
+        expr: |
+          increase(gtel_ledger_double_entry_failed_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Double-entry validation failed"
+          description: "Failed count: {{ $value }}"
+
+      # RabbitMQ queue not consuming
+      - alert: RabbitMQConsumerDown
+        expr: |
+          rabbitmq_queue_consumers{queue="java-ledger-events"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No consumers for java-ledger-events queue"
+          description: "Java Ledger may not be running"
+
+      # RabbitMQ queue buildup
+      - alert: RabbitMQQueueBacklog
+        expr: |
+          rabbitmq_queue_messages_ready{queue="java-ledger-events"} > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RabbitMQ queue backlog > 10k messages"
+          description: "Messages ready: {{ $value }}"
+
+      # Database connection pool exhaustion
+      - alert: DatabasePoolExhaustion
+        expr: |
+          hikaricp_connections_active / hikaricp_connections_max > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database connection pool > 90% full"
+          description: "Active: {{ $value }}"
+
+      # Transaction deduplication cache misses
+      - alert: HighDedupCacheMissRate
+        expr: |
+          (rate(gtel_ledger_duplicates_total[5m]) /
+           rate(gtel_ledger_events_received_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High dedup cache miss rate (> 10%)"
+          description: "Miss rate: {{ $value | humanizePercentage }}"
+
+      # GC pause time too high
+      - alert: HighGCPauseTime
+        expr: |
+          jvm_gc_pause_seconds{quantile="0.99"} > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P99 GC pause time > 500ms"
+          description: "Pause time: {{ $value }}s"
+
+      # Low available memory
+      - alert: LowAvailableMemory
+        expr: |
+          jvm_memory_available_bytes / jvm_memory_max_bytes < 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Available JVM memory < 10%"
+          description: "Available: {{ $value | humanizePercentage }}"
+
+      # Saving-Gateway event queue buildup
+      - alert: GatewayQueueBacklog
+        expr: |
+          gtel_gateway_event_queue_size > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Gateway event queue > 1000 events"
+          description: "Queue size: {{ $value }}"
+
+      # Rate limiter dropping requests
+      - alert: HighRateLimitExceeded
+        expr: |
+          rate(gtel_gateway_rate_limit_exceeded_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Gateway rate limiting > 1 req/sec"
+          description: "Rejected: {{ $value }}req/s"

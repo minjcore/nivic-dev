@@ -1,0 +1,284 @@
+{
+  "dashboard": {
+    "title": "Infrastructure - Database & Messaging",
+    "tags": ["infrastructure", "database", "rabbitmq", "redis"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "PostgreSQL Connections",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "pg_stat_activity_count{state=\"active\"}",
+            "legendFormat": "Active",
+            "refId": "A"
+          },
+          {
+            "expr": "pg_stat_activity_count{state=\"idle\"}",
+            "legendFormat": "Idle",
+            "refId": "B"
+          },
+          {
+            "expr": "pg_stat_activity_count{state=\"idle_in_transaction\"}",
+            "legendFormat": "Idle in TX",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "short",
+            "label": "Connections"
+          }
+        ]
+      },
+      {
+        "title": "PostgreSQL Query Performance",
+        "type": "graph",
+        "gridPos": {"x": 8, "y": 0, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(pg_stat_statements_calls[1m])",
+            "legendFormat": "Queries/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(pg_stat_statements_mean_time[5m]))",
+            "legendFormat": "P95 Query Time",
+            "refId": "B"
+          }
+        ]
+      },
+      {
+        "title": "PostgreSQL Cache Hit Ratio",
+        "type": "graph",
+        "gridPos": {"x": 16, "y": 0, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "pg_stat_database_blks_hit / (pg_stat_database_blks_hit + pg_stat_database_blks_read)",
+            "legendFormat": "Index Hit Ratio"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "percentunit"
+          }
+        ]
+      },
+      {
+        "title": "PostgreSQL Disk I/O",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(pg_stat_database_tup_returned[1m])",
+            "legendFormat": "Tuples Returned/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(pg_stat_database_tup_fetched[1m])",
+            "legendFormat": "Tuples Fetched/sec",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(pg_stat_database_tup_inserted[1m])",
+            "legendFormat": "Tuples Inserted/sec",
+            "refId": "C"
+          },
+          {
+            "expr": "rate(pg_stat_database_tup_updated[1m])",
+            "legendFormat": "Tuples Updated/sec",
+            "refId": "D"
+          }
+        ]
+      },
+      {
+        "title": "RabbitMQ Queue Metrics",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rabbitmq_queue_messages_ready",
+            "legendFormat": "Ready: {{ queue }}",
+            "refId": "A"
+          },
+          {
+            "expr": "rabbitmq_queue_messages_unacked",
+            "legendFormat": "Unacked: {{ queue }}",
+            "refId": "B"
+          },
+          {
+            "expr": "rabbitmq_queue_consumers",
+            "legendFormat": "Consumers: {{ queue }}"
+          }
+        ]
+      },
+      {
+        "title": "RabbitMQ Publisher Throughput",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(rabbitmq_messages_published_total[1m])",
+            "legendFormat": "Published/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(rabbitmq_messages_delivered_total[1m])",
+            "legendFormat": "Delivered/sec",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(rabbitmq_messages_acknowledged_total[1m])",
+            "legendFormat": "Acknowledged/sec",
+            "refId": "C"
+          }
+        ]
+      },
+      {
+        "title": "RabbitMQ Memory Usage",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rabbitmq_memory_used_bytes",
+            "legendFormat": "Used Memory",
+            "refId": "A"
+          },
+          {
+            "expr": "rabbitmq_memory_limit_bytes",
+            "legendFormat": "Memory Limit",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "bytes"
+          }
+        ]
+      },
+      {
+        "title": "Redis Memory & Keys",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 24, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "redis_memory_used_bytes",
+            "legendFormat": "Memory Used",
+            "refId": "A"
+          },
+          {
+            "expr": "redis_db_keys",
+            "legendFormat": "Total Keys",
+            "refId": "B"
+          }
+        ]
+      },
+      {
+        "title": "Redis Commands Per Second",
+        "type": "graph",
+        "gridPos": {"x": 8, "y": 24, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(redis_commands_processed_total[1m])",
+            "legendFormat": "Commands/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(redis_expired_keys_total[1m])",
+            "legendFormat": "Expired Keys/sec",
+            "refId": "B"
+          }
+        ]
+      },
+      {
+        "title": "Redis Hit/Miss Ratio",
+        "type": "graph",
+        "gridPos": {"x": 16, "y": 24, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_total)",
+            "legendFormat": "Hit Ratio"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "percentunit"
+          }
+        ]
+      },
+      {
+        "title": "PostgreSQL Table Sizes",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 32, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "pg_total_relation_size_bytes{schemaname=\"public\"}",
+            "legendFormat": "{{ tablename }}"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "bytes"
+          }
+        ]
+      },
+      {
+        "title": "RabbitMQ Connection Count",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 32, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rabbitmq_connections",
+            "legendFormat": "Connections"
+          },
+          {
+            "expr": "rabbitmq_channels",
+            "legendFormat": "Channels"
+          }
+        ]
+      },
+      {
+        "title": "Disk Usage",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 40, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "node_filesystem_avail_bytes{fstype=\"ext4\"} / node_filesystem_size_bytes{fstype=\"ext4\"}",
+            "legendFormat": "{{ device }} Available"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "percentunit"
+          }
+        ]
+      },
+      {
+        "title": "System Load & CPU",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 40, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "node_load1",
+            "legendFormat": "1-min Load",
+            "refId": "A"
+          },
+          {
+            "expr": "node_load5",
+            "legendFormat": "5-min Load",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(node_cpu_seconds_total[1m])",
+            "legendFormat": "CPU Usage: {{ cpu }}"
+          }
+        ]
+      }
+    ],
+    "schemaVersion": 27,
+    "version": 1,
+    "refresh": "10s"
+  },
+  "overwrite": true
+}

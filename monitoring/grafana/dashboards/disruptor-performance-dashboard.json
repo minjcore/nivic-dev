@@ -1,0 +1,279 @@
+{
+  "dashboard": {
+    "title": "Disruptor Performance - Ring Buffer Analysis",
+    "tags": ["disruptor", "performance", "ring-buffer"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "Ring Buffer Utilization",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "(gtel_disruptor_ring_buffer_size - gtel_disruptor_ring_buffer_available) / gtel_disruptor_ring_buffer_size",
+            "legendFormat": "Buffer Utilization %",
+            "refId": "A"
+          },
+          {
+            "expr": "gtel_disruptor_ring_buffer_available / gtel_disruptor_ring_buffer_size",
+            "legendFormat": "Available %",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "percentunit"
+          }
+        ]
+      },
+      {
+        "title": "Event Throughput (Events/sec)",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(gtel_disruptor_events_published_total[1m])",
+            "legendFormat": "Published TPS",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(gtel_disruptor_events_processed_total[1m])",
+            "legendFormat": "Processed TPS",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(gtel_disruptor_events_failed_total[1m])",
+            "legendFormat": "Failed TPS",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "short"
+          }
+        ]
+      },
+      {
+        "title": "Event Handler Latency",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, gtel_disruptor_handler_latency_seconds)",
+            "legendFormat": "P50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, gtel_disruptor_handler_latency_seconds)",
+            "legendFormat": "P95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, gtel_disruptor_handler_latency_seconds)",
+            "legendFormat": "P99",
+            "refId": "C"
+          },
+          {
+            "expr": "histogram_quantile(0.999, gtel_disruptor_handler_latency_seconds)",
+            "legendFormat": "P99.9",
+            "refId": "D"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "us"
+          }
+        ]
+      },
+      {
+        "title": "Ring Buffer Sequence",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "gtel_disruptor_ring_buffer_current_sequence",
+            "legendFormat": "Current Sequence"
+          }
+        ]
+      },
+      {
+        "title": "Wait Strategy Performance",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(gtel_disruptor_wait_strategy_busy_spins_total[1m])",
+            "legendFormat": "Busy Spins/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(gtel_disruptor_wait_strategy_yields_total[1m])",
+            "legendFormat": "Yields/sec",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(gtel_disruptor_wait_strategy_parks_total[1m])",
+            "legendFormat": "Parks/sec",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "short"
+          }
+        ]
+      },
+      {
+        "title": "Garbage Collection Impact",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "jvm_gc_pause_seconds{quantile=\"0.99\"}",
+            "legendFormat": "P99 GC Pause",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(jvm_gc_pause_seconds_count[1m])",
+            "legendFormat": "GC Events/sec",
+            "refId": "B"
+          },
+          {
+            "expr": "jvm_gc_max_data_size - jvm_memory_usage_after_gc_bytes",
+            "legendFormat": "Free Memory (post-GC)"
+          }
+        ]
+      },
+      {
+        "title": "Handler Execution Distribution",
+        "type": "piechart",
+        "gridPos": {"x": 0, "y": 24, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "increase(gtel_disruptor_handler_executions_total{handler!=\"\"}[5m])",
+            "legendFormat": "{{ handler }}"
+          }
+        ]
+      },
+      {
+        "title": "Batch Grouping Efficiency",
+        "type": "stat",
+        "gridPos": {"x": 8, "y": 24, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "gtel_disruptor_batch_size_avg",
+            "legendFormat": "Avg Batch Size"
+          },
+          {
+            "expr": "gtel_disruptor_batch_size_max",
+            "legendFormat": "Max Batch Size"
+          }
+        ]
+      },
+      {
+        "title": "Memory Pressure",
+        "type": "graph",
+        "gridPos": {"x": 16, "y": 24, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "jvm_memory_used_bytes{area=\"heap\"} / jvm_memory_max_bytes{area=\"heap\"}",
+            "legendFormat": "Heap %",
+            "refId": "A"
+          },
+          {
+            "expr": "jvm_memory_used_bytes{area=\"nonheap\"} / jvm_memory_max_bytes{area=\"nonheap\"}",
+            "legendFormat": "Non-Heap %",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "percentunit"
+          }
+        ]
+      },
+      {
+        "title": "Ring Buffer Contention",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 32, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(gtel_disruptor_ring_full_errors_total[1m])",
+            "legendFormat": "Ring Full Errors/sec"
+          },
+          {
+            "expr": "increase(gtel_disruptor_ring_wrap_arounds_total[5m])",
+            "legendFormat": "Wrap-Arounds (5m)"
+          }
+        ]
+      },
+      {
+        "title": "End-to-End Latency (E2E)",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 32, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, gtel_disruptor_e2e_latency_seconds)",
+            "legendFormat": "P95 E2E"
+          },
+          {
+            "expr": "histogram_quantile(0.99, gtel_disruptor_e2e_latency_seconds)",
+            "legendFormat": "P99 E2E"
+          },
+          {
+            "expr": "histogram_quantile(0.999, gtel_disruptor_e2e_latency_seconds)",
+            "legendFormat": "P99.9 E2E"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ms"
+          }
+        ]
+      },
+      {
+        "title": "Handler Thread States",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 40, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "gtel_disruptor_handler_threads_runnable",
+            "legendFormat": "Runnable"
+          },
+          {
+            "expr": "gtel_disruptor_handler_threads_blocked",
+            "legendFormat": "Blocked"
+          },
+          {
+            "expr": "gtel_disruptor_handler_threads_waiting",
+            "legendFormat": "Waiting"
+          }
+        ]
+      },
+      {
+        "title": "CPU Usage",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 40, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "process_cpu_usage",
+            "legendFormat": "Process CPU"
+          },
+          {
+            "expr": "system_cpu_usage",
+            "legendFormat": "System CPU"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "percentunit"
+          }
+        ]
+      }
+    ],
+    "schemaVersion": 27,
+    "version": 1,
+    "refresh": "10s"
+  },
+  "overwrite": true
+}
