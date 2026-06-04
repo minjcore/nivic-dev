@@ -72,7 +72,10 @@ public class CryptoDepositListener {
             log.info("✓ Posted crypto deposit: {} {} (trans_id={}, ref={})", amount, currency, trans.id(), refId);
 
         } catch (Exception e) {
-            log.error("Error processing crypto deposit event", e);
+            log.error("Error processing crypto deposit event: {}", e.getMessage(), e);
+            if (e.getCause() != null) {
+                log.error("Caused by: {}", e.getCause().getMessage());
+            }
         }
     }
 

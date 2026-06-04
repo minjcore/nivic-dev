@@ -501,7 +501,14 @@
       "Bash(./test-event-pipeline.sh)",
       "Bash(mvn package *)",
       "Bash(mvn help:active-profiles *)",
-      "Bash(awk '{print \"  - \" $NF}')"
+      "Bash(awk '{print \"  - \" $NF}')",
+      "Bash(cargo build *)",
+      "Bash(cargo tree *)",
+      "Bash(echo \"Compact: $\\(curl -s http://localhost:8090/api/balance-sheet)",
+      "Bash(echo \"Found $\\(curl -s 'http://localhost:8090/api/transactions?ref=crypto%25')",
+      "Bash(awk '{print \"  \" $0}')",
+      "Bash(mvn -v)",
+      "Bash(PGPASSWORD=postgres psql *)"
     ]
   }
 }

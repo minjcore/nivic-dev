@@ -1603,6 +1603,10 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
     try (Connection c = dataSource.getConnection()) {
       c.setAutoCommit(false);
       try {
+        // Defer all constraint checks until commit
+        try (Statement st = c.createStatement()) {
+          st.execute("SET CONSTRAINTS ALL DEFERRED");
+        }
         CoaTrans t = postJournalTx(c, lines, refId, memo, reversesRef);
         c.commit();
         return t;
@@ -1666,6 +1670,8 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
         createdAt = rs.getTimestamp(2).toInstant();
       }
     }
+
+    // First, insert all lines (deferred constraints will check at commit)
     List<CoaTransLine> resultLines = new ArrayList<>(lines.size());
     for (int i = 0; i < lines.size(); i++) {
       JournalLine l = lines.get(i);
@@ -1680,6 +1686,12 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
         ps.setString(7, l.currency());
         ps.executeUpdate();
       }
+    }
+
+    // Then, update all account balances
+    for (int i = 0; i < lines.size(); i++) {
+      JournalLine l = lines.get(i);
+      int lineNo = i + 1;
       try (PreparedStatement ps = c.prepareStatement(UPDATE_BALANCE)) {
         ps.setLong(1, l.netDelta());
         ps.setString(2, l.accountCode());

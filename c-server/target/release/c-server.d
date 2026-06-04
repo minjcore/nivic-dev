@@ -1,0 +1,1 @@
+/Users/khangdc/Desktop/nivic-dev/c-server/target/release/c-server: /Users/khangdc/Desktop/nivic-dev/c-server/src/blockchain.rs /Users/khangdc/Desktop/nivic-dev/c-server/src/event.rs /Users/khangdc/Desktop/nivic-dev/c-server/src/main.rs /Users/khangdc/Desktop/nivic-dev/c-server/src/wallet.rs
