@@ -1,12 +1,17 @@
 package dev.nivic.ledger;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/bank")
 @CrossOrigin(origins = "*", allowedHeaders = "*")
+@Component
 public class BankController {
+
+  @Autowired
 
   private final BankTransferService bankTransferService;
 
@@ -82,7 +87,7 @@ public class BankController {
     return ResponseEntity.ok(bankTransferService.getPendingTransfers());
   }
 
-  record RegisterBankAccountRequest(
+  public static record RegisterBankAccountRequest(
       String accountNumber,
       String bankCode,
       String bankName,
@@ -91,7 +96,7 @@ public class BankController {
       String accountType
   ) {}
 
-  record InitiateTransferRequest(
+  public static record InitiateTransferRequest(
       long bankAccountId,
       long amountMinor,
       String currency,
