@@ -15,7 +15,7 @@ public class BalanceSheetService {
     this.jdbcTemplate = jdbcTemplate;
   }
 
-  public BalanceSheetDTO getBalanceSheet() {
+  public DetailedBalance getBalanceSheetWithDetails() {
     List<AccountBalance> accounts = fetchAccounts();
 
     Map<String, AccountTypeGroup> grouped = accounts.stream()
@@ -33,14 +33,13 @@ public class BalanceSheetService {
             )
         ));
 
-    return new BalanceSheetDTO(
-        new Date(),
-        grouped.get("ASSET") != null ? grouped.get("ASSET") : new AccountTypeGroup("ASSET", new ArrayList<>(), BigDecimal.ZERO),
-        grouped.get("LIABILITY") != null ? grouped.get("LIABILITY") : new AccountTypeGroup("LIABILITY", new ArrayList<>(), BigDecimal.ZERO),
-        grouped.get("EQUITY") != null ? grouped.get("EQUITY") : new AccountTypeGroup("EQUITY", new ArrayList<>(), BigDecimal.ZERO),
-        grouped.get("REVENUE") != null ? grouped.get("REVENUE") : new AccountTypeGroup("REVENUE", new ArrayList<>(), BigDecimal.ZERO),
-        grouped.get("EXPENSE") != null ? grouped.get("EXPENSE") : new AccountTypeGroup("EXPENSE", new ArrayList<>(), BigDecimal.ZERO),
-        grouped.get("TRANSIT") != null ? grouped.get("TRANSIT") : new AccountTypeGroup("TRANSIT", new ArrayList<>(), BigDecimal.ZERO)
+    return new DetailedBalance(
+        grouped.getOrDefault("ASSET", new AccountTypeGroup("ASSET", new ArrayList<>(), BigDecimal.ZERO)),
+        grouped.getOrDefault("LIABILITY", new AccountTypeGroup("LIABILITY", new ArrayList<>(), BigDecimal.ZERO)),
+        grouped.getOrDefault("EQUITY", new AccountTypeGroup("EQUITY", new ArrayList<>(), BigDecimal.ZERO)),
+        grouped.getOrDefault("REVENUE", new AccountTypeGroup("REVENUE", new ArrayList<>(), BigDecimal.ZERO)),
+        grouped.getOrDefault("EXPENSE", new AccountTypeGroup("EXPENSE", new ArrayList<>(), BigDecimal.ZERO)),
+        grouped.getOrDefault("TRANSIT", new AccountTypeGroup("TRANSIT", new ArrayList<>(), BigDecimal.ZERO))
     );
   }
 
@@ -55,6 +54,25 @@ public class BalanceSheetService {
             new BigDecimal(rs.getLong("balance_minor"))
         )
     );
+  }
+
+  public static class DetailedBalance {
+    public AccountTypeGroup assets;
+    public AccountTypeGroup liabilities;
+    public AccountTypeGroup equity;
+    public AccountTypeGroup revenue;
+    public AccountTypeGroup expense;
+    public AccountTypeGroup transit;
+
+    public DetailedBalance(AccountTypeGroup assets, AccountTypeGroup liabilities, AccountTypeGroup equity,
+                           AccountTypeGroup revenue, AccountTypeGroup expense, AccountTypeGroup transit) {
+      this.assets = assets;
+      this.liabilities = liabilities;
+      this.equity = equity;
+      this.revenue = revenue;
+      this.expense = expense;
+      this.transit = transit;
+    }
   }
 
   public static class AccountBalance {
