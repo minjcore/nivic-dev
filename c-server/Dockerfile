@@ -1,20 +1,30 @@
-FROM rust:latest as builder
-RUN apt-get update && apt-get install -y pkg-config libssl-dev
-WORKDIR /build
-COPY Cargo.* ./
-COPY src ./src
+# Build stage
+FROM rust:1.75 as builder
+
+WORKDIR /app
+
+# Copy manifests
+COPY Cargo.toml Cargo.toml
+COPY src src
+
+# Build
 RUN cargo build --release
 
+# Runtime stage
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
-COPY --from=builder /build/target/release/c-server .
 
-ENV C_SERVER_PORT=8080
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/*
 
-EXPOSE 8080
+# Copy binary from builder
+COPY --from=builder /app/target/release/c-server /app/c-server
 
-HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8080/health || exit 1
 
-ENTRYPOINT ["./c-server"]
+# Run
+EXPOSE 8080
+CMD ["./c-server"]
