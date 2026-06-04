@@ -309,7 +309,7 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
       "SELECT code, name, kind, currency_code, balance_minor, version FROM coa_account WHERE code = ?";
 
   private static final String UPDATE_BALANCE =
-      "UPDATE coa_account SET balance_minor = balance_minor + ?, version = version + 1 WHERE code = ?";
+      "UPDATE coa_account SET balance_minor = balance_minor + CAST(? AS BIGINT), version = version + 1 WHERE code = ?";
 
   private static final String SELECT_REF_ID =
       "SELECT id FROM coa_trans WHERE ref_id = ?";
@@ -1603,10 +1603,6 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
     try (Connection c = dataSource.getConnection()) {
       c.setAutoCommit(false);
       try {
-        // Defer all constraint checks until commit
-        try (Statement st = c.createStatement()) {
-          st.execute("SET CONSTRAINTS ALL DEFERRED");
-        }
         CoaTrans t = postJournalTx(c, lines, refId, memo, reversesRef);
         c.commit();
         return t;
