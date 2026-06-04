@@ -508,7 +508,24 @@
       "Bash(echo \"Found $\\(curl -s 'http://localhost:8090/api/transactions?ref=crypto%25')",
       "Bash(awk '{print \"  \" $0}')",
       "Bash(mvn -v)",
-      "Bash(PGPASSWORD=postgres psql *)"
+      "Bash(PGPASSWORD=postgres psql *)",
+      "Bash(mvn -pl java clean compile)",
+      "Bash(mvn dependency:build-classpath -q -Dmdep.outputFile=/dev/stdout)",
+      "Bash(javac -cp \"target/classes:$\\(mvn dependency:build-classpath -q -Dmdep.outputFile=/dev/stdout\\)\" src/test/java/dev/nivic/ledger/SettlementIntegrationTest.java)",
+      "Bash(javac -cp \"target/classes:$\\(mvn dependency:build-classpath -q -Dmdep.outputFile=/dev/stdout \\)\" -d target/test-classes src/test/java/dev/nivic/ledger/SettlementIntegrationTest.java)",
+      "Bash(mvn spring-boot:run -DskipTests)",
+      "Bash(/tmp/test_settlement.sh)",
+      "Bash(netstat -tlnp)",
+      "Bash(mvn spring-boot:run -DskipTests -q)",
+      "Bash(SPRING_DATASOURCE_URL=\"jdbc:postgresql://localhost:5432/gtelpay_new\" SPRING_DATASOURCE_USERNAME=\"postgres\" SPRING_DATASOURCE_PASSWORD=\"postgres\" mvn spring-boot:run -DskipTests -q)",
+      "Bash(SPRING_DATASOURCE_URL=\"jdbc:postgresql://localhost:5432/gtelpay_new\" SPRING_DATASOURCE_USERNAME=\"postgres\" SPRING_DATASOURCE_PASSWORD=\"postgres\" mvn spring-boot:run -DskipTests)",
+      "Bash(javac -cp /Users/khangdc/Desktop/nivic-dev/java/target/classes:__TRACKED_VAR__/.m2/repository/org/postgresql/postgresql/42.7.1/postgresql-42.7.1.jar:__TRACKED_VAR__/.m2/repository/com/zaxxer/HikariCP/5.1.0/HikariCP-5.1.0.jar:__TRACKED_VAR__/.m2/repository/org/slf4j/slf4j-api/2.0.13/slf4j-api-2.0.13.jar test_settlement_direct.java)",
+      "Bash(java -cp /tmp:/Users/khangdc/Desktop/nivic-dev/java/target/classes:__TRACKED_VAR__/.m2/repository/org/postgresql/postgresql/42.7.1/postgresql-42.7.1.jar:__TRACKED_VAR__/.m2/repository/com/zaxxer/HikariCP/5.1.0/HikariCP-5.1.0.jar:__TRACKED_VAR__/.m2/repository/org/slf4j/slf4j-api/2.0.13/slf4j-api-2.0.13.jar:__TRACKED_VAR__/.m2/repository/org/slf4j/slf4j-simple/2.0.13/slf4j-simple-2.0.13.jar test_settlement_direct)",
+      "Bash(java -cp /tmp:/Users/khangdc/Desktop/nivic-dev/java/target/classes:__TRACKED_VAR__/.m2/repository/org/postgresql/postgresql/42.7.1/postgresql-42.7.1.jar:__TRACKED_VAR__/.m2/repository/com/zaxxer/HikariCP/5.1.0/HikariCP-5.1.0.jar:__TRACKED_VAR__/.m2/repository/org/slf4j/slf4j-api/2.0.13/slf4j-api-2.0.13.jar:__TRACKED_VAR__/.m2/repository/org/slf4j/slf4j-nop/2.0.13/slf4j-nop-2.0.13.jar test_settlement_direct)",
+      "Bash(pkill -f \"java.*LedgerApplication\")",
+      "Bash(SPRING_DATASOURCE_URL=\"jdbc:postgresql://localhost:5432/gtelpay_new\" SPRING_DATASOURCE_USERNAME=\"postgres\" SPRING_DATASOURCE_PASSWORD=\"postgres\" mvn -f /Users/khangdc/Desktop/nivic-dev/java/pom.xml spring-boot:run -DskipTests -q)",
+      "Bash(awk '{print $2}')",
+      "Bash(SPRING_DATASOURCE_URL=\"jdbc:postgresql://localhost:5432/gtelpay_new\" SPRING_DATASOURCE_USERNAME=\"postgres\" SPRING_DATASOURCE_PASSWORD=\"postgres\" SERVER_PORT=9095 mvn -f /Users/khangdc/Desktop/nivic-dev/java/pom.xml spring-boot:run -DskipTests -q)"
     ]
   }
 }

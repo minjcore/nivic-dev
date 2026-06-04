@@ -41,8 +41,8 @@ dev/nivic/auth/LoginApprovalBroker$Request.class
 dev/nivic/ledger/SettlementService$SettlementReceipt.class
 dev/nivic/merchant/MerchantDisabledException.class
 dev/nivic/coa/query/BalanceQueryMetrics.class
-dev/nivic/ledger/BankGatewayAPI$RegisterRequest.class
 dev/nivic/coa/cmd/ReversalCmd.class
+dev/nivic/ledger/SettlementController$WalletSettlementRequest.class
 dev/nivic/sevlet/idempotency/OrderIdMismatchException.class
 dev/nivic/wal/SignedWalVerifier.class
 dev/nivic/ledger/SettlementService$SettlementRequest.class
@@ -137,7 +137,6 @@ dev/nivic/ledger/JdbcWalletManager.class
 dev/nivic/sevlet/secret/JdbcMidSecretResolver.class
 dev/nivic/saving/WithdrawalCmd.class
 dev/nivic/payment/WalletVerificationService.class
-dev/nivic/ledger/BankGatewayAPI.class
 dev/nivic/db/DbSchema$MERCHANT_CONFIG_.class
 dev/nivic/modules/package-info.class
 dev/nivic/saving/SavInterestCalc.class
@@ -180,13 +179,16 @@ dev/nivic/ledger/BalanceSheetController.class
 dev/nivic/ledger/TransactionController.class
 dev/nivic/sevlet/idempotency/MemoryIdempotencyGate$Key.class
 dev/nivic/ledger/CoreLedgerStatus.class
+dev/nivic/ledger/JdbcSettlementManager.class
 dev/nivic/bank/BankGateway$BankTransfer.class
 dev/nivic/wal/InternalWalEvent.class
 dev/nivic/bank/BankGateway$TransferResult.class
 dev/nivic/coa/mc/ProposalStatus.class
+dev/nivic/ledger/SettlementManager.class
 dev/nivic/coa/cmd/WithdrawInitCmd.class
 dev/nivic/ledger/CurrencyController$RegisterRequest.class
 dev/nivic/coa/cmd/InternalTransferSettleCmd.class
+dev/nivic/ledger/Settlement.class
 dev/nivic/coa/query/BalanceQueryEvent.class
 dev/nivic/ledger/TransactionQueryService$TransactionHeader.class
 dev/nivic/analytics/WalIncrementalReader$WalRecord.class
@@ -236,7 +238,6 @@ dev/nivic/money/MoneyTransfers$Balances.class
 dev/nivic/model/package-info.class
 dev/nivic/coa/bridge/WalletGlBridge.class
 dev/nivic/coa/api/MiniJson.class
-dev/nivic/ledger/BankGatewayAPI$InitiateRequest.class
 dev/nivic/ledger/WalletController$BalanceResponse.class
 dev/nivic/sevlet/BodyTooLargeException.class
 dev/nivic/saving/InsufficientFundsException.class
@@ -290,6 +291,7 @@ dev/nivic/coa/cmd/DisbursementPrefundCmd.class
 dev/nivic/saving/AccrueInterestCmd.class
 dev/nivic/sevlet/secret/MidSecretResolver.class
 dev/nivic/coa/cmd/DisbursementSettleCmd.class
+dev/nivic/ledger/SettlementException.class
 dev/nivic/analytics/WalIncrementalReader.class
 dev/nivic/ledger/CryptoDepositListener.class
 dev/nivic/saving/SavTransLineView.class

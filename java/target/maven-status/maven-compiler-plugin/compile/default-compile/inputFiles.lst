@@ -125,12 +125,12 @@
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/BalanceSheetService.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/BankAccount.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/BankController.java
-/Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/BankGatewayAPI.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/BankTransferService.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/CoreLedgerStatus.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/CryptoDepositListener.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/CurrencyController.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/JdbcPaymentLedger.java
+/Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/JdbcSettlementManager.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/JdbcWalletLedger.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/JdbcWalletManager.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/LedgerApplication.java
@@ -144,7 +144,9 @@
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/PaymentLedger.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/RabbitConfig.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/ReportingController.java
+/Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/Settlement.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/SettlementController.java
+/Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/SettlementManager.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/SettlementService.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/TransactionController.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/TransactionQueryService.java
