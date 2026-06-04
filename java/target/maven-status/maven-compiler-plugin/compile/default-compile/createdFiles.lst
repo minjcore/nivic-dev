@@ -27,6 +27,7 @@ dev/nivic/coa/cmd/SavingsInterestCmd.class
 dev/nivic/sevlet/idempotency/MemoryIdempotencyGate.class
 dev/nivic/coa/AccountingPeriod.class
 dev/nivic/sevlet/BinaryBodyReader.class
+dev/nivic/coa/Currency.class
 dev/nivic/coa/CoaTrans.class
 dev/nivic/money/MoneyTransfers.class
 dev/nivic/config/ApplicationProperties.class
@@ -180,6 +181,7 @@ dev/nivic/wal/InternalWalEvent.class
 dev/nivic/bank/BankGateway$TransferResult.class
 dev/nivic/coa/mc/ProposalStatus.class
 dev/nivic/coa/cmd/WithdrawInitCmd.class
+dev/nivic/ledger/CurrencyController$RegisterRequest.class
 dev/nivic/coa/cmd/InternalTransferSettleCmd.class
 dev/nivic/coa/query/BalanceQueryEvent.class
 dev/nivic/ledger/TransactionQueryService$TransactionHeader.class
@@ -191,6 +193,7 @@ dev/nivic/payment/JdbcPaymentIntentExpiry.class
 dev/nivic/payment/disruptor/WalletPersistDisruptor.class
 dev/nivic/cli/WalShipperMain.class
 dev/nivic/coa/cmd/TopUpReceiveCmd.class
+dev/nivic/coa/JdbcCurrencyManager.class
 dev/nivic/ledger/LedgerApplication.class
 dev/nivic/controllers/package-info.class
 dev/nivic/coa/CoaAccount.class
@@ -207,6 +210,7 @@ dev/nivic/coa/cmd/SavingsDepositCmd.class
 dev/nivic/coa/query/BalanceQueryHandler.class
 dev/nivic/analytics/WalletCoreEventPayload.class
 dev/nivic/ledger/OrderIdConflictException.class
+dev/nivic/ledger/CurrencyController.class
 dev/nivic/ledger/TransactionQueryService$TransactionLine.class
 dev/nivic/coa/mc/Proposal$Line.class
 dev/nivic/entity/package-info.class
@@ -285,6 +289,7 @@ dev/nivic/saving/SavTransLineView.class
 dev/nivic/coa/CoaAccountKind.class
 dev/nivic/saving/SavingLedger.class
 dev/nivic/ledger/BalanceSheetService$AccountTypeGroup.class
+dev/nivic/coa/CurrencyManager.class
 dev/nivic/saving/SavTransfer.class
 dev/nivic/saving/SavAccountFlags.class
 dev/nivic/coa/JdbcFundFlowLedger.class

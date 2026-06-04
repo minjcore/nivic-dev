@@ -24,8 +24,11 @@
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/coa/CoaAccountKind.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/coa/CoaTrans.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/coa/CoaTransLine.java
+/Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/coa/Currency.java
+/Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/coa/CurrencyManager.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/coa/FundFlowLedger.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/coa/JdbcAccountManager.java
+/Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/coa/JdbcCurrencyManager.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/coa/JdbcFundFlowLedger.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/coa/LedgerException.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/coa/PeriodStatus.java
@@ -126,6 +129,7 @@
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/BankTransferService.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/CoreLedgerStatus.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/CryptoDepositListener.java
+/Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/CurrencyController.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/JdbcPaymentLedger.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/JdbcWalletLedger.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/LedgerApplication.java
