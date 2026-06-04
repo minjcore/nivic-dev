@@ -132,6 +132,7 @@
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/CurrencyController.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/JdbcPaymentLedger.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/JdbcWalletLedger.java
+/Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/JdbcWalletManager.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/LedgerApplication.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/LedgerConfig.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/MemoryPaymentLedger.java
@@ -147,7 +148,11 @@
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/SettlementService.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/TransactionController.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/TransactionQueryService.java
+/Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/Wallet.java
+/Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/WalletController.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/WalletLedger.java
+/Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/WalletManager.java
+/Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/ledger/WalletTransfer.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/merchant/MerchantConfig.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/merchant/MerchantDisabledException.java
 /Users/khangdc/Desktop/nivic-dev/java/src/main/java/dev/nivic/model/package-info.java

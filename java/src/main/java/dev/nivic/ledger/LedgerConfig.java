@@ -26,4 +26,9 @@ public class LedgerConfig {
   public CurrencyManager currencyManager(DataSource dataSource) {
     return new JdbcCurrencyManager(dataSource);
   }
+
+  @Bean
+  public WalletManager walletManager(DataSource dataSource) {
+    return new JdbcWalletManager(dataSource);
+  }
 }

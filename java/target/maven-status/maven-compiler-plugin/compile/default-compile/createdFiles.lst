@@ -101,10 +101,12 @@ dev/nivic/saving/SavAccountKind.class
 dev/nivic/journal/JdbcWalletJournal.class
 dev/nivic/command/GenericInputCommand.class
 dev/nivic/merchant/MerchantConfig.class
+dev/nivic/ledger/WalletManager.class
 dev/nivic/coa/AccountStatus.class
 dev/nivic/coa/query/BalanceQueryResult.class
 dev/nivic/coa/report/TrialBalance.class
 dev/nivic/coa/FundFlowLedger.class
+dev/nivic/ledger/Wallet.class
 dev/nivic/analytics/WalletCoreEventJson.class
 dev/nivic/coa/cmd/FxExchangeCmd.class
 dev/nivic/coa/cmd/EodRejectSettlementCmd.class
@@ -128,8 +130,10 @@ dev/nivic/coa/report/BalanceSheet.class
 dev/nivic/service/package-info.class
 dev/nivic/ledger/JdbcPaymentLedger.class
 dev/nivic/coa/error/AccountException$InactiveException.class
+dev/nivic/ledger/WalletController$CreateWalletRequest.class
 dev/nivic/payment/AccountHoldStore.class
 dev/nivic/saving/DepositCmd.class
+dev/nivic/ledger/JdbcWalletManager.class
 dev/nivic/sevlet/secret/JdbcMidSecretResolver.class
 dev/nivic/saving/WithdrawalCmd.class
 dev/nivic/payment/WalletVerificationService.class
@@ -233,6 +237,7 @@ dev/nivic/model/package-info.class
 dev/nivic/coa/bridge/WalletGlBridge.class
 dev/nivic/coa/api/MiniJson.class
 dev/nivic/ledger/BankGatewayAPI$InitiateRequest.class
+dev/nivic/ledger/WalletController$BalanceResponse.class
 dev/nivic/sevlet/BodyTooLargeException.class
 dev/nivic/saving/InsufficientFundsException.class
 dev/nivic/ledger/MemoryPaymentLedger.class
@@ -246,6 +251,7 @@ dev/nivic/saving/SavTransView.class
 dev/nivic/wal/SignedWalVerifier$VerifiedRecord.class
 dev/nivic/ledger/SettlementController$SettlementInitiateRequest.class
 dev/nivic/saving/OpenAccountCmd.class
+dev/nivic/ledger/WalletController$TransferRequest.class
 dev/nivic/payment/disruptor/WalletPersistDisruptor$1.class
 dev/nivic/coa/cmd/QrPosCreditMerchantCmd.class
 dev/nivic/ledger/RabbitConfig.class
@@ -275,6 +281,7 @@ dev/nivic/coa/cmd/EodSettleOutboundCmd.class
 dev/nivic/coa/error/NothingToCloseException.class
 dev/nivic/coa/mc/ProposeJournalCmd$EntryLine.class
 dev/nivic/coa/error/AccountException$HasBalance.class
+dev/nivic/ledger/WalletController.class
 dev/nivic/payment/WalletPayloadJson.class
 dev/nivic/coa/error/AccountException$AlreadyExists.class
 dev/nivic/party/package-info.class
@@ -290,6 +297,7 @@ dev/nivic/coa/CoaAccountKind.class
 dev/nivic/saving/SavingLedger.class
 dev/nivic/ledger/BalanceSheetService$AccountTypeGroup.class
 dev/nivic/coa/CurrencyManager.class
+dev/nivic/ledger/WalletTransfer.class
 dev/nivic/saving/SavTransfer.class
 dev/nivic/saving/SavAccountFlags.class
 dev/nivic/coa/JdbcFundFlowLedger.class
