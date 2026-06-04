@@ -201,6 +201,19 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
   private static final String SELECT_PENDING_PROPOSALS =
       "SELECT id FROM coa_proposal WHERE status = 'PENDING' ORDER BY created_at DESC";
 
+  /** Settlement requests table for crypto → bank withdrawals. */
+  private static final String DDL_SETTLEMENT_REQUESTS = """
+      CREATE TABLE IF NOT EXISTS settlement_requests (
+        id              BIGINT       PRIMARY KEY,
+        currency        VARCHAR(10)  NOT NULL,
+        amount_crypto   BIGINT       NOT NULL,
+        amount_vnd      BIGINT       NOT NULL DEFAULT 0,
+        bank_account    VARCHAR(20)  NOT NULL,
+        status          VARCHAR(16)  NOT NULL DEFAULT 'PENDING',
+        created_at      TIMESTAMP    NOT NULL DEFAULT NOW()
+      )
+      """;
+
   /** Subsidiary-ledger index: per-account, per-party balance scans (e.g. wallet balance of a user). */
   private static final String DDL_IDX_DATA_PARTY =
       "CREATE INDEX IF NOT EXISTS coa_trans_data_party_idx"
@@ -1700,6 +1713,7 @@ public final class JdbcFundFlowLedger implements FundFlowLedger {
         st.execute(DDL_PROPOSAL);
         st.execute(DDL_PROPOSAL_LINE);
         st.execute(DDL_IDX_PROPOSAL_STATUS);
+        st.execute(DDL_SETTLEMENT_REQUESTS);
       }
       try (Connection c = dataSource.getConnection();
           PreparedStatement ps = c.prepareStatement(UPSERT_ACCOUNT)) {
