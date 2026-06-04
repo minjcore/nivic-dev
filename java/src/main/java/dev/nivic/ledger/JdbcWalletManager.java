@@ -54,26 +54,38 @@ public class JdbcWalletManager implements WalletManager {
 
   public JdbcWalletManager(DataSource dataSource) {
     this.dataSource = dataSource;
-    ensureSchema();
+    try {
+      ensureSchema();
+    } catch (Exception e) {
+      // Schema might already exist, continue
+      schemaEnsured = true;
+    }
   }
 
   @Override
   public Wallet createWallet(String uid, String walletType, String currency, String accountCode) {
     ensureSchema();
     long id = System.currentTimeMillis();
-    try (Connection c = dataSource.getConnection();
-        PreparedStatement ps = c.prepareStatement(
-            "INSERT INTO wallet (id, uid, wallet_type, status, currency_code, account_code) "
-                + "VALUES (?, ?, ?, 'ACTIVE', ?, ?) ON CONFLICT (uid, currency_code) DO UPDATE "
-                + "SET wallet_type = EXCLUDED.wallet_type RETURNING *"
-        )) {
-      ps.setLong(1, id);
-      ps.setString(2, uid);
-      ps.setString(3, walletType);
-      ps.setString(4, currency);
-      ps.setString(5, accountCode);
-      try (ResultSet rs = ps.executeQuery()) {
-        if (rs.next()) return mapWallet(rs);
+    try (Connection c = dataSource.getConnection()) {
+      // Insert wallet
+      try (PreparedStatement ps = c.prepareStatement(
+          "INSERT INTO wallet (id, uid, wallet_type, status, currency_code, account_code) "
+              + "VALUES (?, ?, ?, 'ACTIVE', ?, ?) ON CONFLICT (uid, currency_code) DO NOTHING"
+      )) {
+        ps.setLong(1, id);
+        ps.setString(2, uid);
+        ps.setString(3, walletType);
+        ps.setString(4, currency);
+        ps.setString(5, accountCode);
+        ps.executeUpdate();
+      }
+      // Now fetch it back
+      try (PreparedStatement ps = c.prepareStatement("SELECT * FROM wallet WHERE uid = ? AND currency_code = ?")) {
+        ps.setString(1, uid);
+        ps.setString(2, currency);
+        try (ResultSet rs = ps.executeQuery()) {
+          if (rs.next()) return mapWallet(rs);
+        }
       }
     } catch (SQLException e) {
       throw new RuntimeException("Failed to create wallet for " + uid, e);

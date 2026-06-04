@@ -8,6 +8,7 @@ import java.util.List;
  * NO direct blockchain transfers - all via wallet system.
  */
 public interface WalletManager {
+  // Interface - see JdbcWalletManager for implementation
   // Wallet CRUD
   Wallet createWallet(String uid, String walletType, String currency, String accountCode);
   Optional<Wallet> getWallet(long walletId);
