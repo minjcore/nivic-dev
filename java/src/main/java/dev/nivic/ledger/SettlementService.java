@@ -2,16 +2,24 @@ package dev.nivic.ledger;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import dev.nivic.bank.BankGateway;
 import java.util.*;
 
 @Service
 public class SettlementService {
 
   private final JdbcTemplate jdbcTemplate;
+  private final BankGateway bankGateway;
   private volatile boolean tableEnsured = false;
 
   public SettlementService(JdbcTemplate jdbcTemplate) {
     this.jdbcTemplate = jdbcTemplate;
+    // Initialize standalone BankGateway (no Spring dependency)
+    this.bankGateway = new BankGateway(
+        System.getenv("SWIFT_ENDPOINT"),
+        System.getenv("ACH_ENDPOINT"),
+        System.getenv("LOCAL_BANK_ENDPOINT")
+    );
     ensureTable();
   }
 
@@ -140,11 +148,39 @@ public class SettlementService {
       return null;
     }
 
-    // Update settlement status
+    // Update settlement status to POSTED (ledger transaction done)
     jdbcTemplate.update(
-        "UPDATE settlement_requests SET status = 'SETTLED', amount_vnd = ? WHERE id = ?",
+        "UPDATE settlement_requests SET status = 'POSTED', amount_vnd = ? WHERE id = ?",
         vndAmount, settlementId
     );
+
+    // INITIATE BANK TRANSFER (non-blocking, will complete async)
+    try {
+      var bankTransfer = bankGateway.initiateTransfer(
+          1111L,  // TODO: lookup actual bank account ID from settlement.bankAccount
+          vndMinor,
+          "VND",
+          "Settlement #" + settlementId
+      );
+
+      // Execute transfer (to actual bank)
+      var transferResult = bankGateway.executeTransfer(bankTransfer.id());
+
+      if (transferResult != null && "EXECUTED".equals(transferResult.status())) {
+        // Mark settlement as EXECUTING (bank transfer in progress)
+        jdbcTemplate.update(
+            "UPDATE settlement_requests SET status = 'EXECUTING' WHERE id = ?",
+            settlementId
+        );
+      }
+    } catch (Exception e) {
+      // Bank transfer failed, but ledger is posted
+      // Mark settlement as FAILED_BANK
+      jdbcTemplate.update(
+          "UPDATE settlement_requests SET status = 'FAILED_BANK' WHERE id = ?",
+          settlementId
+      );
+    }
 
     return new SettlementReceipt(transId, settlementId, settlement.currency,
         settlement.amountCrypto, vndAmount, lines);
@@ -181,4 +217,16 @@ public class SettlementService {
       long amountVnd,
       List<SettlementLine> lines
   ) {}
+
+  // Called by bank webhook when transfer is confirmed
+  public void confirmSettlement(long settlementId, String bankTransactionId) {
+    // Mark settlement as CONFIRMED (funds arrived at bank account)
+    jdbcTemplate.update(
+        "UPDATE settlement_requests SET status = 'CONFIRMED' WHERE id = ?",
+        settlementId
+    );
+
+    // Confirm transfer in bank gateway (for record-keeping)
+    // bankGateway.confirmTransfer(transferId, bankTransactionId);
+  }
 }

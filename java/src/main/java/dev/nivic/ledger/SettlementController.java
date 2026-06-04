@@ -48,5 +48,12 @@ public class SettlementController {
     return ResponseEntity.ok(receipt);
   }
 
+  @PostMapping("/{id}/confirm")
+  public ResponseEntity<?> confirmSettlement(@PathVariable long id,
+      @RequestParam String bankTransactionId) {
+    settlementService.confirmSettlement(id, bankTransactionId);
+    return ResponseEntity.ok().build();
+  }
+
   record SettlementInitiateRequest(String currency, long amountCrypto, String bankAccount) {}
 }
