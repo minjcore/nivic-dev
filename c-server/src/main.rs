@@ -164,7 +164,7 @@ fn load_config() -> Config {
         custody_wallet: std::env::var("CUSTODY_WALLET")
             .unwrap_or_else(|_| "0x1234567890123456789012345678901234567890".to_string()),
         rabbitmq_url: std::env::var("RABBITMQ_URL")
-            .unwrap_or_else(|_| "amqp://gtel-c-server:password@localhost:5672/gtel-prod".to_string()),
+            .unwrap_or_else(|_| "amqp://guest:guest@localhost:5672//".to_string()),
         exchange: std::env::var("RABBITMQ_EXCHANGE")
             .unwrap_or_else(|_| "gtel-events".to_string()),
         routing_key: std::env::var("RABBITMQ_ROUTING_KEY")
