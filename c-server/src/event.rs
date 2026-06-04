@@ -1,6 +1,7 @@
 use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::info;
+use tracing::{info, warn};
+use lapin::{Channel, Connection, ConnectionProperties};
 
 #[derive(Serialize)]
 pub struct CryptoDepositEvent {
@@ -14,23 +15,61 @@ pub struct CryptoDepositEvent {
 }
 
 pub struct EventPublisher {
+    channel: Option<Channel>,
     exchange: String,
     routing_key: String,
-    connected: bool,
 }
 
 impl EventPublisher {
     pub async fn new(rabbitmq_url: &str, exchange: &str, routing_key: &str) -> Self {
-        info!("✓ EventPublisher initialized: {} → {}.{}", rabbitmq_url, exchange, routing_key);
-        EventPublisher {
-            exchange: exchange.to_string(),
-            routing_key: routing_key.to_string(),
-            connected: true,
+        match Connection::connect(rabbitmq_url, ConnectionProperties::default()).await {
+            Ok(conn) => {
+                match conn.create_channel().await {
+                    Ok(channel) => {
+                        if let Err(e) = channel
+                            .exchange_declare(
+                                exchange,
+                                lapin::ExchangeKind::Topic,
+                                lapin::options::ExchangeDeclareOptions {
+                                    durable: true,
+                                    ..Default::default()
+                                },
+                                lapin::types::FieldTable::default(),
+                            )
+                            .await
+                        {
+                            warn!("Failed to declare exchange: {}", e);
+                        }
+                        info!("✓ RabbitMQ connected: {} → {}.{}", rabbitmq_url, exchange, routing_key);
+                        EventPublisher {
+                            channel: Some(channel),
+                            exchange: exchange.to_string(),
+                            routing_key: routing_key.to_string(),
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to create channel: {}", e);
+                        EventPublisher {
+                            channel: None,
+                            exchange: exchange.to_string(),
+                            routing_key: routing_key.to_string(),
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Failed to connect to RabbitMQ: {}", e);
+                EventPublisher {
+                    channel: None,
+                    exchange: exchange.to_string(),
+                    routing_key: routing_key.to_string(),
+                }
+            }
         }
     }
 
     pub async fn is_connected(&self) -> bool {
-        self.connected
+        self.channel.is_some()
     }
 
     pub async fn publish_deposit_initiated(
@@ -62,10 +101,23 @@ impl EventPublisher {
             retry_count: 0,
         };
 
-        let _json = serde_json::to_string(&event)?;
-        info!("Published CRYPTO_DEPOSIT_INITIATED: {} (correlation_id: {})",
-            deposit_id, event.correlation_id);
-        // TODO: Actually publish to RabbitMQ via AMQP
+        let json = serde_json::to_string(&event)?;
+
+        if let Some(channel) = &self.channel {
+            channel
+                .basic_publish(
+                    &self.exchange,
+                    &self.routing_key,
+                    lapin::options::BasicPublishOptions::default(),
+                    json.as_bytes(),
+                    lapin::BasicProperties::default(),
+                )
+                .await?;
+            info!("✓ Published CRYPTO_DEPOSIT_INITIATED: {} (correlation_id: {})",
+                deposit_id, event.correlation_id);
+        } else {
+            warn!("RabbitMQ not connected, event not published: {}", deposit_id);
+        }
         Ok(())
     }
 }

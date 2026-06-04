@@ -4,12 +4,10 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
-use web3::Web3;
-use std::collections::HashMap;
 
 mod blockchain;
 mod event;

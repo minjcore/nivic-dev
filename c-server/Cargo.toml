@@ -16,6 +16,8 @@ dotenv = "0.15"
 hex = "0.4"
 sha2 = "0.10"
 rand = "0.8"
+lapin = "2.3"
+futures = "0.3"
 
 [profile.release]
 opt-level = 3

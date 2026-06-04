@@ -22,9 +22,9 @@ services:
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
     environment:
-      RABBITMQ_DEFAULT_USER: gtel-c-server
-      RABBITMQ_DEFAULT_PASS: password
-      RABBITMQ_DEFAULT_VHOST: /gtel-prod
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_VHOST: /
     ports:
       - "5672:5672"      # AMQP
       - "15672:15672"    # Management UI
@@ -59,15 +59,34 @@ services:
       SPRING_DATASOURCE_PASSWORD: postgres
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
-      SPRING_RABBITMQ_USERNAME: gtel-c-server
-      SPRING_RABBITMQ_PASSWORD: password
-      SPRING_RABBITMQ_VIRTUAL_HOST: /gtel-prod
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+      SPRING_RABBITMQ_VIRTUAL_HOST: /
       SPRING_PROFILES_ACTIVE: ledger
     ports:
       - "8090:8090"
     depends_on:
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  c-server:
+    build:
+      context: ./c-server
+      dockerfile: Dockerfile
+    environment:
+      C_SERVER_PORT: "8080"
+      BLOCKCHAIN_RPC_URL: "https://eth-sepolia.g.alchemy.com/v2/demo"
+      USDT_CONTRACT: "0xfff9976782d46cc05630d07ee6e6a95b5b8dce91"
+      USDC_CONTRACT: "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984"
+      CUSTODY_WALLET: "0x1234567890123456789012345678901234567890"
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672//"
+      RABBITMQ_EXCHANGE: "gtel-events"
+      RABBITMQ_ROUTING_KEY: "ledger.crypto"
+    ports:
+      - "8080:8080"
+    depends_on:
       rabbitmq:
         condition: service_healthy
 
