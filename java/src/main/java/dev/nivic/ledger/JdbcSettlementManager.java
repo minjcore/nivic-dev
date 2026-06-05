@@ -13,6 +13,8 @@ public class JdbcSettlementManager implements SettlementManager {
   private final FundFlowLedger fundFlowLedger;
   private final BankGateway bankGateway;
   private volatile boolean schemaEnsured = false;
+  private final java.util.concurrent.atomic.AtomicLong idSequence =
+      new java.util.concurrent.atomic.AtomicLong(System.currentTimeMillis() * 1000);
 
   private static final String DDL_SETTLEMENT = """
       CREATE TABLE IF NOT EXISTS settlement (
@@ -49,36 +51,74 @@ public class JdbcSettlementManager implements SettlementManager {
   @Override
   public Settlement initiate(long walletId, long amountMinor, String type, String currency, String destination) {
     ensureSchema();
-    long id = System.currentTimeMillis();
+    long id = idSequence.incrementAndGet();
 
-    // Validate wallet exists and has balance
-    var wallet = walletManager.getWallet(walletId)
-        .orElseThrow(() -> new RuntimeException("Wallet not found: " + walletId));
-    if (wallet.balanceMinor() < amountMinor) {
-      throw new RuntimeException("Insufficient balance");
-    }
+    // Pessimistic locking: Lock wallet and create settlement in same transaction
+    try (Connection c = dataSource.getConnection()) {
+      c.setAutoCommit(false);
+      try {
+        // Lock wallet row with SELECT ... FOR UPDATE
+        Wallet wallet;
+        try (PreparedStatement ps = c.prepareStatement(
+            "SELECT id, uid, wallet_type, status, balance_minor, currency_code, account_code, version, created_at, last_activity_at "
+                + "FROM wallet WHERE id = ? FOR UPDATE"
+        )) {
+          ps.setLong(1, walletId);
+          try (ResultSet rs = ps.executeQuery()) {
+            if (!rs.next()) {
+              throw new RuntimeException("Wallet not found: " + walletId);
+            }
+            wallet = mapWallet(rs);
+          }
+        }
 
-    try (Connection c = dataSource.getConnection();
-        PreparedStatement ps = c.prepareStatement(
+        if (wallet.balanceMinor() < amountMinor) {
+          throw new RuntimeException("Insufficient balance");
+        }
+
+        // Create settlement (still holding lock)
+        try (PreparedStatement ps = c.prepareStatement(
             "INSERT INTO settlement "
                 + "(id, wallet_id, settlement_type, status, amount_minor, currency, destination_bank) "
                 + "VALUES (?, ?, ?, 'PENDING', ?, ?, ?)"
         )) {
-      ps.setLong(1, id);
-      ps.setLong(2, walletId);
-      ps.setString(3, type);
-      ps.setLong(4, amountMinor);
-      ps.setString(5, currency);
-      ps.setString(6, destination);
-      ps.executeUpdate();
+          ps.setLong(1, id);
+          ps.setLong(2, walletId);
+          ps.setString(3, type);
+          ps.setLong(4, amountMinor);
+          ps.setString(5, currency);
+          ps.setString(6, destination);
+          ps.executeUpdate();
+        }
 
-      return new Settlement(
-          id, walletId, type, "PENDING", amountMinor, currency,
-          destination, null, null, null, Instant.now(), null
-      );
+        c.commit();
+        return new Settlement(
+            id, walletId, type, "PENDING", amountMinor, currency,
+            destination, null, null, null, Instant.now(), null
+        );
+      } catch (Exception e) {
+        c.rollback();
+        throw e;
+      }
     } catch (SQLException e) {
-      throw new RuntimeException("Failed to initiate settlement", e);
+      throw new RuntimeException("Failed to initiate settlement: " + e.getMessage(), e);
     }
+  }
+
+  private Wallet mapWallet(ResultSet rs) throws SQLException {
+    return new Wallet(
+        rs.getLong("id"),
+        rs.getString("uid"),
+        rs.getString("wallet_type"),
+        rs.getString("status"),
+        rs.getLong("balance_minor"),
+        rs.getString("currency_code"),
+        rs.getString("account_code"),
+        rs.getLong("version"),
+        rs.getObject("created_at", java.sql.Timestamp.class).toInstant(),
+        rs.getObject("last_activity_at", java.sql.Timestamp.class) != null ?
+            rs.getObject("last_activity_at", java.sql.Timestamp.class).toInstant() : null
+    );
   }
 
   @Override

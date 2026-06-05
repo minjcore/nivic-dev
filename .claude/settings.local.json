@@ -525,7 +525,27 @@
       "Bash(pkill -f \"java.*LedgerApplication\")",
       "Bash(SPRING_DATASOURCE_URL=\"jdbc:postgresql://localhost:5432/gtelpay_new\" SPRING_DATASOURCE_USERNAME=\"postgres\" SPRING_DATASOURCE_PASSWORD=\"postgres\" mvn -f /Users/khangdc/Desktop/nivic-dev/java/pom.xml spring-boot:run -DskipTests -q)",
       "Bash(awk '{print $2}')",
-      "Bash(SPRING_DATASOURCE_URL=\"jdbc:postgresql://localhost:5432/gtelpay_new\" SPRING_DATASOURCE_USERNAME=\"postgres\" SPRING_DATASOURCE_PASSWORD=\"postgres\" SERVER_PORT=9095 mvn -f /Users/khangdc/Desktop/nivic-dev/java/pom.xml spring-boot:run -DskipTests -q)"
+      "Bash(SPRING_DATASOURCE_URL=\"jdbc:postgresql://localhost:5432/gtelpay_new\" SPRING_DATASOURCE_USERNAME=\"postgres\" SPRING_DATASOURCE_PASSWORD=\"postgres\" SERVER_PORT=9095 mvn -f /Users/khangdc/Desktop/nivic-dev/java/pom.xml spring-boot:run -DskipTests -q)",
+      "Bash(pkill -f java)",
+      "Bash(cat)",
+      "Bash(/tmp/test_endpoints.sh)",
+      "Bash(pkill -f \"java -jar\")",
+      "Bash(java -jar -Dspring.profiles.active=ledger java/target/sevlet-wallet-1.0.0-SNAPSHOT.jar)",
+      "Bash(java -jar -Dspring.profiles.active=ledger target/sevlet-wallet-1.0.0-SNAPSHOT.jar)",
+      "Bash(pkill -f c-server)",
+      "Bash(java -jar -Dspring.profiles.active=ledger /Users/khangdc/Desktop/nivic-dev/java/target/sevlet-wallet-1.0.0-SNAPSHOT.jar)",
+      "Bash(/tmp/integration_test.sh)",
+      "Bash(/tmp/integration_report.sh)",
+      "Bash(/tmp/verify_rabbitmq.sh)",
+      "Bash(/tmp/full_system_check.sh)",
+      "Bash(pkill -f \"c-server\")",
+      "Bash(C_SERVER_PORT=8081 BLOCKCHAIN_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/demo USDT_CONTRACT=0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0 USDC_CONTRACT=0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238 CUSTODY_WALLET=0x742d35Cc6634C0532925a3b844Bc0e7595f58bF RABBITMQ_URL=amqp://guest:guest@localhost:5672// RABBITMQ_EXCHANGE=gtel-events RABBITMQ_ROUTING_KEY=ledger.crypto /Users/khangdc/Desktop/nivic-dev/c-server/target/release/c-server)",
+      "Bash(/tmp/e2e_test_with_rabbitmq.sh)",
+      "Bash(/tmp/rabbitmq_event_test.sh)",
+      "Bash(/tmp/diagnostic_load_test.sh)",
+      "Bash(/tmp/verify_pessimistic_locking.sh)",
+      "Bash(/tmp/simple_concurrent_test.sh)",
+      "Bash(/tmp/proper_concurrent_test.sh)"
     ]
   }
 }

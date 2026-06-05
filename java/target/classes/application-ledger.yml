@@ -12,18 +12,18 @@ spring:
     show-sql: false
     database-platform: org.hibernate.dialect.PostgreSQL10Dialect
   datasource:
-    url: jdbc:postgresql://postgres:5432/gtelpay_prod
+    url: jdbc:postgresql://127.0.0.1:5432/gtelpay_prod
     username: postgres
     password: postgres
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
   rabbitmq:
-    host: rabbitmq
+    host: 127.0.0.1
     port: 5672
-    username: gtel-c-server
-    password: password
-    virtual-host: /gtel-prod
+    username: guest
+    password: guest
+    virtual-host: /
   # Redis disabled for ledger profile (not required for accounting)
   # redis:
   #   host: redis

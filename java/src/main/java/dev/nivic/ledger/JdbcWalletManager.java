@@ -108,6 +108,22 @@ public class JdbcWalletManager implements WalletManager {
     return Optional.empty();
   }
 
+  public Optional<Wallet> getWalletForUpdate(long walletId) {
+    ensureSchema();
+    try (Connection c = dataSource.getConnection();
+        PreparedStatement ps = c.prepareStatement(
+            "SELECT * FROM wallet WHERE id = ? FOR UPDATE"
+        )) {
+      ps.setLong(1, walletId);
+      try (ResultSet rs = ps.executeQuery()) {
+        if (rs.next()) return Optional.of(mapWallet(rs));
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException("Failed to get wallet for update (locking)", e);
+    }
+    return Optional.empty();
+  }
+
   @Override
   public Optional<Wallet> findByUid(String uid, String currency) {
     ensureSchema();
