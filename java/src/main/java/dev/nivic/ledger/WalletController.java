@@ -12,8 +12,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/wallets")
 @CrossOrigin(origins = "*", allowedHeaders = "*")
 public class WalletController {
-  @Autowired
-  private WalletManager walletManager;
+  private final WalletManager walletManager;
+
+  public WalletController(WalletManager walletManager) {
+    this.walletManager = walletManager;
+  }
 
   @PostMapping
   public ResponseEntity<?> createWallet(@RequestBody CreateWalletRequest req) {

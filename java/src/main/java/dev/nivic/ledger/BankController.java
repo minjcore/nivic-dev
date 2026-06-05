@@ -8,10 +8,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/bank")
 @CrossOrigin(origins = "*", allowedHeaders = "*")
-@Component
 public class BankController {
-
-  @Autowired
 
   private final BankTransferService bankTransferService;
 

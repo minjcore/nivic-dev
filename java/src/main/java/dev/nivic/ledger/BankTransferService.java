@@ -20,12 +20,12 @@ public class BankTransferService {
           CREATE TABLE IF NOT EXISTS bank_accounts (
             id                  BIGINT       PRIMARY KEY,
             account_number      VARCHAR(30)  NOT NULL UNIQUE,
-            bank_code           VARCHAR(10)  NOT NULL,
-            bank_name           VARCHAR(100) NOT NULL,
-            account_holder_name VARCHAR(100) NOT NULL,
-            currency            VARCHAR(3)   NOT NULL,
-            account_type        VARCHAR(20)  NOT NULL,
-            status              VARCHAR(20)  NOT NULL DEFAULT 'PENDING_VERIFICATION',
+            bank_code           VARCHAR(32)  NOT NULL,
+            bank_name           VARCHAR(256) NOT NULL,
+            account_holder_name VARCHAR(256) NOT NULL,
+            currency            VARCHAR(10)  NOT NULL,
+            account_type        VARCHAR(32)  NOT NULL,
+            status              VARCHAR(32)  NOT NULL DEFAULT 'PENDING_VERIFICATION',
             created_at          TIMESTAMP    NOT NULL DEFAULT NOW()
           )
           """);
@@ -35,11 +35,11 @@ public class BankTransferService {
             id                  BIGINT       PRIMARY KEY,
             bank_account_id     BIGINT       NOT NULL REFERENCES bank_accounts(id),
             amount_minor        BIGINT       NOT NULL,
-            currency            VARCHAR(3)   NOT NULL,
-            status              VARCHAR(20)  NOT NULL DEFAULT 'PENDING',
-            bank_transaction_id VARCHAR(50),
+            currency            VARCHAR(10)  NOT NULL,
+            status              VARCHAR(32)  NOT NULL DEFAULT 'PENDING',
+            bank_transaction_id VARCHAR(256),
             settlement_id       BIGINT,
-            reference_number    VARCHAR(50)  NOT NULL UNIQUE,
+            reference_number    VARCHAR(128) NOT NULL UNIQUE,
             created_at          TIMESTAMP    NOT NULL DEFAULT NOW(),
             executed_at         TIMESTAMP,
             confirmed_at        TIMESTAMP

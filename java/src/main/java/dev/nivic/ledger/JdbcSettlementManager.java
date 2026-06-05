@@ -91,6 +91,25 @@ public class JdbcSettlementManager implements SettlementManager {
       throw new RuntimeException("Settlement must be PENDING to hold");
     }
 
+    // Create a virtual wallet_transfer to reference in wallet_hold
+    long transferId = System.currentTimeMillis();
+    try (Connection c = dataSource.getConnection();
+        PreparedStatement ps = c.prepareStatement(
+            "INSERT INTO wallet_transfer "
+                + "(id, from_wallet_id, to_wallet_id, amount_minor, currency_code, status, ref_id) "
+                + "VALUES (?, ?, ?, ?, ?, 'PENDING', ?)"
+        )) {
+      ps.setLong(1, transferId);
+      ps.setLong(2, settlement.walletId());
+      ps.setLong(3, settlement.walletId());  // Virtual transfer (self)
+      ps.setLong(4, settlement.amountMinor());
+      ps.setString(5, settlement.currency());
+      ps.setString(6, "SETTLEMENT-" + settlementId);
+      ps.executeUpdate();
+    } catch (SQLException e) {
+      throw new RuntimeException("Failed to create settlement transfer", e);
+    }
+
     // Create hold on wallet
     long holdId = System.currentTimeMillis();
     try (Connection c = dataSource.getConnection();
@@ -100,7 +119,7 @@ public class JdbcSettlementManager implements SettlementManager {
         )) {
       ps.setLong(1, holdId);
       ps.setLong(2, settlement.walletId());
-      ps.setLong(3, settlementId);  // Use settlement ID as transfer_id reference
+      ps.setLong(3, transferId);  // Reference the virtual transfer
       ps.setLong(4, settlement.amountMinor());
       ps.executeUpdate();
     } catch (SQLException e) {
