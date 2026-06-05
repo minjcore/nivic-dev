@@ -1,0 +1,99 @@
+groups:
+  - name: crypto_settlement_alerts
+    interval: 30s
+    rules:
+      # C-Server Alerts
+      - alert: BlockchainConnectionDown
+        expr: c_server_blockchain_status == 0
+        for: 2m
+        annotations:
+          summary: "Blockchain connection is down"
+          description: "C-Server cannot connect to Sepolia RPC"
+
+      - alert: HighDepositProcessingLatency
+        expr: rate(c_server_deposit_processing_duration_seconds_sum[5m]) / rate(c_server_deposit_processing_duration_seconds_count[5m]) > 5
+        for: 5m
+        annotations:
+          summary: "High deposit processing latency"
+          description: "Deposit processing taking > 5 seconds"
+
+      - alert: DepositDetectionFailures
+        expr: rate(c_server_errors[5m]) > 0.1
+        for: 5m
+        annotations:
+          summary: "Deposit detection errors"
+          description: "Error rate > 0.1 errors/sec"
+
+      # Java Ledger Alerts
+      - alert: HighSettlementFailureRate
+        expr: rate(settlement_failures_total[5m]) / (rate(settlement_initiated_total[5m]) + 0.001) > 0.1
+        for: 5m
+        annotations:
+          summary: "High settlement failure rate"
+          description: "Settlement failure rate > 10%"
+
+      - alert: SettlementProcessingLatencyHigh
+        expr: histogram_quantile(0.95, rate(settlement_processing_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        annotations:
+          summary: "High settlement latency"
+          description: "P95 settlement latency > 2 seconds"
+
+      - alert: DatabaseConnectionPoolExhausted
+        expr: db_connection_pool_active >= db_connection_pool_max * 0.9
+        for: 2m
+        annotations:
+          summary: "Database connection pool near capacity"
+          description: "Active connections > 90% of max"
+
+      # RabbitMQ Alerts
+      - alert: RabbitMQQueueDepthHigh
+        expr: rabbitmq_queue_messages_ready > 1000
+        for: 5m
+        annotations:
+          summary: "RabbitMQ queue depth high"
+          description: "Queue has > 1000 unprocessed messages"
+
+      - alert: RabbitMQConnectionDown
+        expr: rabbitmq_connections == 0
+        for: 1m
+        annotations:
+          summary: "RabbitMQ connections unavailable"
+          description: "No active RabbitMQ connections"
+
+      # PostgreSQL Alerts
+      - alert: PostgreSQLHighConnectionCount
+        expr: pg_stat_activity_count > 18
+        for: 2m
+        annotations:
+          summary: "PostgreSQL high connection count"
+          description: "Active connections > 18"
+
+      - alert: PostgreSQLSlowQueries
+        expr: rate(pg_slow_queries[5m]) > 1
+        for: 5m
+        annotations:
+          summary: "PostgreSQL slow queries detected"
+          description: "Slow queries > 1 per second"
+
+      # System Alerts
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.85
+        for: 5m
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage > 85%"
+
+      - alert: HighDiskUsage
+        expr: (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) > 0.85
+        for: 5m
+        annotations:
+          summary: "High disk usage"
+          description: "Disk usage > 85%"
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage > 80%"

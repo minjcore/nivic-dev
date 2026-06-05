@@ -1,0 +1,62 @@
+{
+  "dashboard": {
+    "title": "Crypto Settlement System - Overview",
+    "timezone": "UTC",
+    "panels": [
+      {
+        "title": "System Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "c_server_blockchain_status"
+          }
+        ]
+      },
+      {
+        "title": "Deposits Detected (24h)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(c_server_deposits_detected[24h])"
+          }
+        ]
+      },
+      {
+        "title": "Settlement Success Rate",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "settlement_success_rate"
+          }
+        ]
+      },
+      {
+        "title": "Settlement Processing Latency (P95)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, settlement_processing_duration_seconds)"
+          }
+        ]
+      },
+      {
+        "title": "RabbitMQ Queue Depth",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rabbitmq_queue_messages_ready"
+          }
+        ]
+      },
+      {
+        "title": "Database Connections",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "db_connection_pool_active"
+          }
+        ]
+      }
+    ]
+  }
+}
