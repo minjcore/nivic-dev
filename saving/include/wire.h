@@ -203,6 +203,7 @@
 #define WIRE_ERR_NOT_MERCHANT    0x0E
 #define WIRE_ERR_SYSTEM_OFFLINE  0x0F   /* mid=1 (clearing) not online */
 #define WIRE_ERR_MAINTENANCE     0x10   /* server in scheduled maintenance mode */
+#define WIRE_ERR_QR_EXPIRED      0x11   /* signed-QR replay window elapsed (≠ already-paid) */
 #define WIRE_ERR_INTERNAL        0xFF
 
 /* ─── Session token ──────────────────────────────────────────────────────── */

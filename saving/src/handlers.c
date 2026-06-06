@@ -1076,7 +1076,11 @@ static void handle_qr_pay(DB *db, SessionTable *st, int fd, const WireFrame *f) 
         send_ack(fd, f->seq, WIRE_ERR_BAD_FRAME, NULL, 0); return;
     }
     char ref[256] = {0};
-    if (ref_len > 0 && ref_len < (uint8_t)sizeof(ref))
+    /* ref_len is uint8_t (≤255) and sizeof(ref)==256; the bounds were already
+     * checked against body_len above. NOTE: do NOT cast sizeof(ref) to uint8_t —
+     * (uint8_t)256 == 0, which silently disabled this copy and left ref all-zero,
+     * breaking every signed-QR verification. */
+    if (ref_len > 0)
         memcpy(ref, f->body + 117, ref_len);
 
     size_t acs_off = 117 + ref_len;
@@ -1085,10 +1089,12 @@ static void handle_qr_pay(DB *db, SessionTable *st, int fd, const WireFrame *f) 
     if (acs_len > 0 && acs_len < sizeof(acs_url))
         memcpy(acs_url, f->body + acs_off, acs_len);
 
-    /* Replay protection: QR must be within 10-minute window */
+    /* Replay protection: QR must be within 10-minute window.
+     * Distinct from "already paid" (WIRE_ERR_INTENT_SETTLED below) so the client
+     * can tell the user the honest reason: expired vs. already-settled. */
     uint64_t now = (uint64_t)time(NULL);
     if (ts + 600 < now || ts > now + 60) {
-        send_ack(fd, f->seq, WIRE_ERR_INTENT_SETTLED, NULL, 0); return;
+        send_ack(fd, f->seq, WIRE_ERR_QR_EXPIRED, NULL, 0); return;
     }
 
     /* Verify merchant Ed25519 sig over mid(4BE)||amount(8BE)||ts(8BE)||ref */
@@ -1102,18 +1108,6 @@ static void handle_qr_pay(DB *db, SessionTable *st, int fd, const WireFrame *f) 
     wr64(msg + 12, ts);
     memcpy(msg + 20, ref, ref_len);
     if (ed25519_verify(pubkey, sig, msg, 20 + ref_len) != 0) {
-        /* TEMP DEBUG: dump exactly what the client sent so we can see the mismatch. */
-        fprintf(stderr, "[QR_PAY BAD_SIG] mid=%u amount=%llu ts=%llu ref_len=%u ref='%.*s'\n",
-                merchant_id, (unsigned long long)amount, (unsigned long long)ts,
-                ref_len, ref_len, ref);
-        fprintf(stderr, "  msg(%d): ", 20 + ref_len);
-        for (int i = 0; i < 20 + ref_len; i++) fprintf(stderr, "%02x", msg[i]);
-        fprintf(stderr, "\n  sig:    ");
-        for (int i = 0; i < 64; i++) fprintf(stderr, "%02x", sig[i]);
-        fprintf(stderr, "\n  pubkey: ");
-        for (int i = 0; i < 32; i++) fprintf(stderr, "%02x", pubkey[i]);
-        fprintf(stderr, "\n");
-        fflush(stderr);
         send_ack(fd, f->seq, WIRE_ERR_BAD_SIG, NULL, 0); return;
     }
 
