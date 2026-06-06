@@ -10,6 +10,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.saving.wire.data.SavingClient
+import app.saving.wire.protocol.Money
 import app.saving.wire.protocol.WireCode
 import app.saving.wire.protocol.WireError
 import kotlinx.coroutines.launch
@@ -44,7 +45,7 @@ fun TransferSheet(client: SavingClient, initialToId: String = "", onDone: () -> 
                     val amt = amount.toLongOrNull()
                     if (to == null || amt == null || amt <= 0) { error = "Nhập ID và số tiền hợp lệ"; return@launch }
                     loading = true; error = null
-                    try { client.transfer(to, amt); onDone(); onDismiss() }
+                    try { client.transfer(to, Money(amt)); onDone(); onDismiss() }
                     catch (e: WireError) { error = if (e.code == WireCode.ERR_LOW_BALANCE) "Không đủ số dư." else "Lỗi: ${e.code}" }
                     catch (e: Exception) { error = e.message }
                     finally { loading = false }

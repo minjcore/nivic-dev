@@ -38,6 +38,7 @@ import app.saving.wire.data.LoyaltyMember
 import app.saving.wire.data.MerchantOrder
 import app.saving.wire.data.MerchantStats
 import app.saving.wire.data.MerchantsClient
+import app.saving.wire.protocol.Money
 import app.saving.wire.data.SavingClient
 import app.saving.wire.data.SavingEvent
 import app.saving.wire.util.VietQR
@@ -976,7 +977,7 @@ private fun CreateOrderDialog(
                                 MODE_WIRE -> {
                                     runCatching {
                                         val order  = client.createOrder(mid, token, amt, "", 0)
-                                        val intent = wireClient.createIntent(amt)
+                                        val intent = wireClient.createIntent(Money(amt))
                                         order to intent
                                     }.onSuccess { (order, intent) ->
                                         val oid = java.net.URLEncoder.encode(order.orderID, "UTF-8")

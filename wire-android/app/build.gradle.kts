@@ -18,8 +18,8 @@ android {
         applicationId = "app.saving.wire"
         minSdk        = 26
         targetSdk     = 35
-        versionCode   = 2
-        versionName   = "1.1-reffix"
+        versionCode   = 7
+        versionName   = "1.4-honest-errs"
     }
 
     signingConfigs {

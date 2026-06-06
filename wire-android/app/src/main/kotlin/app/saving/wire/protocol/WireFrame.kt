@@ -56,6 +56,7 @@ object WireCode {
     const val ERR_NOT_MERCHANT:    Byte = 0x0E
     const val ERR_SYSTEM_OFFLINE:  Byte = 0x0F
     const val ERR_MAINTENANCE:     Byte = 0x10
+    const val ERR_QR_EXPIRED:      Byte = 0x11
     const val ERR_INTERNAL:        Byte = 0xFF.toByte()
 }
 
@@ -118,8 +119,8 @@ fun WireFrame.Companion.login(id: Long, hash: ByteArray, seq: Int) =
 fun WireFrame.Companion.createAccount(id: Long, hash: ByteArray, seq: Int) =
     WireFrame(WireCmd.CREATE_ACCOUNT, seq, id.toUInt32Bytes() + hash)
 
-fun WireFrame.Companion.transfer(token: ByteArray, toId: Long, amount: Long, seq: Int) =
-    WireFrame(WireCmd.TRANSFER, seq, token + toId.toUInt32Bytes() + amount.toInt64Bytes())
+fun WireFrame.Companion.transfer(token: ByteArray, toId: Long, amount: Money, seq: Int) =
+    WireFrame(WireCmd.TRANSFER, seq, token + toId.toUInt32Bytes() + amount.toBytes())
 
 fun WireFrame.Companion.getBalance(token: ByteArray, seq: Int) =
     WireFrame(WireCmd.GET_BALANCE, seq, token)
@@ -147,9 +148,9 @@ fun WireFrame.Companion.enrollTotp(token: ByteArray, customerId: Long, secret: B
     WireFrame(WireCmd.ENROLL_TOTP, seq, token + customerId.toUInt32Bytes() + secret)
 
 /* TOTP_CHARGE  body: [merchant_token 32B][customer_uid 4B][totp_code 4B][amount 8B] */
-fun WireFrame.Companion.totpCharge(token: ByteArray, customerId: Long, totpCode: Int, amount: Long, seq: Int) =
+fun WireFrame.Companion.totpCharge(token: ByteArray, customerId: Long, totpCode: Int, amount: Money, seq: Int) =
     WireFrame(WireCmd.TOTP_CHARGE, seq,
-        token + customerId.toUInt32Bytes() + totpCode.toLong().toUInt32Bytes() + amount.toInt64Bytes())
+        token + customerId.toUInt32Bytes() + totpCode.toLong().toUInt32Bytes() + amount.toBytes())
 
 /* REGISTER_MERCHANT  body: [token 32B][name N bytes] */
 fun WireFrame.Companion.registerMerchant(token: ByteArray, name: String, seq: Int) =
@@ -157,9 +158,9 @@ fun WireFrame.Companion.registerMerchant(token: ByteArray, name: String, seq: In
 
 /* CREATE_INTENT  body: [merchant_token 32B][request_id 8B][order_id 8B][amount 8B] */
 fun WireFrame.Companion.createIntent(token: ByteArray, requestId: Long, orderId: Long,
-                                      amount: Long, seq: Int) =
+                                      amount: Money, seq: Int) =
     WireFrame(WireCmd.CREATE_INTENT, seq,
-        token + requestId.toInt64Bytes() + orderId.toInt64Bytes() + amount.toInt64Bytes())
+        token + requestId.toInt64Bytes() + orderId.toInt64Bytes() + amount.toBytes())
 
 /* PAY_INTENT  body: [token 32B][merchant_id 4B][request_id 8B][totp_code 4B] */
 fun WireFrame.Companion.payIntent(token: ByteArray, merchantId: Long, requestId: Long,
@@ -173,12 +174,11 @@ fun WireFrame.Companion.confirmIntent(token: ByteArray, merchantId: Long, reques
         token + merchantId.toUInt32Bytes() + requestId.toInt64Bytes())
 
 /* QR_PAY body: [customer_token 32B][mid 4B][amount 8B][ts 8B][sig 64B][ref_len 1B][ref N][acs_url rest] */
-fun WireFrame.Companion.qrPay(token: ByteArray, merchantId: Long, amount: Long,
+fun WireFrame.Companion.qrPay(token: ByteArray, merchantId: Long, amount: Money,
                                ts: Long, ref: String, sig: ByteArray, acsUrl: String, seq: Int): WireFrame {
     val refBytes = ref.toByteArray(Charsets.UTF_8)
-    android.util.Log.i("QRPAY", "ref='$ref' len=${refBytes.size} hex=${refBytes.joinToString(""){ "%02x".format(it) }}")
     return WireFrame(WireCmd.QR_PAY, seq,
-        token + merchantId.toUInt32Bytes() + amount.toInt64Bytes() +
+        token + merchantId.toUInt32Bytes() + amount.toBytes() +
         ts.toInt64Bytes() + sig +
         byteArrayOf(refBytes.size.toByte()) + refBytes +
         acsUrl.toByteArray(Charsets.UTF_8))
@@ -206,7 +206,7 @@ fun WireFrame.parseEvtTransferIn(): EvtTransferInBody {
     require(body.size >= 20)
     return EvtTransferInBody(
         fromId  = body.getInt(0).toLong() and 0xFFFFFFFFL,
-        amount  = body.getLong(4),
+        amount  = Money.fromBytes(body, 4).raw,   // validated: rejects negative / truncated
         balance = body.getLong(12)
     )
 }

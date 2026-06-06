@@ -6,6 +6,16 @@ import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
+/** The socket is dead (closed by server, idle-killed, broken pipe). The caller
+ *  is expected to reconnect + re-login and retry. Distinct from a protocol-level
+ *  [WireError] so the resilient layer can tell "transport died" from "server said no".
+ *
+ *  [delivered] = false  → the frame never left the device (write failed): retrying
+ *  is always safe. [delivered] = true → the frame may have reached the server but
+ *  the ack was lost: retrying a money-moving op risks a double-spend, so only
+ *  idempotent reads may be retried automatically. */
+class ConnectionDead(msg: String, val delivered: Boolean = false) : Exception(msg)
+
 class WireConnection(
     private val host:   String,
     private val port:   Int,
@@ -26,11 +36,25 @@ class WireConnection(
         startReceiving()
     }
 
+    /** Tear the old socket down and dial a fresh one. Any in-flight calls are
+     *  failed with [ConnectionDead] so the resilient layer retries them on the
+     *  new socket. [onEvent] is preserved (it's a field, not re-set here). */
+    suspend fun reconnect() = withContext(Dispatchers.IO) {
+        recvJob?.cancel()
+        runCatching { socket?.close() }
+        pending.values.forEach { it.completeExceptionally(ConnectionDead("reconnecting", delivered = true)) }
+        pending.clear()
+        val s = Socket(host, port)
+        socket = s
+        input  = DataInputStream(s.inputStream)
+        startReceiving()
+    }
+
     fun disconnect() {
         recvJob?.cancel()
-        socket?.close()
+        runCatching { socket?.close() }
         socket = null
-        pending.values.forEach { it.completeExceptionally(Exception("disconnected")) }
+        pending.values.forEach { it.completeExceptionally(ConnectionDead("disconnected", delivered = true)) }
         pending.clear()
     }
 
@@ -38,10 +62,19 @@ class WireConnection(
         val raw  = frame.encode(secret)
         val resp = CompletableDeferred<WireFrame>()
         pending[frame.seq] = resp
-        withContext(Dispatchers.IO) {
-            val out = socket?.getOutputStream() ?: throw Exception("not connected")
-            out.write(raw)
-            out.flush()
+        try {
+            withContext(Dispatchers.IO) {
+                val out = socket?.getOutputStream() ?: throw ConnectionDead("not connected")
+                out.write(raw)
+                out.flush()
+            }
+        } catch (e: ConnectionDead) {
+            pending.remove(frame.seq)
+            throw e
+        } catch (e: Exception) {
+            // broken pipe / reset / closed socket — surface as ConnectionDead
+            pending.remove(frame.seq)
+            throw ConnectionDead(e.message ?: "write failed")
         }
         return resp.await()
     }
@@ -63,7 +96,7 @@ class WireConnection(
                     dispatch(frame)
                 }
             } catch (_: Exception) {
-                pending.values.forEach { it.completeExceptionally(Exception("disconnected")) }
+                pending.values.forEach { it.completeExceptionally(ConnectionDead("recv ended", delivered = true)) }
                 pending.clear()
             }
         }

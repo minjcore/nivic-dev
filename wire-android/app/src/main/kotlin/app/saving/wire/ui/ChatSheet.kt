@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.saving.wire.data.SavingEvent
+import app.saving.wire.protocol.Money
 import app.saving.wire.protocol.WireCode
 import app.saving.wire.protocol.WireError
 import app.saving.wire.util.vndFormatted
@@ -220,7 +221,7 @@ fun ChatSheet(vm: WireViewModel, onDismiss: () -> Unit) {
                             paying = true
                             runCatching {
                                 vm.client.sendMsg(toId, "💸 Đang chuyển ${amount.vndFormatted()}...")
-                                vm.client.transfer(toId, amount)
+                                vm.client.transfer(toId, Money(amount))
                                 val notice = "💸 Chuyển ${amount.vndFormatted()}"
                                 chatVm.onIncoming(0L, notice)   // show locally
                                 vm.client.sendMsg(toId, notice)

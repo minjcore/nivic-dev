@@ -1,8 +1,10 @@
 package app.saving.wire.viewmodel
 
+import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Bundle
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -58,7 +60,43 @@ class WireViewModel(app: Application) : AndroidViewModel(app) {
         return link
     }
 
+    // Battery mode: hold the Wire socket only while the app is in the foreground.
+    // When the last activity stops we drop the socket (no radio/wakelock kept
+    // in the background); when one starts again we redial. SavingClient's
+    // resilient layer re-logs-in transparently, so dropping the socket is cheap.
+    private var startedActivities = 0
+    private val lifecycleCallbacks = object : Application.ActivityLifecycleCallbacks {
+        override fun onActivityStarted(activity: Activity) {
+            if (startedActivities++ == 0) onEnterForeground()
+        }
+        override fun onActivityStopped(activity: Activity) {
+            if (--startedActivities == 0) onEnterBackground()
+        }
+        override fun onActivityCreated(a: Activity, b: Bundle?) {}
+        override fun onActivityResumed(a: Activity) {}
+        override fun onActivityPaused(a: Activity) {}
+        override fun onActivitySaveInstanceState(a: Activity, b: Bundle) {}
+        override fun onActivityDestroyed(a: Activity) {}
+    }
+
+    private fun onEnterForeground() {
+        // Pre-warm so the balance/home is live the moment the user looks; if not
+        // logged in yet, just open the socket. Any failure is recovered lazily.
+        viewModelScope.launch {
+            runCatching {
+                if (!client.isConnected.value) client.connect()
+                if (_session.value is Session.Home) refreshBalance()
+            }.onFailure { Log.e("WireVM", "foreground connect failed: ${it.message}") }
+        }
+    }
+
+    private fun onEnterBackground() {
+        // Drop the socket but keep cached creds — resilient() re-logs-in on next use.
+        client.disconnect()
+    }
+
     init {
+        getApplication<Application>().registerActivityLifecycleCallbacks(lifecycleCallbacks)
         viewModelScope.launch {
             runCatching { client.connect() }.onFailure {
                 Log.e("WireVM", "connect failed: ${it.message}")
@@ -103,5 +141,8 @@ class WireViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearToast() { _homeState.update { it.copy(toast = null) } }
 
-    override fun onCleared() { client.disconnect() }
+    override fun onCleared() {
+        getApplication<Application>().unregisterActivityLifecycleCallbacks(lifecycleCallbacks)
+        client.disconnect()
+    }
 }

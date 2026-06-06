@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.*
 import app.saving.wire.data.SavingClient
 import app.saving.wire.deeplink.SavingDeeplink
 import app.saving.wire.deeplink.SavingDeeplinkParser
+import app.saving.wire.protocol.Money
 import app.saving.wire.protocol.WireCode
 import app.saving.wire.protocol.WireError
 import kotlinx.coroutines.Dispatchers
@@ -444,7 +445,7 @@ private fun TOTPPayContent(
                         loading = true; error = null
                         runCatching {
                             val code = TOTP.generateCode(secret!!)
-                            wireClient.totpCharge(p.uid, code.toInt(), p.amount)
+                            wireClient.totpCharge(p.uid, code.toInt(), Money(p.amount))
                         }.onSuccess { success = true }
                          .onFailure { error = it.message }
                         loading = false
@@ -646,7 +647,7 @@ private fun AcsPayContent(
                 scope.launch {
                     loading = true; error = null
                     try {
-                        client.qrPay(payload.mid, payload.amount, payload.ts,
+                        client.qrPay(payload.mid, Money(payload.amount), payload.ts,
                                      payload.ref, payload.sig, payload.acsUrl)
                         success = true
                         kotlinx.coroutines.delay(1500)
@@ -654,8 +655,9 @@ private fun AcsPayContent(
                     } catch (e: WireError) {
                         error = when (e.code) {
                             WireCode.ERR_LOW_BALANCE    -> "Không đủ số dư"
-                            WireCode.ERR_BAD_SIG        -> "QR không hợp lệ hoặc đã hết hạn"
-                            WireCode.ERR_INTENT_SETTLED -> "QR đã hết hạn (> 10 phút)"
+                            WireCode.ERR_BAD_SIG        -> "QR không hợp lệ (chữ ký sai)"
+                            WireCode.ERR_QR_EXPIRED     -> "QR đã hết hạn — nhờ cửa hàng tạo QR mới"
+                            WireCode.ERR_INTENT_SETTLED -> "QR này đã được thanh toán rồi"
                             WireCode.ERR_NOT_FOUND      -> "Không tìm thấy cửa hàng"
                             WireCode.ERR_SYSTEM_OFFLINE,
                             WireCode.ERR_MAINTENANCE    -> "Hệ thống tạm thời không khả dụng"
@@ -733,7 +735,7 @@ private fun MerchantPayContent(
                     if (amt <= 0) { error = "Nhập số tiền hợp lệ"; return@launch }
                     loading = true; error = null
                     try {
-                        client.payMerchant(payload.mid, amt)
+                        client.payMerchant(payload.mid, Money(amt))
                         payload.ref?.let { orderId ->
                             merchantsClient.confirmPaid(orderId, accountId.toInt())
                         }
