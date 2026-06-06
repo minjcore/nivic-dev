@@ -26,6 +26,28 @@ static inline uint64_t from_be64(const uint8_t *p) {
            ((uint64_t)p[6]<<8 )| (uint64_t)p[7];
 }
 
+/* Run a parameterized query, transparently reconnecting once if the connection
+ * has dropped (e.g. Postgres was restarted). The libpq handle is a single
+ * long-lived connection shared under db->mu; without this, one PG restart wedges
+ * EVERY subsequent query with "no connection to the server" until the wallet
+ * process itself is restarted. PQstatus only flips to CONNECTION_BAD after a
+ * command fails on a dead socket, so we check it post-exec and PQreset+retry.
+ * A normal SQL error (constraint, etc.) leaves the connection OK → no retry.
+ * Signature mirrors PQexecParams so call sites are a drop-in rename. Caller
+ * holds DB_LOCK, so the reset is serialized with all other DB access. */
+static PGresult *db_exec_params(DB *db, const char *sql, int n,
+                                const Oid *types, const char *const *vals,
+                                const int *lens, const int *fmts, int binary) {
+    PGresult *r = PQexecParams(db->conn, sql, n, types, vals, lens, fmts, binary);
+    if (PQstatus(db->conn) == CONNECTION_BAD) {
+        fprintf(stderr, "[db] connection lost — reconnecting (PQreset)\n");
+        PQclear(r);
+        PQreset(db->conn);
+        r = PQexecParams(db->conn, sql, n, types, vals, lens, fmts, binary);
+    }
+    return r;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
  *  Schema
  * ══════════════════════════════════════════════════════════════════════════ */
@@ -233,7 +255,7 @@ int db_account_create(DB *db, uint32_t id, const uint8_t *password_hash) {
     int         fmts[2]  = { 1, 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 2, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     int ok = (PQresultStatus(r) == PGRES_COMMAND_OK);
@@ -252,7 +274,7 @@ int db_account_exists(DB *db, uint32_t id) {
     int         fmts[1] = { 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 1, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     int found = (PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) ? 1 : 0;
@@ -270,7 +292,7 @@ int db_account_get_hash(DB *db, uint32_t id, uint8_t *hash) {
     int         fmts[1] = { 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 1);  /* binary result */
+    PGresult *r = db_exec_params(db, SQL, 1, NULL, vals, lens, fmts, 1);  /* binary result */
     DB_UNLOCK(db);
 
     int rc = -1;
@@ -295,7 +317,7 @@ int64_t db_account_balance(DB *db, uint32_t id) {
     int         fmts[1] = { 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 1);
+    PGresult *r = db_exec_params(db, SQL, 1, NULL, vals, lens, fmts, 1);
     DB_UNLOCK(db);
 
     int64_t bal = -1;
@@ -320,7 +342,7 @@ int db_account_balance_detail(DB *db, uint32_t id, BalanceDetail *out) {
     int         fmts[1] = { 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 1);
+    PGresult *r = db_exec_params(db, SQL, 1, NULL, vals, lens, fmts, 1);
     DB_UNLOCK(db);
 
     int rc = -1;
@@ -393,7 +415,7 @@ int db_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount, int t
     int         fmts[4] = { 1, 1, 1, 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 4, NULL, vals, lens, fmts, 1);
+    PGresult *r = db_exec_params(db, SQL, 4, NULL, vals, lens, fmts, 1);
     DB_UNLOCK(db);
 
     /* col0 = after_bal (NULL if sender had insufficient balance or no row)
@@ -439,7 +461,7 @@ int db_idempotency_claim(DB *db, uint64_t mid, uint64_t request_id, uint64_t ord
     int         fmts[3] = { 1, 1, 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 3, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 3, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     int rc = -1;
@@ -466,7 +488,7 @@ int db_qr_ref_claim(DB *db, const char *ref, uint32_t mid) {
     int         fmts[2] = { 0,                 1              };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 2, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     int rc = -1;
@@ -511,7 +533,7 @@ int db_ledger_append(DB *db,
     int fmts[6] = { 1, 1, 1, 1, 1, 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 6, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 6, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     int ok = (PQresultStatus(r) == PGRES_COMMAND_OK);
@@ -534,7 +556,7 @@ int db_guardian_count(DB *db, uint32_t account_id) {
     int         fmts[1] = { 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 1);
+    PGresult *r = db_exec_params(db, SQL, 1, NULL, vals, lens, fmts, 1);
     DB_UNLOCK(db);
 
     int cnt = -1;
@@ -562,7 +584,7 @@ int db_guardian_add(DB *db, uint32_t account_id, uint32_t guardian_id) {
     int         fmts[2] = { 1, 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 2, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     int ok = (PQresultStatus(r) == PGRES_COMMAND_OK);
@@ -580,7 +602,7 @@ int db_guardian_list(DB *db, uint32_t account_id, uint32_t ids[3]) {
     int         fmts[1] = { 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 1);
+    PGresult *r = db_exec_params(db, SQL, 1, NULL, vals, lens, fmts, 1);
     DB_UNLOCK(db);
 
     int n = 0;
@@ -620,7 +642,7 @@ int db_recovery_open(DB *db, uint32_t account_id) {
     int         fmts[1] = { 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 1, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     int ok = (PQresultStatus(r) == PGRES_COMMAND_OK);
@@ -641,7 +663,7 @@ int db_recovery_approve(DB *db, uint32_t account_id, uint32_t guardian_id) {
     int         fmts1[1] = { 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SEL, 1, NULL, vals1, lens1, fmts1, 0);
+    PGresult *r = db_exec_params(db, SEL, 1, NULL, vals1, lens1, fmts1, 0);
 
     char approvals[256] = "";
     if (PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) {
@@ -673,7 +695,7 @@ int db_recovery_approve(DB *db, uint32_t account_id, uint32_t guardian_id) {
     int         lens2[2] = { (int)strlen(updated), 8 };
     int         fmts2[2] = { 0, 1 };  /* text, binary */
 
-    PGresult *r2 = PQexecParams(db->conn, UPD, 2, NULL, vals2, lens2, fmts2, 0);
+    PGresult *r2 = db_exec_params(db, UPD, 2, NULL, vals2, lens2, fmts2, 0);
     DB_UNLOCK(db);
     PQclear(r2);
 
@@ -692,7 +714,7 @@ int db_recovery_is_complete(DB *db, uint32_t account_id) {
     int         fmts[1] = { 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 1, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     int complete = 0;
@@ -718,7 +740,7 @@ void db_recovery_close(DB *db, uint32_t account_id) {
     int         fmts[1] = { 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 1, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
     PQclear(r);
 }
@@ -741,7 +763,7 @@ int db_record_transfer(DB *db, uint32_t from_id, uint32_t to_id, uint64_t amount
     int         fmts[4] = { 1, 1, 1, 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 4, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 4, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     int ok = (PQresultStatus(r) == PGRES_COMMAND_OK);
@@ -773,7 +795,7 @@ int db_history(DB *db, uint32_t account_id, TxEntry *out, int max_count, int64_t
     int         fmts[3] = { 1, 0, 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 3, NULL, vals, lens, fmts, 1);
+    PGresult *r = db_exec_params(db, SQL, 3, NULL, vals, lens, fmts, 1);
     DB_UNLOCK(db);
 
     if (PQresultStatus(r) != PGRES_TUPLES_OK) {
@@ -836,7 +858,7 @@ int db_merchant_history(DB *db, uint32_t mid, MerchantTxEntry *out, int max_coun
     int         fmts[3] = { 1, 0, 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 3, NULL, vals, lens, fmts, 1);
+    PGresult *r = db_exec_params(db, SQL, 3, NULL, vals, lens, fmts, 1);
     DB_UNLOCK(db);
 
     if (PQresultStatus(r) != PGRES_TUPLES_OK) {
@@ -877,7 +899,7 @@ int db_totp_enroll(DB *db, uint32_t merchant_id, uint32_t customer_id,
     int         fmts[3] = { 1, 1, 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 3, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 3, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     int ok = (PQresultStatus(r) == PGRES_COMMAND_OK);
@@ -899,7 +921,7 @@ int db_totp_get_secret(DB *db, uint32_t merchant_id, uint32_t customer_id,
     int         fmts[2] = { 1, 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 1);
+    PGresult *r = db_exec_params(db, SQL, 2, NULL, vals, lens, fmts, 1);
     DB_UNLOCK(db);
 
     if (PQresultStatus(r) != PGRES_TUPLES_OK || PQntuples(r) == 0) {
@@ -936,7 +958,7 @@ int db_intent_create(DB *db, uint32_t mid, uint64_t request_id,
     int         fmts[5] = { 1, 1, 1, 1, 0 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 5, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 5, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     if (PQresultStatus(r) != PGRES_COMMAND_OK) {
@@ -963,7 +985,7 @@ int db_intent_get(DB *db, uint32_t mid, uint64_t request_id, IntentInfo *out) {
     int         fmts[2] = { 1, 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 1);
+    PGresult *r = db_exec_params(db, SQL, 2, NULL, vals, lens, fmts, 1);
     DB_UNLOCK(db);
 
     if (PQresultStatus(r) != PGRES_TUPLES_OK || PQntuples(r) == 0) {
@@ -998,7 +1020,7 @@ int db_intent_find_by_order(DB *db, uint32_t mid, uint64_t order_id, IntentInfo 
     int         fmts[2] = { 1, 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 1);
+    PGresult *r = db_exec_params(db, SQL, 2, NULL, vals, lens, fmts, 1);
     DB_UNLOCK(db);
 
     if (PQresultStatus(r) != PGRES_TUPLES_OK || PQntuples(r) == 0) {
@@ -1031,7 +1053,7 @@ int db_intent_settle(DB *db, uint32_t mid, uint64_t request_id) {
     int         fmts[2] = { 1, 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 2, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     if (PQresultStatus(r) != PGRES_COMMAND_OK) {
@@ -1061,7 +1083,7 @@ int db_merchant_register(DB *db, uint32_t mid, const char *name) {
     int         fmts[2] = { 1, 0 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 2, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     if (PQresultStatus(r) != PGRES_COMMAND_OK) {
@@ -1084,7 +1106,7 @@ int db_merchant_exists(DB *db, uint32_t mid) {
     int         fmts[1] = { 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 1, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     if (PQresultStatus(r) != PGRES_TUPLES_OK) {
@@ -1105,7 +1127,7 @@ int db_merchant_get_name(DB *db, uint32_t mid, char *name_out, size_t name_max) 
     int         fmts[1] = { 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 1, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     if (PQresultStatus(r) != PGRES_TUPLES_OK || PQntuples(r) == 0) {
@@ -1140,7 +1162,7 @@ char *db_intents_range(DB *db,
     int         fmts[2] = { 0, 0 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 2, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     if (PQresultStatus(r) != PGRES_TUPLES_OK) {
@@ -1229,7 +1251,7 @@ char *db_export_transfers_csv(DB *db,
     int         fmts[2] = { 0, 0 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 2, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
 
     if (PQresultStatus(r) != PGRES_TUPLES_OK) {
@@ -1286,7 +1308,7 @@ int db_admin_user_upsert(DB *db, const char *username, const uint8_t *password_h
     int         lens[2] = { (int)strlen(username), 32 };
     int         fmts[2] = { 0, 1 };
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 2, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
     int ok = PQresultStatus(r) == PGRES_COMMAND_OK;
     if (!ok) fprintf(stderr, "[db] admin_user_upsert: %s\n", PQerrorMessage(db->conn));
@@ -1301,7 +1323,7 @@ int db_admin_user_verify(DB *db, const char *username, const uint8_t *password_h
     int         lens[1] = { (int)strlen(username) };
     int         fmts[1] = { 0 };
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 1);
+    PGresult *r = db_exec_params(db, SQL, 1, NULL, vals, lens, fmts, 1);
     DB_UNLOCK(db);
     if (PQresultStatus(r) != PGRES_TUPLES_OK || PQntuples(r) == 0) {
         PQclear(r); return -1;
@@ -1317,7 +1339,7 @@ int db_admin_user_list(DB *db, char *out_json, int buf_size) {
         "SELECT username, TO_CHAR(create_time AT TIME ZONE 'Asia/Ho_Chi_Minh',"
         "'YYYY-MM-DD HH24:MI:SS') FROM admins ORDER BY create_time ASC";
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 0, NULL, NULL, NULL, NULL, 0);
+    PGresult *r = db_exec_params(db, SQL, 0, NULL, NULL, NULL, NULL, 0);
     DB_UNLOCK(db);
     if (PQresultStatus(r) != PGRES_TUPLES_OK) {
         PQclear(r); return -1;
@@ -1340,7 +1362,7 @@ int db_admin_user_delete(DB *db, const char *username) {
     int         lens[1] = { (int)strlen(username) };
     int         fmts[1] = { 0 };
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 1, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
     int ok = PQresultStatus(r) == PGRES_COMMAND_OK;
     PQclear(r);
@@ -1358,7 +1380,7 @@ int db_admin_audit_log(DB *db, const char *username, const char *action,
     int         lens[5] = { (int)strlen(username), (int)strlen(action), 8, 8, (int)strlen(ref) };
     int         fmts[5] = { 0, 0, 1, 1, 0 };
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 5, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 5, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
     int ok = PQresultStatus(r) == PGRES_COMMAND_OK;
     if (!ok) fprintf(stderr, "[db] audit_log: %s\n", PQerrorMessage(db->conn));
@@ -1377,7 +1399,7 @@ char *db_admin_audit_list(DB *db, int limit) {
     int         lens[1] = { 0 };
     int         fmts[1] = { 0 };
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 1, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
     if (PQresultStatus(r) != PGRES_TUPLES_OK) {
         fprintf(stderr, "[db] audit_list: %s\n", PQerrorMessage(db->conn));
@@ -1411,7 +1433,7 @@ int db_admin_stats(DB *db, AdminStats *out) {
         " (SELECT COUNT(*)::BIGINT FROM accounts)";
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 0, NULL, NULL, NULL, NULL, 1);
+    PGresult *r = db_exec_params(db, SQL, 0, NULL, NULL, NULL, NULL, 1);
     DB_UNLOCK(db);
 
     int rc = -1;
@@ -1444,7 +1466,7 @@ int db_admin_cash_in(DB *db, uint32_t to_uid, uint64_t amount, int64_t *after_ou
     int         f[2] = { 1, 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, v, l, f, 1);
+    PGresult *r = db_exec_params(db, SQL, 2, NULL, v, l, f, 1);
     DB_UNLOCK(db);
 
     int rc = -1;
@@ -1475,7 +1497,7 @@ int db_admin_cash_out(DB *db, uint32_t from_uid, uint64_t amount, int64_t *after
     int         f[2] = { 1, 1 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, v, l, f, 1);
+    PGresult *r = db_exec_params(db, SQL, 2, NULL, v, l, f, 1);
     DB_UNLOCK(db);
 
     int rc = -1;
@@ -1503,7 +1525,7 @@ int db_intent_list(DB *db, uint32_t mid, IntentSummary *out, int max_count) {
     int         fmts[2] = { 1, 0 };
 
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 1);
+    PGresult *r = db_exec_params(db, SQL, 2, NULL, vals, lens, fmts, 1);
     DB_UNLOCK(db);
 
     if (PQresultStatus(r) != PGRES_TUPLES_OK) {
@@ -1536,7 +1558,7 @@ int db_push_token_upsert(DB *db, uint32_t mid, const char *device_token) {
     int         lens[2] = { 8, (int)strlen(device_token) };
     int         fmts[2] = { 1, 0 };
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 2, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
     int ok = (PQresultStatus(r) == PGRES_COMMAND_OK);
     if (!ok) fprintf(stderr, "[db] push_token_upsert: %s\n", PQerrorMessage(db->conn));
@@ -1552,7 +1574,7 @@ int db_push_token_get(DB *db, uint32_t mid, char *out, size_t outlen) {
     int         lens[1] = { 8 };
     int         fmts[1] = { 1 };
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, vals, lens, fmts, 0);
+    PGresult *r = db_exec_params(db, SQL, 1, NULL, vals, lens, fmts, 0);
     DB_UNLOCK(db);
     if (PQresultStatus(r) != PGRES_TUPLES_OK || PQntuples(r) == 0) {
         PQclear(r); return -1;
@@ -1574,7 +1596,7 @@ int db_merchant_pubkey_set(DB *db, uint32_t mid, const uint8_t pubkey[32]) {
     const int   plens[2] = { 32, 8 };
     const int   pfmts[2] = { 1, 1 };
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 2, NULL, pvals, plens, pfmts, 1);
+    PGresult *r = db_exec_params(db, SQL, 2, NULL, pvals, plens, pfmts, 1);
     DB_UNLOCK(db);
     int ok = (PQresultStatus(r) == PGRES_COMMAND_OK);
     PQclear(r);
@@ -1589,7 +1611,7 @@ int db_merchant_pubkey_get(DB *db, uint32_t mid, uint8_t pubkey_out[32]) {
     const int   plens[1] = { 8 };
     const int   pfmts[1] = { 1 };
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, pvals, plens, pfmts, 1);
+    PGresult *r = db_exec_params(db, SQL, 1, NULL, pvals, plens, pfmts, 1);
     DB_UNLOCK(db);
     if (PQresultStatus(r) != PGRES_TUPLES_OK || PQntuples(r) == 0 ||
         PQgetlength(r, 0, 0) != 32) {
@@ -1608,7 +1630,7 @@ int db_txn_get(DB *db, int64_t txn_id, TxnDetail *out) {
     const int   plens[1] = { 8 };
     const int   pfmts[1] = { 1 };
     DB_LOCK(db);
-    PGresult *r = PQexecParams(db->conn, SQL, 1, NULL, pvals, plens, pfmts, 1);
+    PGresult *r = db_exec_params(db, SQL, 1, NULL, pvals, plens, pfmts, 1);
     DB_UNLOCK(db);
     if (PQresultStatus(r) != PGRES_TUPLES_OK || PQntuples(r) == 0) {
         PQclear(r); return -1;
